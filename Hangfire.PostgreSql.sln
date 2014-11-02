@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30501.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{766BE831-F758-46BC-AFD3-BBEEFE0F686F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.PostgreSql", "src\Hangfire.PostgreSql\Hangfire.PostgreSql.csproj", "{7386E68C-544D-49D8-8AE4-B642217C5BED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.PostgreSql.Tests", "tests\Hangfire.PostgreSql.Tests\Hangfire.PostgreSql.Tests.csproj", "{6DFFA275-C483-4501-823A-741AC9EC0847}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{2222F7BB-3628-4B75-BEFD-1976C135FC85}"
+	ProjectSection(SolutionItems) = preProject
+		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\NuGet.exe = .nuget\NuGet.exe
+		.nuget\NuGet.targets = .nuget\NuGet.targets
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7386E68C-544D-49D8-8AE4-B642217C5BED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7386E68C-544D-49D8-8AE4-B642217C5BED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7386E68C-544D-49D8-8AE4-B642217C5BED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7386E68C-544D-49D8-8AE4-B642217C5BED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DFFA275-C483-4501-823A-741AC9EC0847}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DFFA275-C483-4501-823A-741AC9EC0847}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DFFA275-C483-4501-823A-741AC9EC0847}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DFFA275-C483-4501-823A-741AC9EC0847}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{6DFFA275-C483-4501-823A-741AC9EC0847} = {766BE831-F758-46BC-AFD3-BBEEFE0F686F}
+	EndGlobalSection
+EndGlobal
