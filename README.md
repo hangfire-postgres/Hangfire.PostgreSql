@@ -1,6 +1,6 @@
 Hangfire.PostgreSql
 ===================
-This is an plugin to the Hangfire Storage System.
+This is an plugin to the Hangfire to enable PostgreSQL as a storage system.
 
 Instructions
 ------------
