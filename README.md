@@ -1,10 +1,24 @@
 Hangfire.PostgreSql
 ===================
 This is an plugin to the Hangfire to enable PostgreSQL as a storage system.
+Read about hangfire here: https://github.com/HangfireIO/Hangfire#hangfire-
+and here: http://hangfire.io/
 
 Instructions
 ------------
-Coming Soon!
+Install Hangfire, see https://github.com/HangfireIO/Hangfire#installation
+
+Download all of repository, add the Hangfire.PostgreSql.csproj to your solution.
+Reference it in your project, and you are ready to go by using:
+
+```csharp
+app.UseHangfire(config =>
+{
+    config.UsePostgreSqlStorage("<connection string or its name>");
+    config.UseServer();
+});
+```
+
 
 Related Projects
 -----------------
