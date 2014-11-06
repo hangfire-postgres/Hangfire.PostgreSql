@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Hangfire.PostgreSql</id>
-    <version>1.0</version>
+    <version>1.0.1</version>
     <title>Hangfire PostgreSql Storage</title>
     <authors>Frank Hommers</authors>
     <owners>frankhommers</owners>
