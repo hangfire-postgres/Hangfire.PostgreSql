@@ -16,6 +16,20 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{2222F7
 		.nuget\NuGet.targets = .nuget\NuGet.targets
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nuspecs", "nuspecs", "{16354A76-2C70-444F-956E-D289DD6B0127}"
+	ProjectSection(SolutionItems) = preProject
+		nuspecs\Hangfire.PostgreSql.nuspec = nuspecs\Hangfire.PostgreSql.nuspec
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{E9430085-FC9B-4A44-8F55-CFD825BD284A}"
+	ProjectSection(SolutionItems) = preProject
+		build\Build.proj = build\Build.proj
+		build\Build.tasks = build\Build.tasks
+		build\Hangfire.PostgreSql.Properties.proj = build\Hangfire.PostgreSql.Properties.proj
+		build\Hangfire.versions.targets = build\Hangfire.versions.targets
+		build\ILMerge.CSharp.targets = build\ILMerge.CSharp.targets
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
