@@ -98,8 +98,10 @@ namespace Hangfire.PostgreSql
             if (parameters == null) throw new ArgumentNullException("parameters");
 
             const string createJobSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-values (@invocationData, @arguments, @createdAt, @expireAt) returning ""id""";
+INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
+VALUES (@invocationData, @arguments, @createdAt, @expireAt) 
+RETURNING ""id"";
+";
 
             var invocationData = InvocationData.Serialize(job);
 
@@ -128,8 +130,9 @@ values (@invocationData, @arguments, @createdAt, @expireAt) returning ""id""";
                 }
 
                 const string insertParameterSql = @"
-insert into ""hangfire"".""jobparameter"" (""jobid"", ""name"", ""value"")
-values (@jobId, @name, @value)";
+INSERT INTO ""hangfire"".""jobparameter"" (""jobid"", ""name"", ""value"")
+VALUES (@jobId, @name, @value);
+";
 
                 _connection.Execute(insertParameterSql, parameterArray);
             }
@@ -142,7 +145,11 @@ values (@jobId, @name, @value)";
             if (id == null) throw new ArgumentNullException("id");
 
             const string sql = 
-                @"select ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" from ""hangfire"".""job"" where ""id"" = @id";
+                @"
+SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
+FROM ""hangfire"".""job"" 
+WHERE ""id"" = @id;
+";
 
             var jobData = _connection.Query<SqlJob>(sql, new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture) })
                 .SingleOrDefault();
@@ -179,10 +186,11 @@ values (@jobId, @name, @value)";
             if (jobId == null) throw new ArgumentNullException("jobId");
 
             const string sql = @"
-select s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
-from ""hangfire"".""state"" s
-inner join ""hangfire"".""job"" j on j.""stateid"" = s.""id""
-where j.""id"" = @jobId";
+SELECT s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
+FROM ""hangfire"".""state"" s
+INNER JOIN ""hangfire"".""job"" j on j.""stateid"" = s.""id""
+WHERE j.""id"" = @jobId;
+";
 
             var sqlState = _connection.Query<SqlState>(sql, new { jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) }).SingleOrDefault();
             if (sqlState == null)
@@ -215,7 +223,8 @@ WITH ""inputvalues"" AS (
 	RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
 )
 INSERT INTO ""hangfire"".""jobparameter""(""jobid"", ""name"", ""value"")
-SELECT ""jobid"", ""name"", ""value"" FROM ""inputvalues"" ""insertvalues""
+SELECT ""jobid"", ""name"", ""value"" 
+FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
 	SELECT 1 
 	FROM ""updatedrows"" 
@@ -233,7 +242,12 @@ WHERE NOT EXISTS (
                         if (name == null) throw new ArgumentNullException("name");
 
                         return _connection.Query<string>(
-                            @"select ""value"" from ""hangfire"".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
+                            @"
+SELECT ""value"" 
+FROM ""hangfire"".""jobparameter"" 
+WHERE ""jobid"" = @id 
+AND ""name"" = @name;
+",
                             new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture), name = name })
                             .SingleOrDefault();
                     }
@@ -243,7 +257,11 @@ WHERE NOT EXISTS (
                         if (key == null) throw new ArgumentNullException("key");
 
                         var result = _connection.Query<string>(
-                            @"select ""value"" from ""hangfire"".""set"" where ""key"" = @key",
+                            @"
+SELECT ""value"" 
+FROM ""hangfire"".""set"" 
+WHERE ""key"" = @key;
+",
                             new { key });
             
                         return new HashSet<string>(result);
@@ -255,7 +273,13 @@ WHERE NOT EXISTS (
                         if (toScore < fromScore) throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
 
                         return _connection.Query<string>(
-                            @"select ""value"" from ""hangfire"".""set"" where ""key"" = @key and ""score"" between @from and @to order by ""score"" limit 1",
+                            @"
+SELECT ""value"" 
+FROM ""hangfire"".""set"" 
+WHERE ""key"" = @key 
+AND ""score"" BETWEEN @from AND @to 
+ORDER BY ""score"" LIMIT 1;
+",
                             new { key, from = fromScore, to = toScore })
                             .SingleOrDefault();
                     }
@@ -283,7 +307,8 @@ WHERE NOT EXISTS (
 	FROM ""updatedrows"" 
 	WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
 	AND ""updatedrows"".""field"" = ""insertvalues"".""field""
-);";
+);
+";
 
             using (var transaction = _connection.BeginTransaction(IsolationLevel.Serializable))
             {
@@ -300,7 +325,11 @@ WHERE NOT EXISTS (
             if (key == null) throw new ArgumentNullException("key");
 
             var result = _connection.Query<SqlHash>(
-                @"select field ""Field"", value ""Value"" from ""hangfire"".""hash"" where ""key"" = @key",
+                @"
+SELECT ""field"" ""Field"", ""value"" ""Value"" 
+FROM ""hangfire"".""hash"" 
+WHERE ""key"" = @key;
+",
                 new { key })
                 .ToDictionary(x => x.Field, x => x.Value);
 
@@ -321,11 +350,10 @@ WHERE NOT EXISTS (
 
             const string sql = @"
 WITH ""inputvalues"" AS (
-	SELECT @id ""id"", @data ""data"", now() at time zone 'utc' ""lastheartbeat""
+	SELECT @id ""id"", @data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
 ), ""updatedrows"" AS ( 
 	UPDATE ""hangfire"".""server"" ""updatetarget""
-	SET ""data"" = ""inputvalues"".""data"", 
-        ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
+	SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
 	FROM ""inputvalues""
 	WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
 	RETURNING ""updatetarget"".""id""
@@ -336,7 +364,8 @@ WHERE NOT EXISTS (
 	SELECT 1 
 	FROM ""updatedrows"" 
 	WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
-);";
+);
+";
 
             _connection.Execute(sql,
                 new { id = serverId, data = JobHelper.ToJson(data) });
@@ -347,7 +376,10 @@ WHERE NOT EXISTS (
             if (serverId == null) throw new ArgumentNullException("serverId");
 
             _connection.Execute(
-                @"delete from ""hangfire"".""server"" where ""id"" = @id",
+                @"
+DELETE FROM ""hangfire"".""server"" 
+WHERE ""id"" = @id;
+",
                 new { id = serverId });
         }
 
@@ -356,7 +388,11 @@ WHERE NOT EXISTS (
             if (serverId == null) throw new ArgumentNullException("serverId");
 
             _connection.Execute(
-                @"update ""hangfire"".""server"" set ""lastheartbeat"" = now() at time zone 'utc' where ""id"" = @id",
+                @"
+UPDATE ""hangfire"".""server"" 
+SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
+WHERE ""id"" = @id;
+",
                 new { id = serverId });
         }
 
@@ -368,7 +404,10 @@ WHERE NOT EXISTS (
             }
 
             return _connection.Execute(
-                string.Format(@"delete from ""hangfire"".""server"" where ""lastheartbeat"" < (now() at time zone 'utc' - interval '{0} milliseconds')", (long)timeOut.TotalMilliseconds));
+                string.Format(@"
+DELETE FROM ""hangfire"".""server"" 
+WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{0} MILLISECONDS');
+", (long)timeOut.TotalMilliseconds));
         }
     }
 }

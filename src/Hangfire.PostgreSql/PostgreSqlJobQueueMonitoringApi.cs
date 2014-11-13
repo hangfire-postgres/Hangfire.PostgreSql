@@ -40,7 +40,10 @@ namespace Hangfire.PostgreSql
 
         public IEnumerable<string> GetQueues()
         {
-            const string sqlQuery = @"select distinct ""queue"" from ""hangfire"".""jobqueue""";
+            const string sqlQuery = @"
+SELECT DISTINCT ""queue"" 
+FROM ""hangfire"".""jobqueue"";
+";
             return _connection.Query(sqlQuery).Select(x => (string)x.queue).ToList();
         }
 
@@ -52,13 +55,14 @@ namespace Hangfire.PostgreSql
         private IEnumerable<int> GetQueuedOrFetchedJobIds(string queue, bool fetched, int @from, int perPage)
         {
             string sqlQuery = string.Format(@"
-  select j.""id"" 
-  from ""hangfire"".""jobqueue"" jq
-  left join ""hangfire"".""job"" j on jq.""jobid"" = j.""id""
-  left join ""hangfire"".""state"" s on s.""id"" = j.""stateid""
-  where jq.""queue"" = @queue and jq.""fetchedat"" {0}
-    limit @count offset @start
-", fetched ? "is not null" : "is null");
+SELECT j.""id"" 
+FROM ""hangfire"".""jobqueue"" jq
+LEFT JOIN ""hangfire"".""job"" j ON jq.""jobid"" = j.""id""
+LEFT JOIN ""hangfire"".""state"" s ON s.""id"" = j.""stateid""
+WHERE jq.""queue"" = @queue 
+AND jq.""fetchedat"" {0}
+LIMIT @count OFFSET @start;
+", fetched ? "IS NOT NULL" : "IS NULL");
 
             return _connection.Query<int>(
                 sqlQuery,
@@ -74,9 +78,18 @@ namespace Hangfire.PostgreSql
         public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
         {
             const string sqlQuery = @"
-select 
-    (select count(*) from ""hangfire"".""jobqueue"" where ""fetchedat"" is null and ""queue"" = @queue) ""EnqueuedCount"", 
-    (select count(*) from ""hangfire"".""jobqueue"" where ""fetchedat"" is not null and ""queue"" = @queue) ""FetchedCount"";
+SELECT (
+        SELECT COUNT(*) 
+        FROM ""hangfire"".""jobqueue"" 
+        WHERE ""fetchedat"" IS NULL 
+        AND ""queue"" = @queue
+    ) ""EnqueuedCount"", 
+    (
+        SELECT COUNT(*) 
+        FROM ""hangfire"".""jobqueue"" 
+        WHERE ""fetchedat"" IS NOT NULL 
+        AND ""queue"" = @queue
+    ) ""FetchedCount"";
 ";
 
             var result = _connection.Query(sqlQuery, new { queue = queue }).Single();

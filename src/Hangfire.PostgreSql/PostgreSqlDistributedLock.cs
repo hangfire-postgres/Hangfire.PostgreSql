@@ -55,9 +55,12 @@ namespace Hangfire.PostgreSql
                     using (var trx = _connection.BeginTransaction(IsolationLevel.RepeatableRead))
                     {
                         rowsAffected = _connection.Execute(@"
-insert into ""hangfire"".""lock""(""resource"") 
-select @resource
-where not exists (select 1 from ""hangfire"".""lock"" where ""resource"" = @resource);
+INSERT INTO ""hangfire"".""lock""(""resource"") 
+SELECT @resource
+WHERE NOT EXISTS (
+    SELECT 1 FROM ""hangfire"".""lock"" 
+    WHERE ""resource"" = @resource
+);
 ", new
                         {
                             resource = resource
@@ -97,7 +100,8 @@ where not exists (select 1 from ""hangfire"".""lock"" where ""resource"" = @reso
             _completed = true;
 
             int rowsAffected = _connection.Execute(@"
-delete from ""hangfire"".""lock"" where ""resource"" = @resource
+DELETE FROM ""hangfire"".""lock"" 
+WHERE ""resource"" = @resource;
 ", new
             {
                 resource = _resource

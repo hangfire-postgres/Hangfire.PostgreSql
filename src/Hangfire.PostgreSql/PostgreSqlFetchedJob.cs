@@ -58,7 +58,10 @@ namespace Hangfire.PostgreSql
         public void RemoveFromQueue()
         {
             _connection.Execute(
-                @"delete from ""hangfire"".""jobqueue"" where ""id"" = @id;",
+                @"
+DELETE FROM ""hangfire"".""jobqueue"" 
+WHERE ""id"" = @id;
+",
                 new { id = Id });
 
             _removedFromQueue = true;
@@ -67,7 +70,11 @@ namespace Hangfire.PostgreSql
         public void Requeue()
         {
             _connection.Execute(
-                @"update ""hangfire"".""jobqueue"" set ""fetchedat"" = null where ""id"" = @id;",
+                @"
+UPDATE ""hangfire"".""jobqueue"" 
+SET ""fetchedat"" = NULL 
+WHERE ""id"" = @id;
+",
                 new { id = Id });
 
             _requeued = true;

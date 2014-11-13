@@ -55,13 +55,20 @@ namespace Hangfire.PostgreSql
             FetchedJob fetchedJob;
 
             const string fetchJobSqlTemplate = @"
-update ""hangfire"".""jobqueue"" 
-set ""fetchedat"" = now() at time zone 'utc'
-where ""id"" in (select ""id"" from ""hangfire"".""jobqueue"" where  ""queue"" = ANY @queues and ""fetchedat"" {0} order by ""queue"", ""fetchedat"" limit 1)
-returning ""id"" as ""Id"", ""jobid"" as ""JobId"", ""queue"" as ""Queue"";
+UPDATE ""hangfire"".""jobqueue"" 
+SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
+WHERE ""id"" IN (
+    SELECT ""id"" 
+    FROM ""hangfire"".""jobqueue"" 
+    WHERE ""queue"" = ANY @queues 
+    AND ""fetchedat"" {0} 
+    ORDER BY ""queue"", ""fetchedat"" 
+    LIMIT 1
+)
+RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
 ";
 
-            var fetchConditions = new[] { "is null", string.Format("< now() at time zone 'utc' + interval '{0} seconds'", timeoutSeconds) };
+            var fetchConditions = new[] { "IS NULL", string.Format("< NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS'", timeoutSeconds) };
             var currentQueryIndex = 0;
 
             do
@@ -97,7 +104,9 @@ returning ""id"" as ""Id"", ""jobid"" as ""JobId"", ""queue"" as ""Queue"";
         public void Enqueue(string queue, string jobId)
         {
             const string enqueueJobSql = @"
-insert into ""hangfire"".""jobqueue"" (""jobid"", ""queue"") values (@jobId, @queue)";
+INSERT INTO ""hangfire"".""jobqueue"" (""jobid"", ""queue"") 
+VALUES (@jobId, @queue);
+";
 
             _connection.Execute(enqueueJobSql, new { jobId = Convert.ToInt32(jobId,CultureInfo.InvariantCulture), queue = queue });
         }
