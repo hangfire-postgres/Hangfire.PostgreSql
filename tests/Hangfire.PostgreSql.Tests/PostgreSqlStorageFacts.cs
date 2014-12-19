@@ -85,7 +85,7 @@ namespace Hangfire.PostgreSql.Tests
             }
         }
 
-        [Fact]
+        [Fact, CleanDatabase]
         public void GetComponents_ReturnsAllNeededComponents()
         {
             var storage = CreateStorage();
@@ -96,11 +96,11 @@ namespace Hangfire.PostgreSql.Tests
             Assert.Contains(typeof(ExpirationManager), componentTypes);
         }
 
-        private static PostgreSqlStorage CreateStorage()
+        private PostgreSqlStorage CreateStorage()
         {
             return new PostgreSqlStorage(
                 ConnectionUtils.GetConnectionString(),
-                new PostgreSqlStorageOptions { PrepareSchemaIfNecessary = false });
+                _options);
         }
     }
 }
