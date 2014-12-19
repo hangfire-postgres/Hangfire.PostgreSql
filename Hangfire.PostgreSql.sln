@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.30501.0
+VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{766BE831-F758-46BC-AFD3-BBEEFE0F686F}"
 EndProject
@@ -26,6 +26,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{E9430085
 		build\Build.proj = build\Build.proj
 		build\Build.tasks = build\Build.tasks
 		build\Hangfire.PostgreSql.Properties.proj = build\Hangfire.PostgreSql.Properties.proj
+		build\Hangfire.PostgreSql.version.targets = build\Hangfire.PostgreSql.version.targets
 		build\Hangfire.versions.targets = build\Hangfire.versions.targets
 		build\ILMerge.CSharp.targets = build\ILMerge.CSharp.targets
 	EndProjectSection
