@@ -16,11 +16,11 @@
       https://github.com/frankhommers/Hangfire.PostgreSql/releases
 
       1.3.0
-      * Breaking – Use 'Hangfire.Core' 1.3.0.
-      * Breaking – Use 'LibLog' package instead of 'Common.Logging' for logging.
-      * Changed – 'Npgsql' package updated to 2.2.3.
-      * Changed – 'Dapper' package updated to 1.38.
-      * Changed – Mirrored the functionality of 'Hangfire.SqlServer' 1.3.0.
+      * Breaking - Use 'Hangfire.Core' 1.3.0.
+      * Breaking - Use 'LibLog' package instead of 'Common.Logging' for logging.
+      * Changed - 'Npgsql' package updated to 2.2.3.
+      * Changed - 'Dapper' package updated to 1.38.
+      * Changed - Mirrored the functionality of 'Hangfire.SqlServer' 1.3.0.
     </releaseNotes>
     <dependencies>
       <dependency id="Hangfire.Core" version="1.3.0" />
