@@ -23,7 +23,7 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Text;
-using Common.Logging;
+using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
@@ -32,6 +32,7 @@ namespace Hangfire.PostgreSql
 {
     public class PostgreSqlStorage : JobStorage
     {
+        private readonly NpgsqlConnection _existingConnection;
         private readonly PostgreSqlStorageOptions _options;
         private readonly string _connectionString;
 
@@ -82,9 +83,27 @@ namespace Hangfire.PostgreSql
                 }
             }
 
-            var defaultQueueProvider = new PostgreSqlJobQueueProvider(options);
-            QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
+            InitializeQueueProviders();
         }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SqlServerStorage"/> class with
+        /// explicit instance of the <see cref="SqlConnection"/> class that will be used
+        /// to query the data.
+        /// </summary>
+        /// <param name="existingConnection">Existing connection</param>
+        public PostgreSqlStorage(NpgsqlConnection existingConnection)
+        {
+            if (existingConnection == null) throw new ArgumentNullException("existingConnection");
+            var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
+            if (connectionStringBuilder.Enlist) throw new ArgumentException("Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
+            
+            _existingConnection = existingConnection;
+            _options = new PostgreSqlStorageOptions();
+
+            InitializeQueueProviders();
+        }
+
 
         public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
 
@@ -95,9 +114,8 @@ namespace Hangfire.PostgreSql
 
         public override IStorageConnection GetConnection()
         {
-            var connection = CreateAndOpenConnection();
-
-            return new PostgreSqlConnection(connection, QueueProviders);
+            var connection = _existingConnection ?? CreateAndOpenConnection();
+            return new PostgreSqlConnection(connection, QueueProviders, _existingConnection == null);
         }
 
         public override IEnumerable<IServerComponent> GetComponents()
@@ -144,6 +162,12 @@ namespace Hangfire.PostgreSql
             connection.Open();
 
             return connection;
+        }
+
+        private void InitializeQueueProviders()
+        {
+            var defaultQueueProvider = new PostgreSqlJobQueueProvider(_options);
+            QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
         }
 
         private bool IsConnectionString(string nameOrConnectionString)

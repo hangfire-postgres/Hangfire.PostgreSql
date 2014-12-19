@@ -39,20 +39,36 @@ namespace Hangfire.PostgreSql
         private readonly NpgsqlConnection _connection;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
+
+        public PostgreSqlConnection(
+            NpgsqlConnection connection,
+            PersistentJobQueueProviderCollection queueProviders)
+            : this(connection, queueProviders, true)
+        {
+        }
+
         public PostgreSqlConnection(
             NpgsqlConnection connection, 
-            PersistentJobQueueProviderCollection queueProviders)
+            PersistentJobQueueProviderCollection queueProviders,
+            bool ownsConnection)
         {
             if (connection == null) throw new ArgumentNullException("connection");
             if (queueProviders == null) throw new ArgumentNullException("queueProviders");
 
             _connection = connection;
             _queueProviders = queueProviders;
+            OwnsConnection = ownsConnection;
         }
+
+        public bool OwnsConnection { get; private set; }
+        public NpgsqlConnection Connection { get { return _connection; } }
 
         public void Dispose()
         {
-            _connection.Dispose();
+            if (OwnsConnection)
+            { 
+                 _connection.Dispose();
+            }
         }
 
         public IWriteOnlyTransaction CreateWriteTransaction()
@@ -213,23 +229,23 @@ WHERE j.""id"" = @jobId;
 
             const string sql = @"
 WITH ""inputvalues"" AS (
-	SELECT @jobid ""jobid"", @name ""name"", @value ""value""
+    SELECT @jobid ""jobid"", @name ""name"", @value ""value""
 ), ""updatedrows"" AS ( 
-	UPDATE ""hangfire"".""jobparameter"" ""updatetarget""
-	SET ""value"" = ""inputvalues"".""value""
-	FROM ""inputvalues""
-	WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
-	AND ""updatetarget"".""name"" = ""inputvalues"".""name""
-	RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
+    UPDATE ""hangfire"".""jobparameter"" ""updatetarget""
+    SET ""value"" = ""inputvalues"".""value""
+    FROM ""inputvalues""
+    WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
+    AND ""updatetarget"".""name"" = ""inputvalues"".""name""
+    RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
 )
 INSERT INTO ""hangfire"".""jobparameter""(""jobid"", ""name"", ""value"")
 SELECT ""jobid"", ""name"", ""value"" 
 FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
-	SELECT 1 
-	FROM ""updatedrows"" 
-	WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
-	AND ""updatedrows"".""name"" = ""insertvalues"".""name""
+    SELECT 1 
+    FROM ""updatedrows"" 
+    WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
+    AND ""updatedrows"".""name"" = ""insertvalues"".""name""
 );";
 
                         _connection.Execute(sql,
@@ -291,22 +307,22 @@ ORDER BY ""score"" LIMIT 1;
 
                         const string sql = @"
 WITH ""inputvalues"" AS (
-	SELECT @key ""key"", @field ""field"", @value ""value""
+    SELECT @key ""key"", @field ""field"", @value ""value""
 ), ""updatedrows"" AS ( 
-	UPDATE ""hangfire"".""hash"" ""updatetarget""
-	SET ""value"" = ""inputvalues"".""value""
-	FROM ""inputvalues""
-	WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
-	AND ""updatetarget"".""field"" = ""inputvalues"".""field""
-	RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
+    UPDATE ""hangfire"".""hash"" ""updatetarget""
+    SET ""value"" = ""inputvalues"".""value""
+    FROM ""inputvalues""
+    WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
+    AND ""updatetarget"".""field"" = ""inputvalues"".""field""
+    RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
 )
 INSERT INTO ""hangfire"".""hash""(""key"", ""field"", ""value"")
 SELECT ""key"", ""field"", ""value"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
-	SELECT 1 
-	FROM ""updatedrows"" 
-	WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
-	AND ""updatedrows"".""field"" = ""insertvalues"".""field""
+    SELECT 1 
+    FROM ""updatedrows"" 
+    WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
+    AND ""updatedrows"".""field"" = ""insertvalues"".""field""
 );
 ";
 
@@ -350,20 +366,20 @@ WHERE ""key"" = @key;
 
             const string sql = @"
 WITH ""inputvalues"" AS (
-	SELECT @id ""id"", @data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
+    SELECT @id ""id"", @data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
 ), ""updatedrows"" AS ( 
-	UPDATE ""hangfire"".""server"" ""updatetarget""
-	SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
-	FROM ""inputvalues""
-	WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
-	RETURNING ""updatetarget"".""id""
+    UPDATE ""hangfire"".""server"" ""updatetarget""
+    SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
+    FROM ""inputvalues""
+    WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
+    RETURNING ""updatetarget"".""id""
 )
 INSERT INTO ""hangfire"".""server""(""id"", ""data"", ""lastheartbeat"")
 SELECT ""id"", ""data"", ""lastheartbeat"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
-	SELECT 1 
-	FROM ""updatedrows"" 
-	WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
+    SELECT 1 
+    FROM ""updatedrows"" 
+    WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
 );
 ";
 

@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    public class StorageOptionsFacts
+    public class PostgreSqlStorageOptionsFacts
     {
         [Fact]
         public void Ctor_SetsTheDefaultOptions()

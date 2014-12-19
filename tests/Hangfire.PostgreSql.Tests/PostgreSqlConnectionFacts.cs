@@ -50,6 +50,33 @@ namespace Hangfire.PostgreSql.Tests
         }
 
         [Fact, CleanDatabase]
+        public void Dispose_DisposesTheConnection_IfOwned()
+        {
+            using (var sqlConnection = ConnectionUtils.CreateConnection())
+            {
+                var connection = new PostgreSqlConnection(sqlConnection, _providers);
+
+                connection.Dispose();
+
+                Assert.Equal(ConnectionState.Closed, sqlConnection.State);
+            }
+        }
+
+        [Fact, CleanDatabase]
+        public void Dispose_DoesNotDisposeTheConnection_IfNotOwned()
+        {
+            using (var sqlConnection = ConnectionUtils.CreateConnection())
+            {
+                var connection = new PostgreSqlConnection(sqlConnection, _providers, ownsConnection: false);
+
+                connection.Dispose();
+
+                Assert.Equal(ConnectionState.Open, sqlConnection.State);
+            }
+        }
+
+
+        [Fact, CleanDatabase]
         public void FetchNextJob_DelegatesItsExecution_ToTheQueue()
         {
             UseConnection(connection =>
@@ -243,7 +270,7 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
         {
             const string createJobSql = @"
 INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-	VALUES ('', '', '', now() at time zone 'utc') RETURNING ""id"";
+    VALUES ('', '', '', now() at time zone 'utc') RETURNING ""id"";
             ";
 
             const string createStateSql = @"
@@ -255,8 +282,8 @@ VALUES(@jobId, @name, @reason, @data, now() at time zone 'utc')
 returning ""id"";";
 
             const string updateJobStateSql = @"
-	update ""hangfire"".""job""
-	set ""stateid"" = @stateId
+    update ""hangfire"".""job""
+    set ""stateid"" = @stateId
     where ""id"" = @jobId;
 ";
 
@@ -439,8 +466,8 @@ values ('', '', now() at time zone 'utc') returning ""id""";
         {
             const string arrangeSql = @"
 WITH ""insertedjob"" AS (
-	INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-	VALUES ('', '', now() at time zone 'utc') RETURNING ""id""
+    INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+    VALUES ('', '', now() at time zone 'utc') RETURNING ""id""
 )
 INSERT INTO ""hangfire"".""jobparameter"" (""jobid"", ""name"", ""value"")
 SELECT ""insertedjob"".""id"", @name, @value

@@ -23,8 +23,8 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
-using Common.Logging;
 using Dapper;
+using Hangfire.Logging;
 using Npgsql;
 
 namespace Hangfire.PostgreSql
@@ -32,7 +32,7 @@ namespace Hangfire.PostgreSql
     [ExcludeFromCodeCoverage]
     internal static class PostgreSqlObjectsInstaller
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(PostgreSqlStorage));
+        private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
         public static void Install(NpgsqlConnection connection)
         {

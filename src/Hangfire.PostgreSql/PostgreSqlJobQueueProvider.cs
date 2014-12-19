@@ -35,6 +35,8 @@ namespace Hangfire.PostgreSql
             _options = options;
         }
 
+        public PostgreSqlStorageOptions Options { get { return _options; } }
+
         public IPersistentJobQueue GetJobQueue(IDbConnection connection)
         {
             return new PostgreSqlJobQueue(connection, _options);
