@@ -87,8 +87,8 @@ namespace Hangfire.PostgreSql
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SqlServerStorage"/> class with
-        /// explicit instance of the <see cref="SqlConnection"/> class that will be used
+        /// Initializes a new instance of the <see cref="PostgreSqlStorage"/> class with
+        /// explicit instance of the <see cref="NpgsqlConnection"/> class that will be used
         /// to query the data.
         /// </summary>
         /// <param name="existingConnection">Existing connection</param>
