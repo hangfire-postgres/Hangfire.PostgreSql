@@ -58,15 +58,18 @@ namespace Hangfire.PostgreSql
 
         public void Execute(CancellationToken cancellationToken)
         {
-            using (var connection = _storage.CreateAndOpenConnection())
+            using (var storageConnection = (PostgreSqlConnection)_storage.GetConnection())
             {
                 foreach (var table in ProcessedTables)
                 {
                     Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
-                    using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted)) { 
-                        int rowsAffected = connection.Execute(
-                            String.Format(@"delete from ""hangfire"".""{0}"" where ""expireat"" < now() at time zone 'utc';", table.ToLower()), transaction);
+                    using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted)) { 
+                        int rowsAffected = storageConnection.Connection.Execute(
+                            string.Format(@"
+delete from ""hangfire"".""{0}"" 
+where ""expireat"" < now() at time zone 'utc';
+", table.ToLower()), transaction);
                         transaction.Commit();
                         Logger.DebugFormat("Removed {0} outdated records from table '{1}'...", rowsAffected, table);
                     }

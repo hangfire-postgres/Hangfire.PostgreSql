@@ -1,21 +1,19 @@
 ﻿using System;
-using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Dapper;
+using Npgsql;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
     public class ExpirationManagerFacts
     {
-        private readonly PostgreSqlStorage _storage;
         private readonly CancellationToken _token;
 
         public ExpirationManagerFacts()
         {
-            _storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
             _token = new CancellationToken(true);
         }
 
@@ -28,10 +26,10 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void Execute_RemovesOutdatedRecords()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 var entryId = CreateExpirationEntry(connection, DateTime.UtcNow.AddMonths(-1));
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 manager.Execute(_token);
 
@@ -42,10 +40,10 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void Execute_DoesNotRemoveEntries_WithNoExpirationTimeSet()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 var entryId = CreateExpirationEntry(connection, null);
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 manager.Execute(_token);
 
@@ -56,10 +54,10 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void Execute_DoesNotRemoveEntries_WithFreshExpirationTime()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 var entryId = CreateExpirationEntry(connection, DateTime.Now.AddMonths(1));
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 manager.Execute(_token);
 
@@ -70,7 +68,7 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void Execute_Processes_CounterTable()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 // Arrange
                 const string createSql = @"
@@ -78,7 +76,7 @@ insert into ""hangfire"".""counter"" (""key"", ""value"", ""expireat"")
 values ('key', 1, @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 // Act
                 manager.Execute(_token);
@@ -91,7 +89,7 @@ values ('key', 1, @expireAt)";
         [Fact, CleanDatabase]
         public void Execute_Processes_JobTable()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 // Arrange
                 const string createSql = @"
@@ -99,7 +97,7 @@ insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat
 values ('', '', now() at time zone 'utc', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 // Act
                 manager.Execute(_token);
@@ -112,7 +110,7 @@ values ('', '', now() at time zone 'utc', @expireAt)";
         [Fact, CleanDatabase]
         public void Execute_Processes_ListTable()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 // Arrange
                 const string createSql = @"
@@ -120,7 +118,7 @@ insert into ""hangfire"".""list"" (""key"", ""expireat"")
 values ('key', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 // Act
                 manager.Execute(_token);
@@ -133,7 +131,7 @@ values ('key', @expireAt)";
         [Fact, CleanDatabase]
         public void Execute_Processes_SetTable()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 // Arrange
                 const string createSql = @"
@@ -141,7 +139,7 @@ insert into ""hangfire"".""set"" (""key"", ""score"", ""value"", ""expireat"")
 values ('key', 0, '', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 // Act
                 manager.Execute(_token);
@@ -154,7 +152,7 @@ values ('key', 0, '', @expireAt)";
         [Fact, CleanDatabase]
         public void Execute_Processes_HashTable()
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            using (var connection = CreateConnection())
             {
                 // Arrange
                 const string createSql = @"
@@ -162,7 +160,7 @@ insert into ""hangfire"".""hash"" (""key"", ""field"", ""value"", ""expireat"")
 values ('key', 'field', '', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
-                var manager = CreateManager();
+                var manager = CreateManager(connection);
 
                 // Act
                 manager.Execute(_token);
@@ -172,7 +170,7 @@ values ('key', 'field', '', @expireAt)";
             }
         }
 
-        private static int CreateExpirationEntry(IDbConnection connection, DateTime? expireAt)
+        private static int CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt)
         {
             const string insertSqlNull = @"
 insert into ""hangfire"".""counter""(""key"", ""value"", ""expireat"")
@@ -189,16 +187,22 @@ values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning "
             return recordId;
         }
 
-        private static bool IsEntryExpired(IDbConnection connection, int entryId)
+        private static bool IsEntryExpired(NpgsqlConnection connection, int entryId)
         {
             var count = connection.Query<long>(
                     @"select count(*) from ""hangfire"".""counter"" where ""id"" = @id", new { id = entryId }).Single();
             return count == 0;
         }
 
-        private ExpirationManager CreateManager()
-        {
-            return new ExpirationManager(_storage);
-        }
+         private NpgsqlConnection CreateConnection()
+         {
+             return ConnectionUtils.CreateConnection();
+         }
+ 
+         private ExpirationManager CreateManager(NpgsqlConnection connection)
+         {
+             var storage = new PostgreSqlStorage(connection);
+             return new ExpirationManager(storage);
+         }
     }
 }
