@@ -64,6 +64,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\SharedAssemblyInfo.cs">
+      <Link>Properties\SharedAssemblyInfo.cs</Link>
+    </Compile>
     <Compile Include="EnqueuedAndFetchedCountDto.cs" />
     <Compile Include="Entities\SqlHash.cs" />
     <Compile Include="ExpirationManager.cs" />
@@ -79,7 +82,6 @@
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="PostgreSqlJobQueue.cs" />
     <Compile Include="PostgreSqlFetchedJob.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PostgreSqlDistributedLock.cs" />
     <Compile Include="PostgreSqlDistributedLockException.cs" />
     <Compile Include="PostgreSqlJobQueueProvider.cs" />
