@@ -58,9 +58,9 @@ FROM ""hangfire"".""jobqueue"";
 SELECT j.""id"" 
 FROM ""hangfire"".""jobqueue"" jq
 LEFT JOIN ""hangfire"".""job"" j ON jq.""jobid"" = j.""id""
-LEFT JOIN ""hangfire"".""state"" s ON s.""id"" = j.""stateid""
 WHERE jq.""queue"" = @queue 
 AND jq.""fetchedat"" {0}
+AND j.""id"" IS NOT NULL
 LIMIT @count OFFSET @start;
 ", fetched ? "IS NOT NULL" : "IS NULL");
 
