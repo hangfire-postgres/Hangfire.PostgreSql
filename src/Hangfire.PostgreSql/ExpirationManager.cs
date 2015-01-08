@@ -42,16 +42,19 @@ namespace Hangfire.PostgreSql
 
         private readonly PostgreSqlStorage _storage;
         private readonly TimeSpan _checkInterval;
+        private readonly PostgreSqlStorageOptions _options;
 
-        public ExpirationManager(PostgreSqlStorage storage)
-            : this(storage, TimeSpan.FromHours(1))
+        public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+            : this(storage, options, TimeSpan.FromHours(1))
         {
         }
 
-        public ExpirationManager(PostgreSqlStorage storage, TimeSpan checkInterval)
+        public ExpirationManager(PostgreSqlStorage storage,  PostgreSqlStorageOptions options, TimeSpan checkInterval)
         {
             if (storage == null) throw new ArgumentNullException("storage");
+            if (options == null) throw new ArgumentNullException("storage");
 
+            _options = options;
             _storage = storage;
             _checkInterval = checkInterval;
         }
@@ -67,8 +70,8 @@ namespace Hangfire.PostgreSql
                     using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted)) { 
                         int rowsAffected = storageConnection.Connection.Execute(
                             string.Format(@"
-delete from ""hangfire"".""{0}"" 
-where ""expireat"" < now() at time zone 'utc';
+DELETE FROM """ + _options.SchemaName + @""".""{0}"" 
+WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC';
 ", table.ToLower()), transaction);
                         transaction.Commit();
                         Logger.DebugFormat("Removed {0} outdated records from table '{1}'...", rowsAffected, table);

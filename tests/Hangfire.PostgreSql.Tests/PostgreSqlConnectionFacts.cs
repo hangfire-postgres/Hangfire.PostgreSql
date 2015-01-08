@@ -19,6 +19,7 @@ namespace Hangfire.PostgreSql.Tests
         private readonly Mock<IPersistentJobQueue> _queue;
         private readonly Mock<IPersistentJobQueueProvider> _provider;
         private readonly PersistentJobQueueProviderCollection _providers;
+        private readonly PostgreSqlStorageOptions _options;
 
         public PostgreSqlConnectionFacts()
         {
@@ -29,13 +30,18 @@ namespace Hangfire.PostgreSql.Tests
                 .Returns(_queue.Object);
 
             _providers = new PersistentJobQueueProviderCollection(_provider.Object);
+
+            _options = new PostgreSqlStorageOptions()
+            {
+                SchemaName = GetSchemaName()
+            };
         }
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenConnectionIsNull()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlConnection(null, _providers));
+                () => new PostgreSqlConnection(null, _providers, _options));
 
             Assert.Equal("connection", exception.ParamName);
         }
@@ -44,9 +50,18 @@ namespace Hangfire.PostgreSql.Tests
         public void Ctor_ThrowsAnException_WhenProvidersCollectionIsNull()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlConnection(ConnectionUtils.CreateConnection(), null));
+                () => new PostgreSqlConnection(ConnectionUtils.CreateConnection(), null, _options));
 
             Assert.Equal("queueProviders", exception.ParamName);
+        }
+
+        [Fact, CleanDatabase]
+        public void Ctor_ThrowsAnException_WhenOptionsIsNull()
+        {
+            var exception = Assert.Throws<ArgumentNullException>(
+                () => new PostgreSqlConnection(ConnectionUtils.CreateConnection(), _providers, null));
+
+            Assert.Equal("options", exception.ParamName);
         }
 
         [Fact, CleanDatabase]
@@ -54,7 +69,7 @@ namespace Hangfire.PostgreSql.Tests
         {
             using (var sqlConnection = ConnectionUtils.CreateConnection())
             {
-                var connection = new PostgreSqlConnection(sqlConnection, _providers);
+                var connection = new PostgreSqlConnection(sqlConnection, _providers, _options);
 
                 connection.Dispose();
 
@@ -67,7 +82,7 @@ namespace Hangfire.PostgreSql.Tests
         {
             using (var sqlConnection = ConnectionUtils.CreateConnection())
             {
-                var connection = new PostgreSqlConnection(sqlConnection, _providers, ownsConnection: false);
+                var connection = new PostgreSqlConnection(sqlConnection, _providers, ownsConnection: false, options: _options);
 
                 connection.Dispose();
 
@@ -97,7 +112,7 @@ namespace Hangfire.PostgreSql.Tests
             {
                 var token = new CancellationToken();
                 var anotherProvider = new Mock<IPersistentJobQueueProvider>();
-                _providers.Add(anotherProvider.Object, new [] { "critical" });
+                _providers.Add(anotherProvider.Object, new[] { "critical" });
 
                 Assert.Throws<InvalidOperationException>(
                     () => connection.FetchNextJob(new[] { "critical", "default" }, token));
@@ -171,11 +186,11 @@ namespace Hangfire.PostgreSql.Tests
                 Assert.NotNull(jobId);
                 Assert.NotEmpty(jobId);
 
-                var sqlJob = sql.Query(@"select * from ""hangfire"".""job""").Single();
+                var sqlJob = sql.Query(@"select * from """ + GetSchemaName() + @""".""job""").Single();
                 Assert.Equal(jobId, sqlJob.id.ToString());
                 Assert.Equal(createdAt, sqlJob.createdat);
-                Assert.Equal(null, (int?) sqlJob.stateid);
-                Assert.Equal(null, (string) sqlJob.statename);
+                Assert.Equal(null, (int?)sqlJob.stateid);
+                Assert.Equal(null, (string)sqlJob.statename);
 
                 var invocationData = JobHelper.FromJson<InvocationData>((string)sqlJob.invocationdata);
                 invocationData.Arguments = sqlJob.arguments;
@@ -189,9 +204,9 @@ namespace Hangfire.PostgreSql.Tests
                 Assert.True(sqlJob.expireat < createdAt.AddDays(1).AddMinutes(1));
 
                 var parameters = sql.Query(
-                    @"select * from ""hangfire"".""jobparameter"" where ""jobid"" = @id",
+                    @"select * from """ + GetSchemaName() + @""".""jobparameter"" where ""jobid"" = @id",
                     new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) })
-                    .ToDictionary(x => (string) x.name, x => (string) x.value);
+                    .ToDictionary(x => (string)x.name, x => (string)x.value);
 
                 Assert.Equal("Value1", parameters["Key1"]);
                 Assert.Equal("Value2", parameters["Key2"]);
@@ -218,8 +233,8 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void GetJobData_ReturnsResult_WhenJobExists()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
 values (@invocationData, @arguments, @stateName, now() at time zone 'utc') returning ""id""";
 
             UseConnections((sql, connection) =>
@@ -268,21 +283,21 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
         [Fact, CleanDatabase]
         public void GetStateData_ReturnsCorrectData()
         {
-            const string createJobSql = @"
-INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+            string createJobSql = @"
+INSERT INTO """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
     VALUES ('', '', '', now() at time zone 'utc') RETURNING ""id"";
             ";
 
-            const string createStateSql = @"
-insert into ""hangfire"".""state"" (""jobid"", ""name"", ""createdat"")
+            string createStateSql = @"
+insert into """ + GetSchemaName() + @""".""state"" (""jobid"", ""name"", ""createdat"")
 VALUES(@jobId, 'old-state', now() at time zone 'utc');
 
-insert into ""hangfire"".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
+insert into """ + GetSchemaName() + @""".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
 VALUES(@jobId, @name, @reason, @data, now() at time zone 'utc')
 returning ""id"";";
 
-            const string updateJobStateSql = @"
-    update ""hangfire"".""job""
+            string updateJobStateSql = @"
+    update """ + GetSchemaName() + @""".""job""
     set ""stateid"" = @stateId
     where ""id"" = @jobId;
 ";
@@ -301,7 +316,7 @@ returning ""id"";";
                     createStateSql,
                     new { jobId = jobId, name = "Name", reason = "Reason", @data = JobHelper.ToJson(data) }).Single().id;
 
-                sql.Execute(updateJobStateSql, new {jobId = jobId, stateId = stateId});
+                sql.Execute(updateJobStateSql, new { jobId = jobId, stateId = stateId });
 
                 var result = connection.GetStateData(jobId.ToString(CultureInfo.InvariantCulture));
                 Assert.NotNull(result);
@@ -315,8 +330,8 @@ returning ""id"";";
         [Fact, CleanDatabase]
         public void GetJobData_ReturnsJobLoadException_IfThereWasADeserializationException()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
 values (@invocationData, @arguments, @stateName, now() at time zone 'utc') returning ""id""";
 
             UseConnections((sql, connection) =>
@@ -363,8 +378,8 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
         [Fact, CleanDatabase]
         public void SetParameters_CreatesNewParameter_WhenParameterWithTheGivenNameDoesNotExists()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
 values ('', '', now() at time zone 'utc') returning ""id""";
 
             UseConnections((sql, connection) =>
@@ -375,7 +390,7 @@ values ('', '', now() at time zone 'utc') returning ""id""";
                 connection.SetJobParameter(jobId, "Name", "Value");
 
                 var parameter = sql.Query(
-                    @"select * from ""hangfire"".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
+                    @"select * from """ + GetSchemaName() + @""".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
                     new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), name = "Name" }).Single();
 
                 Assert.Equal("Value", parameter.value);
@@ -385,8 +400,8 @@ values ('', '', now() at time zone 'utc') returning ""id""";
         [Fact, CleanDatabase]
         public void SetParameter_UpdatesValue_WhenParameterWithTheGivenName_AlreadyExists()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
 values ('', '', now() at time zone 'utc') returning ""id""";
 
             UseConnections((sql, connection) =>
@@ -398,7 +413,7 @@ values ('', '', now() at time zone 'utc') returning ""id""";
                 connection.SetJobParameter(jobId, "Name", "AnotherValue");
 
                 var parameter = sql.Query(
-                    @"select * from ""hangfire"".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
+                    @"select * from """ + GetSchemaName() + @""".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
                     new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), name = "Name" }).Single();
 
                 Assert.Equal("AnotherValue", parameter.value);
@@ -408,8 +423,8 @@ values ('', '', now() at time zone 'utc') returning ""id""";
         [Fact, CleanDatabase]
         public void SetParameter_CanAcceptNulls_AsValues()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
 values ('', '', now() at time zone 'utc') returning ""id""";
 
             UseConnections((sql, connection) =>
@@ -420,10 +435,10 @@ values ('', '', now() at time zone 'utc') returning ""id""";
                 connection.SetJobParameter(jobId, "Name", null);
 
                 var parameter = sql.Query(
-                    @"select * from ""hangfire"".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
+                    @"select * from """ + GetSchemaName() + @""".""jobparameter"" where ""jobid"" = @id and ""name"" = @name",
                     new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), name = "Name" }).Single();
 
-                Assert.Equal((string) null, parameter.value);
+                Assert.Equal((string)null, parameter.value);
             });
         }
 
@@ -464,12 +479,12 @@ values ('', '', now() at time zone 'utc') returning ""id""";
         [Fact, CleanDatabase]
         public void GetParameter_ReturnsParameterValue_WhenJobExists()
         {
-            const string arrangeSql = @"
+            string arrangeSql = @"
 WITH ""insertedjob"" AS (
-    INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+    INSERT INTO """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
     VALUES ('', '', now() at time zone 'utc') RETURNING ""id""
 )
-INSERT INTO ""hangfire"".""jobparameter"" (""jobid"", ""name"", ""value"")
+INSERT INTO """ + GetSchemaName() + @""".""jobparameter"" (""jobid"", ""name"", ""value"")
 SELECT ""insertedjob"".""id"", @name, @value
 FROM ""insertedjob""
 RETURNING ""jobid"";
@@ -520,8 +535,8 @@ RETURNING ""jobid"";
         [Fact, CleanDatabase]
         public void GetFirstByLowestScoreFromSet_ReturnsTheValueWithTheLowestScore()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""set"" (""key"", ""score"", ""value"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""set"" (""key"", ""score"", ""value"")
 values 
 ('key', 1.0, '1.0'),
 ('key', -1.0, '-1.0'),
@@ -533,7 +548,7 @@ values
                 sql.Execute(arrangeSql);
 
                 var result = connection.GetFirstByLowestScoreFromSet("key", -1.0, 3.0);
-                
+
                 Assert.Equal("-1.0", result);
             });
         }
@@ -574,7 +589,7 @@ values
                 };
                 connection.AnnounceServer("server", context1);
 
-                var server = sql.Query(@"select * from ""hangfire"".""server""").Single();
+                var server = sql.Query(@"select * from """ + GetSchemaName() + @""".""server""").Single();
                 Assert.Equal("server", server.id);
                 Assert.True(((string)server.data).StartsWith(
                     "{\"WorkerCount\":4,\"Queues\":[\"critical\",\"default\"],\"StartedAt\":"),
@@ -584,10 +599,10 @@ values
                 var context2 = new ServerContext
                 {
                     Queues = new[] { "default" },
-                    WorkerCount = 1000 
+                    WorkerCount = 1000
                 };
                 connection.AnnounceServer("server", context2);
-                var sameServer = sql.Query(@"select * from ""hangfire"".""server""").Single();
+                var sameServer = sql.Query(@"select * from """ + GetSchemaName() + @""".""server""").Single();
                 Assert.Equal("server", sameServer.id);
                 Assert.Contains("1000", sameServer.data);
             });
@@ -603,8 +618,8 @@ values
         [Fact, CleanDatabase]
         public void RemoveServer_RemovesAServerRecord()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""server"" (""id"", ""data"", ""lastheartbeat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""server"" (""id"", ""data"", ""lastheartbeat"")
 values ('Server1', '', now() at time zone 'utc'),
 ('Server2', '', now() at time zone 'utc')";
 
@@ -614,7 +629,7 @@ values ('Server1', '', now() at time zone 'utc'),
 
                 connection.RemoveServer("Server1");
 
-                var server = sql.Query(@"select * from ""hangfire"".""server""").Single();
+                var server = sql.Query(@"select * from """ + GetSchemaName() + @""".""server""").Single();
                 Assert.NotEqual("Server1", server.Id, StringComparer.OrdinalIgnoreCase);
             });
         }
@@ -629,8 +644,8 @@ values ('Server1', '', now() at time zone 'utc'),
         [Fact, CleanDatabase]
         public void Heartbeat_UpdatesLastHeartbeat_OfTheServerWithGivenId()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""server"" (""id"", ""data"", ""lastheartbeat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""server"" (""id"", ""data"", ""lastheartbeat"")
 values
 ('server1', '', '2012-12-12 12:12:12'),
 ('server2', '', '2012-12-12 12:12:12')";
@@ -641,7 +656,7 @@ values
 
                 connection.Heartbeat("server1");
 
-                var servers = sql.Query(@"select * from ""hangfire"".""server""")
+                var servers = sql.Query(@"select * from """ + GetSchemaName() + @""".""server""")
                     .ToDictionary(x => (string)x.id, x => (DateTime)x.lastheartbeat);
 
                 Assert.NotEqual(2012, servers["server1"].Year);
@@ -659,8 +674,8 @@ values
         [Fact, CleanDatabase]
         public void RemoveTimedOutServers_DoItsWorkPerfectly()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""server"" (""id"", ""data"", ""lastheartbeat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""server"" (""id"", ""data"", ""lastheartbeat"")
 values (@id, '', @heartbeat)";
 
             UseConnections((sql, connection) =>
@@ -675,7 +690,7 @@ values (@id, '', @heartbeat)";
 
                 connection.RemoveTimedOutServers(TimeSpan.FromHours(15));
 
-                var liveServer = sql.Query(@"select * from ""hangfire"".""server""").Single();
+                var liveServer = sql.Query(@"select * from """ + GetSchemaName() + @""".""server""").Single();
                 Assert.Equal("server2", liveServer.id);
             });
         }
@@ -702,8 +717,8 @@ values (@id, '', @heartbeat)";
         [Fact, CleanDatabase]
         public void GetAllItemsFromSet_ReturnsAllItems()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""set"" (""key"", ""score"", ""value"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""set"" (""key"", ""score"", ""value"")
 values (@key, 0.0, @value)";
 
             UseConnections((sql, connection) =>
@@ -762,7 +777,7 @@ values (@key, 0.0, @value)";
                 });
 
                 var result = sql.Query(
-                    @"select * from ""hangfire"".""hash"" where ""key"" = @key",
+                    @"select * from """ + GetSchemaName() + @""".""hash"" where ""key"" = @key",
                     new { key = "some-hash" })
                     .ToDictionary(x => (string)x.field, x => (string)x.value);
 
@@ -791,8 +806,8 @@ values (@key, 0.0, @value)";
         [Fact, CleanDatabase]
         public void GetAllEntriesFromHash_ReturnsAllKeysAndTheirValues()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""hash"" (""key"", ""field"", ""value"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""hash"" (""key"", ""field"", ""value"")
 values (@key, @field, @value)";
 
             UseConnections((sql, connection) =>
@@ -819,7 +834,7 @@ values (@key, @field, @value)";
         private void UseConnections(Action<NpgsqlConnection, PostgreSqlConnection> action)
         {
             using (var sqlConnection = ConnectionUtils.CreateConnection())
-            using (var connection = new PostgreSqlConnection(sqlConnection, _providers))
+            using (var connection = new PostgreSqlConnection(sqlConnection, _providers, _options))
             {
                 action(sqlConnection, connection);
             }
@@ -827,14 +842,22 @@ values (@key, @field, @value)";
 
         private void UseConnection(Action<PostgreSqlConnection> action)
         {
-            using (var connection = new PostgreSqlConnection( 
+            using (var connection = new PostgreSqlConnection(
                 ConnectionUtils.CreateConnection(),
-                _providers))
+                _providers,
+                _options))
             {
                 action(connection);
             }
         }
 
-        public static void SampleMethod(string arg){ }
+        private static string GetSchemaName()
+        {
+            return ConnectionUtils.GetSchemaName();
+        }
+
+        public static void SampleMethod(string arg) { }
+
+
     }
 }

@@ -37,13 +37,18 @@ namespace Hangfire.PostgreSql
     {
         private readonly string _connectionString;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
+        private readonly PostgreSqlStorageOptions _options;
 
         public PostgreSqlMonitoringApi(
             string connectionString,
+            PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
+            if(options==null) throw new ArgumentNullException("options");
+
             _connectionString = connectionString;
             _queueProviders = queueProviders;
+            _options = options;
         }
 
         public long ScheduledCount()
@@ -131,7 +136,7 @@ namespace Hangfire.PostgreSql
             return UseConnection<IList<ServerDto>>(connection =>
             {
                 var servers = connection.Query<Entities.Server>(
-                    @"select * from ""hangfire"".""server""", null)
+                    @"SELECT * FROM """ + _options.SchemaName + @""".""server""", null)
                     .ToList();
 
                 var result = new List<ServerDto>();
@@ -273,16 +278,16 @@ namespace Hangfire.PostgreSql
             {
 
 
-                const string sql = @"
+                string sql = @"
 SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt"" 
-FROM ""hangfire"".""job"" 
+FROM """ + _options.SchemaName + @""".""job"" 
 WHERE ""id"" = @id;
 
-SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value"" from ""hangfire"".""jobparameter"" 
+SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value"" from """ + _options.SchemaName + @""".""jobparameter"" 
 WHERE ""jobid"" = @id;
 
 SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""reason"" ""Reason"", ""createdat"" ""CreatedAt"", ""data"" ""Data"" 
-FROM ""hangfire"".""state"" 
+FROM """ + _options.SchemaName + @""".""state"" 
 WHERE ""jobid"" = @id 
 ORDER BY ""id"" DESC;
 ";
@@ -331,25 +336,25 @@ ORDER BY ""id"" DESC;
         {
             return UseConnection(connection =>
             {
-                const string sql = @"
+                string sql = @"
 SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
-FROM ""hangfire"".""job""
+FROM """ + _options.SchemaName + @""".""job""
 GROUP BY ""statename""
 HAVING ""statename"" IS NOT NULL;
 
 SELECT COUNT(""id"") 
-FROM ""hangfire"".""server"";
+FROM """ + _options.SchemaName + @""".""server"";
 
 SELECT SUM(""value"") 
-FROM ""hangfire"".""counter"" 
+FROM """ + _options.SchemaName + @""".""counter"" 
 WHERE ""key"" = 'stats:succeeded';
 
 SELECT SUM(""value"") 
-FROM ""hangfire"".""counter"" 
+FROM """ + _options.SchemaName + @""".""counter"" 
 WHERE ""key"" = 'stats:deleted';
 
 SELECT COUNT(*) 
-FROM ""hangfire"".""set"" 
+FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = 'recurring-jobs';
 ";
 
@@ -395,9 +400,9 @@ WHERE ""key"" = 'recurring-jobs';
 
             var keys = dates.Select(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd-HH"))).ToList();
 
-            const string sqlQuery = @"
+            string sqlQuery = @"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
-FROM ""hangfire"".""counter""
+FROM """ + _options.SchemaName + @""".""counter""
 GROUP BY ""key""
 HAVING ""key"" = ANY @keys;
 ";
@@ -439,9 +444,9 @@ HAVING ""key"" = ANY @keys;
             var stringDates = dates.Select(x => x.ToString("yyyy-MM-dd")).ToList();
             var keys = stringDates.Select(x => String.Format("stats:{0}:{1}", type, x)).ToList();
 
-            const string sqlQuery = @"
+            string sqlQuery = @"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
-FROM ""hangfire"".""counter""
+FROM """ + _options.SchemaName + @""".""counter""
 GROUP BY ""key""
 HAVING ""key"" = ANY @keys;
 ";
@@ -488,11 +493,11 @@ HAVING ""key"" = ANY @keys;
 
         private JobList<EnqueuedJobDto> EnqueuedJobs(NpgsqlConnection connection, IEnumerable<int> jobIds)
         {
-            const string enqueuedJobsSql = @"
+            string enqueuedJobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", j.""expireat"" ""ExpireAt"", s.""name"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-FROM ""hangfire"".""job"" j
-LEFT JOIN ""hangfire"".""state"" s ON s.""id"" = j.""stateid""
-LEFT JOIN ""hangfire"".""jobqueue"" jq ON jq.""jobid"" = j.""id""
+FROM """ + _options.SchemaName + @""".""job"" j
+LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON s.""id"" = j.""stateid""
+LEFT JOIN """ + _options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
 WHERE j.""id"" = ANY @jobIds 
 AND jq.""fetchedat"" IS NULL;
 ";
@@ -516,9 +521,9 @@ AND jq.""fetchedat"" IS NULL;
 
         private long GetNumberOfJobsByStateName(NpgsqlConnection connection, string stateName)
         {
-            const string sqlQuery = @"
+            string sqlQuery = @"
 SELECT COUNT(""id"") 
-FROM ""hangfire"".""job"" 
+FROM """ + _options.SchemaName + @""".""job"" 
 WHERE ""statename"" = @state;
 ";
 
@@ -547,11 +552,11 @@ WHERE ""statename"" = @state;
 
         private JobList<TDto> GetJobs<TDto>(NpgsqlConnection connection, int @from, int count, string stateName, Func<SqlJob, Job, Dictionary<string, string>, TDto> selector)
         {
-            const string jobsSql = @"
+            string jobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 
     j.""expireat"" ""ExpireAt"", NULL ""FetchedAt"", j.""statename"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-FROM ""hangfire"".""job"" j
-LEFT JOIN ""hangfire"".""state"" s ON j.""stateid"" = s.""id""
+FROM """ + _options.SchemaName + @""".""job"" j
+LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
 WHERE j.""statename"" = @stateName 
 ORDER BY j.""id""
 LIMIT @count OFFSET @start;
@@ -587,12 +592,12 @@ LIMIT @count OFFSET @start;
             NpgsqlConnection connection,
             IEnumerable<int> jobIds)
         {
-            const string fetchedJobsSql = @"
+            string fetchedJobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 
     j.""expireat"" ""ExpireAt"", jq.""fetchedat"" ""FetchedAt"", j.""statename"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-FROM ""hangfire"".""job"" j
-LEFT JOIN ""hangfire"".""state"" s ON j.""stateid"" = s.""id""
-LEFT JOIN ""hangfire"".""jobqueue"" jq ON jq.""jobid"" = j.""id""
+FROM """ + _options.SchemaName + @""".""job"" j
+LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
+LEFT JOIN """ + _options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
 WHERE j.""id"" = ANY @jobIds 
 AND ""jq"".""fetchedat"" IS NOT NULL;
 ";

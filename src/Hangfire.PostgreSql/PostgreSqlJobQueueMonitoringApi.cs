@@ -30,19 +30,22 @@ namespace Hangfire.PostgreSql
     internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
     {
         private readonly IDbConnection _connection;
+        private readonly PostgreSqlStorageOptions _options;
 
-        public PostgreSqlJobQueueMonitoringApi(IDbConnection connection)
+        public PostgreSqlJobQueueMonitoringApi(IDbConnection connection, PostgreSqlStorageOptions options)
         {
             if (connection == null) throw new ArgumentNullException("connection");
+            if (options == null) throw new ArgumentNullException("options");
 
             _connection = connection;
+            _options = options;
         }
 
         public IEnumerable<string> GetQueues()
         {
-            const string sqlQuery = @"
+            string sqlQuery = @"
 SELECT DISTINCT ""queue"" 
-FROM ""hangfire"".""jobqueue"";
+FROM """ + _options.SchemaName + @""".""jobqueue"";
 ";
             return _connection.Query(sqlQuery).Select(x => (string)x.queue).ToList();
         }
@@ -56,8 +59,8 @@ FROM ""hangfire"".""jobqueue"";
         {
             string sqlQuery = string.Format(@"
 SELECT j.""id"" 
-FROM ""hangfire"".""jobqueue"" jq
-LEFT JOIN ""hangfire"".""job"" j ON jq.""jobid"" = j.""id""
+FROM """ + _options.SchemaName + @""".""jobqueue"" jq
+LEFT JOIN """ + _options.SchemaName + @""".""job"" j ON jq.""jobid"" = j.""id""
 WHERE jq.""queue"" = @queue 
 AND jq.""fetchedat"" {0}
 AND j.""id"" IS NOT NULL
@@ -77,16 +80,16 @@ LIMIT @count OFFSET @start;
 
         public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
         {
-            const string sqlQuery = @"
+            string sqlQuery = @"
 SELECT (
         SELECT COUNT(*) 
-        FROM ""hangfire"".""jobqueue"" 
+        FROM """ + _options.SchemaName + @""".""jobqueue"" 
         WHERE ""fetchedat"" IS NULL 
         AND ""queue"" = @queue
     ) ""EnqueuedCount"", 
     (
         SELECT COUNT(*) 
-        FROM ""hangfire"".""jobqueue"" 
+        FROM """ + _options.SchemaName + @""".""jobqueue"" 
         WHERE ""fetchedat"" IS NOT NULL 
         AND ""queue"" = @queue
     ) ""FetchedCount"";

@@ -13,12 +13,23 @@ namespace Hangfire.PostgreSql.Tests
     public class PostgreSqlDistributedLockFacts
     {
         private readonly TimeSpan _timeout = TimeSpan.FromSeconds(5);
+        private readonly PostgreSqlStorageOptions _options;
+
+        public PostgreSqlDistributedLockFacts()
+        {
+
+            _options = new PostgreSqlStorageOptions()
+            {
+                SchemaName = GetSchemaName()
+            };
+        }
+
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenResourceIsNullOrEmpty()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlDistributedLock("", _timeout, new Mock<IDbConnection>().Object));
+                () => new PostgreSqlDistributedLock("", _timeout, new Mock<IDbConnection>().Object, _options));
 
             Assert.Equal("resource", exception.ParamName);
         }
@@ -27,21 +38,31 @@ namespace Hangfire.PostgreSql.Tests
         public void Ctor_ThrowsAnException_WhenConnectionIsNull()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlDistributedLock("hello", _timeout, null));
+                () => new PostgreSqlDistributedLock("hello", _timeout, null, _options));
 
             Assert.Equal("connection", exception.ParamName);
         }
 
+        [Fact]
+        public void Ctor_ThrowsAnException_WhenOptionsIsNull()
+        {
+            var exception = Assert.Throws<ArgumentNullException>(
+                () => new PostgreSqlDistributedLock("hi", _timeout, new Mock<IDbConnection>().Object, null));
+
+            Assert.Equal("options", exception.ParamName);
+        }
+
+
         [Fact, CleanDatabase]
         public void Ctor_AcquiresExclusiveApplicationLock_OnSession()
         {
-            UseConnection(sql =>
+            UseConnection(connection =>
             {
                 // ReSharper disable once UnusedVariable
-                var distributedLock = new PostgreSqlDistributedLock("hello", _timeout, sql);
+                var distributedLock = new PostgreSqlDistributedLock("hello", _timeout, connection, _options);
 
-                var lockCount = sql.Query<long>(
-                    @"select count(*) from ""hangfire"".""lock"" where ""resource"" = @resource", new { resource = "hello"}).Single();
+                var lockCount = connection.Query<long>(
+                    @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource", new { resource = "hello" }).Single();
 
                 Assert.Equal(lockCount, 1);
                 //Assert.Equal("Exclusive", lockMode);
@@ -59,7 +80,7 @@ namespace Hangfire.PostgreSql.Tests
             var thread = new Thread(
                 () => UseConnection(connection1 =>
                 {
-                    using (new PostgreSqlDistributedLock("exclusive", _timeout, connection1))
+                    using (new PostgreSqlDistributedLock("exclusive", _timeout, connection1, _options))
                     {
                         lockAcquired.Set();
                         releaseLock.Wait();
@@ -71,7 +92,7 @@ namespace Hangfire.PostgreSql.Tests
 
             UseConnection(connection2 => 
                 Assert.Throws<PostgreSqlDistributedLockException>(
-                    () => new PostgreSqlDistributedLock("exclusive", _timeout, connection2)));
+                    () => new PostgreSqlDistributedLock("exclusive", _timeout, connection2, _options)));
 
             releaseLock.Set();
             thread.Join();
@@ -80,13 +101,13 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void Dispose_ReleasesExclusiveApplicationLock()
         {
-            UseConnection(sql =>
+            UseConnection(connection =>
             {
-                var distributedLock = new PostgreSqlDistributedLock("hello", _timeout, sql);
+                var distributedLock = new PostgreSqlDistributedLock("hello", _timeout, connection, _options);
                 distributedLock.Dispose();
 
-                var lockCount = sql.Query<long>(
-                    @"select count(*) from ""hangfire"".""lock"" where ""resource"" = @resource", new { resource = "hello" }).Single();
+                var lockCount = connection.Query<long>(
+                    @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource", new { resource = "hello" }).Single();
 
                 Assert.Equal(lockCount, 0);
             });
@@ -99,5 +120,12 @@ namespace Hangfire.PostgreSql.Tests
                 action(connection);
             }
         }
+
+        private static string GetSchemaName()
+        {
+            return ConnectionUtils.GetSchemaName();
+        }
+
+
     }
 }

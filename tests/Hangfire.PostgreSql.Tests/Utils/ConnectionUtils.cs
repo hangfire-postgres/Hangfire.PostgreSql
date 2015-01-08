@@ -6,11 +6,13 @@ namespace Hangfire.PostgreSql.Tests
     public static class ConnectionUtils
     {
         private const string DatabaseVariable = "Hangfire_PostgreSql_DatabaseName";
+        private const string SchemaVariable = "Hangfire_PostgreSql_SchemaName";
         private const string ConnectionStringTemplateVariable 
             = "Hangfire_PostgreSql_ConnectionStringTemplate";
 
         private const string MasterDatabaseName = "postgres";
         private const string DefaultDatabaseName = @"hangfire_tests";
+        private const string DefaultSchemaName = @"hangfire";
         private const string DefaultConnectionStringTemplate
             = @"Server=127.0.0.1;Port=5432;Database={0};Integrated Security=true;";
 
@@ -18,6 +20,12 @@ namespace Hangfire.PostgreSql.Tests
         {
             return Environment.GetEnvironmentVariable(DatabaseVariable) ?? DefaultDatabaseName;
         }
+
+        public static string GetSchemaName()
+        {
+            return Environment.GetEnvironmentVariable(SchemaVariable) ?? DefaultSchemaName;
+        }
+
 
         public static string GetMasterConnectionString()
         {

@@ -1,13 +1,12 @@
 ﻿DO $$
 BEGIN
-
     IF NOT EXISTS(
         SELECT schema_name
           FROM information_schema.schemata
           WHERE schema_name = 'hangfire'
       )
     THEN
-      EXECUTE 'CREATE SCHEMA hangfire';
+      EXECUTE 'CREATE SCHEMA "hangfire";';
     END IF;
 
 END
@@ -22,9 +21,19 @@ CREATE TABLE IF NOT EXISTS "schema" (  "version" INT NOT NULL ,
   PRIMARY KEY ("version")
 ); 
 
+
+DO
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM "schema" WHERE "version" = '3') THEN
+        RAISE EXCEPTION 'version-already-applied';
+    END IF;
+END
+$$;
+ 
 INSERT INTO "schema"("version")
 SELECT 3 "version" WHERE NOT EXISTS (SELECT 1 FROM "schema");
--- version 3 to keep in check with Hangfire.SqlServer
+-- version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
 
 --
 -- Table structure for table `Counter`

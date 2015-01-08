@@ -31,7 +31,6 @@ namespace Hangfire.PostgreSql
         public PostgreSqlJobQueueProvider(PostgreSqlStorageOptions options)
         {
             if (options == null) throw new ArgumentNullException("options");
-
             _options = options;
         }
 
@@ -44,7 +43,7 @@ namespace Hangfire.PostgreSql
 
         public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi(IDbConnection connection)
         {
-            return new PostgreSqlJobQueueMonitoringApi(connection);
+            return new PostgreSqlJobQueueMonitoringApi(connection, _options);
         }
     }
 }

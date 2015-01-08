@@ -54,16 +54,17 @@ namespace Hangfire.PostgreSql
             long timeoutSeconds = (long)_options.InvisibilityTimeout.Negate().TotalSeconds;
             FetchedJob fetchedJob;
 
-            const string fetchJobSqlTemplate = @"
-UPDATE ""hangfire"".""jobqueue"" 
+            string fetchJobSqlTemplate = @"
+UPDATE """ + _options.SchemaName + @""".""jobqueue"" 
 SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
 WHERE ""id"" IN (
     SELECT ""id"" 
-    FROM ""hangfire"".""jobqueue"" 
+    FROM """ + _options.SchemaName + @""".""jobqueue"" 
     WHERE ""queue"" = ANY @queues 
     AND ""fetchedat"" {0} 
     ORDER BY ""queue"", ""fetchedat"" 
     LIMIT 1
+    FOR UPDATE
 )
 RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
 ";
@@ -96,6 +97,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
 
             return new PostgreSqlFetchedJob(
                 _connection,
+                _options,
                 fetchedJob.Id,
                 fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
                 fetchedJob.Queue);
@@ -103,8 +105,8 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
 
         public void Enqueue(string queue, string jobId)
         {
-            const string enqueueJobSql = @"
-INSERT INTO ""hangfire"".""jobqueue"" (""jobid"", ""queue"") 
+            string enqueueJobSql = @"
+INSERT INTO """ + _options.SchemaName + @""".""jobqueue"" (""jobid"", ""queue"") 
 VALUES (@jobId, @queue);
 ";
 

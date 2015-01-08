@@ -38,16 +38,20 @@ namespace Hangfire.PostgreSql
 
         private readonly NpgsqlConnection _connection;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
+        private readonly PostgreSqlStorageOptions _options;
 
         public PostgreSqlWriteOnlyTransaction(
             NpgsqlConnection connection,
+            PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
             if (connection == null) throw new ArgumentNullException("connection");
             if (queueProviders == null) throw new ArgumentNullException("queueProviders");
+            if (options == null) throw new ArgumentNullException("options");
 
             _connection = connection;
 ;
+            _options = options;
             _queueProviders = queueProviders;
         }
 
@@ -80,7 +84,7 @@ namespace Hangfire.PostgreSql
             string sql =
                 string.Format(
                     @"
-UPDATE ""hangfire"".""job""
+UPDATE """ + _options.SchemaName + @""".""job""
 SET ""expireat"" = NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS'
 WHERE ""id"" = @id;
 ",
@@ -96,7 +100,7 @@ WHERE ""id"" = @id;
         {
             QueueCommand((con, trx) => con.Execute(
                 @"
-UPDATE ""hangfire"".""job"" 
+UPDATE """ + _options.SchemaName + @""".""job"" 
 SET ""expireat"" = NULL 
 WHERE ""id"" = @id;
 ",
@@ -106,12 +110,12 @@ WHERE ""id"" = @id;
         public void SetJobState(string jobId, IState state)
         {
 
-            const string addAndSetStateSql = @"
+            string addAndSetStateSql = @"
 WITH s AS (
-    INSERT INTO ""hangfire"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
+    INSERT INTO """ + _options.SchemaName + @""".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
     VALUES (@jobId, @name, @reason, @createdAt, @data) RETURNING ""id""
 )
-UPDATE ""hangfire"".""job"" j
+UPDATE """ + _options.SchemaName + @""".""job"" j
 SET ""stateid"" = s.""id"", ""statename"" = @name
 FROM s
 WHERE j.""id"" = @id;
@@ -132,8 +136,8 @@ WHERE j.""id"" = @id;
 
         public void AddJobState(string jobId, IState state)
         {
-            const string addStateSql = @"
-INSERT INTO ""hangfire"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
+            string addStateSql = @"
+INSERT INTO """ + _options.SchemaName + @""".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
 VALUES (@jobId, @name, @reason, @createdAt, @data);
 ";
 
@@ -162,7 +166,7 @@ VALUES (@jobId, @name, @reason, @createdAt, @data);
         {
             QueueCommand((con, trx) => con.Execute(
                 @"
-INSERT INTO ""hangfire"".""counter"" (""key"", ""value"") 
+INSERT INTO """ + _options.SchemaName + @""".""counter"" (""key"", ""value"") 
 VALUES (@key, @value);
 ",
                 new { key, value = +1 }, trx));
@@ -173,7 +177,7 @@ VALUES (@key, @value);
             string sql =
                 string.Format(
                     @"
-INSERT INTO ""hangfire"".""counter""(""key"", ""value"", ""expireat"") 
+INSERT INTO """ + _options.SchemaName + @""".""counter""(""key"", ""value"", ""expireat"") 
 VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS');
 ",
                     (long)expireIn.TotalSeconds);
@@ -188,7 +192,7 @@ VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS');
         {
             QueueCommand((con, trx) => con.Execute(
                 @"
-INSERT INTO ""hangfire"".""counter""(""key"", ""value"") 
+INSERT INTO """ + _options.SchemaName + @""".""counter""(""key"", ""value"") 
 VALUES (@key, @value)
 ",
                 new { key, value = -1 }, trx));
@@ -199,7 +203,7 @@ VALUES (@key, @value)
             string sql =
                 string.Format(
                     @"
-INSERT INTO ""hangfire"".""counter""(""key"", ""value"", ""expireat"") 
+INSERT INTO """ + _options.SchemaName + @""".""counter""(""key"", ""value"", ""expireat"") 
 VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS');
 ",
                     (long) expireIn.TotalSeconds);
@@ -216,18 +220,18 @@ VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS');
 
         public void AddToSet(string key, string value, double score)
         {
-            const string addSql = @"
+            string addSql = @"
 WITH ""inputvalues"" AS (
 	SELECT @key ""key"", @value ""value"", @score ""score""
 ), ""updatedrows"" AS ( 
-	UPDATE ""hangfire"".""set"" ""updatetarget""
+	UPDATE """ + _options.SchemaName + @""".""set"" ""updatetarget""
 	SET ""score"" = ""inputvalues"".""score""
 	FROM ""inputvalues""
 	WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
 	AND ""updatetarget"".""value"" = ""inputvalues"".""value""
 	RETURNING ""updatetarget"".""key"", ""updatetarget"".""value""
 )
-INSERT INTO ""hangfire"".""set""(""key"", ""value"", ""score"")
+INSERT INTO """ + _options.SchemaName + @""".""set""(""key"", ""value"", ""score"")
 SELECT ""key"", ""value"", ""score"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
 	SELECT 1 
@@ -246,7 +250,7 @@ WHERE NOT EXISTS (
         {
             QueueCommand((con, trx) => con.Execute(
                 @"
-DELETE FROM ""hangfire"".""set"" 
+DELETE FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = @key 
 AND ""value"" = @value;
 ",
@@ -257,7 +261,7 @@ AND ""value"" = @value;
         {
             QueueCommand((con, trx) => con.Execute(
                 @"
-INSERT INTO ""hangfire"".""list"" (""key"", ""value"") 
+INSERT INTO """ + _options.SchemaName + @""".""list"" (""key"", ""value"") 
 VALUES (@key, @value);
 ",
                 new { key, value }, trx));
@@ -267,7 +271,7 @@ VALUES (@key, @value);
         {
             QueueCommand((con, trx) => con.Execute(
                 @"
-DELETE FROM ""hangfire"".""list"" 
+DELETE FROM """ + _options.SchemaName + @""".""list"" 
 WHERE ""key"" = @key 
 AND ""value"" = @value;
 ",
@@ -276,13 +280,13 @@ AND ""value"" = @value;
 
         public void TrimList(string key, int keepStartingFrom, int keepEndingAt)
         {
-            const string trimSql =
+            string trimSql =
                 @"
-DELETE FROM ""hangfire"".""list"" AS source
+DELETE FROM """ + _options.SchemaName + @""".""list"" AS source
 WHERE ""key"" = @key
 AND ""id"" NOT IN (
     SELECT ""id"" 
-    FROM ""hangfire"".""list"" AS keep
+    FROM """ + _options.SchemaName + @""".""list"" AS keep
     WHERE keep.""key"" = source.""key""
     ORDER BY ""id"" 
     OFFSET @start LIMIT @end
@@ -299,18 +303,18 @@ AND ""id"" NOT IN (
             if (key == null) throw new ArgumentNullException("key");
             if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
 
-            const string sql = @"
+            string sql = @"
 WITH ""inputvalues"" AS (
 	SELECT @key ""key"", @field ""field"", @value ""value""
 ), ""updatedrows"" AS ( 
-	UPDATE ""hangfire"".""hash"" ""updatetarget""
+	UPDATE """ + _options.SchemaName + @""".""hash"" ""updatetarget""
 	SET ""value"" = ""inputvalues"".""value""
 	FROM ""inputvalues""
 	WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
 	AND ""updatetarget"".""field"" = ""inputvalues"".""field""
 	RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
 )
-INSERT INTO ""hangfire"".""hash""(""key"", ""field"", ""value"")
+INSERT INTO """ + _options.SchemaName + @""".""hash""(""key"", ""field"", ""value"")
 SELECT ""key"", ""field"", ""value"" 
 FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
@@ -335,7 +339,7 @@ WHERE NOT EXISTS (
 
             QueueCommand((con, trx) => con.Execute(
                 @"
-DELETE FROM ""hangfire"".""hash"" 
+DELETE FROM """ + _options.SchemaName + @""".""hash"" 
 WHERE ""key"" = @key;
 ",
                 new { key }, trx));
