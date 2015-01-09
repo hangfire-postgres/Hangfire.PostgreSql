@@ -52,12 +52,11 @@ namespace Hangfire.PostgreSql
 
 
             long timeoutSeconds = (long)_options.InvisibilityTimeout.Negate().TotalSeconds;
-            FetchedJob jobToFetch = null;
             FetchedJob markJobAsFetched = null;
             
 
             string jobToFetchSqlTemplate = @"
-SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt""
+SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
 FROM """ + _options.SchemaName + @""".""jobqueue"" 
 WHERE ""queue"" = ANY @queues 
 AND ""fetchedat"" {0} 
@@ -65,11 +64,12 @@ ORDER BY ""queue"", ""fetchedat""
 LIMIT 1;
 ";
 
-            string markJobAsFetchedSqlTemplate = @"
+            string markJobAsFetchedSql = @"
 UPDATE """ + _options.SchemaName + @""".""jobqueue"" 
-SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
+SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC', 
+    ""updatecount"" = (""updatecount"" + 1) % 2000000000
 WHERE ""id"" = @Id 
-AND ""fetchedat"" {0}
+AND ""updatecount"" = @UpdateCount
 RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
 ";
 
@@ -82,7 +82,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 
                 string jobToFetchJobSql = string.Format(jobToFetchSqlTemplate, fetchConditions[currentQueryIndex]);
 
-                jobToFetch = _connection.Query<FetchedJob>(
+                FetchedJob jobToFetch = _connection.Query<FetchedJob>(
                     jobToFetchJobSql,
                     new { queues = queues.ToList() })
                     .SingleOrDefault();
@@ -97,9 +97,6 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
                 }
                 else
                 {
-                    string markJobAsFetchedSql = 
-                        string.Format(markJobAsFetchedSqlTemplate, jobToFetch.FetchedAt.HasValue ? " = @FetchedAt" : " IS NULL");
-
                     markJobAsFetched = _connection.Query<FetchedJob>(
                         markJobAsFetchedSql,
                         jobToFetch)
@@ -136,6 +133,7 @@ VALUES (@jobId, @queue);
             public int JobId { get; set; }
             public string Queue { get; set; }
             public DateTime? FetchedAt { get; set; }
+            public int UpdateCount { get; set; }
         }
     }
 }
