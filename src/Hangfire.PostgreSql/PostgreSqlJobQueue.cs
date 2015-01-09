@@ -52,21 +52,25 @@ namespace Hangfire.PostgreSql
 
 
             long timeoutSeconds = (long)_options.InvisibilityTimeout.Negate().TotalSeconds;
-            FetchedJob fetchedJob;
+            FetchedJob jobToFetch = null;
+            FetchedJob markJobAsFetched = null;
+            
 
-            string fetchJobSqlTemplate = @"
+            string jobToFetchSqlTemplate = @"
+SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt""
+FROM """ + _options.SchemaName + @""".""jobqueue"" 
+WHERE ""queue"" = ANY @queues 
+AND ""fetchedat"" {0} 
+ORDER BY ""queue"", ""fetchedat"" 
+LIMIT 1;
+";
+
+            string markJobAsFetchedSqlTemplate = @"
 UPDATE """ + _options.SchemaName + @""".""jobqueue"" 
 SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
-WHERE ""id"" IN (
-    SELECT ""id"" 
-    FROM """ + _options.SchemaName + @""".""jobqueue"" 
-    WHERE ""queue"" = ANY @queues 
-    AND ""fetchedat"" {0} 
-    ORDER BY ""queue"", ""fetchedat"" 
-    LIMIT 1
-    FOR UPDATE
-)
-RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
+WHERE ""id"" = @Id 
+AND ""fetchedat"" {0}
+RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
 ";
 
             var fetchConditions = new[] { "IS NULL", string.Format("< NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS'", timeoutSeconds) };
@@ -76,14 +80,14 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                string fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[currentQueryIndex]);
+                string jobToFetchJobSql = string.Format(jobToFetchSqlTemplate, fetchConditions[currentQueryIndex]);
 
-                fetchedJob = _connection.Query<FetchedJob>(
-                    fetchJobSql,
+                jobToFetch = _connection.Query<FetchedJob>(
+                    jobToFetchJobSql,
                     new { queues = queues.ToList() })
                     .SingleOrDefault();
 
-                if (fetchedJob == null)
+                if (jobToFetch == null)
                 {
                     if (currentQueryIndex == fetchConditions.Length - 1)
                     {
@@ -91,16 +95,28 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
                         cancellationToken.ThrowIfCancellationRequested();
                     }
                 }
+                else
+                {
+                    string markJobAsFetchedSql = 
+                        string.Format(markJobAsFetchedSqlTemplate, jobToFetch.FetchedAt.HasValue ? " = @FetchedAt" : " IS NULL");
+
+                    markJobAsFetched = _connection.Query<FetchedJob>(
+                        markJobAsFetchedSql,
+                        jobToFetch)
+                        .SingleOrDefault();
+                }
+
+
 
                 currentQueryIndex = (currentQueryIndex + 1) % fetchConditions.Length;
-            } while (fetchedJob == null);
+            } while (markJobAsFetched == null);
 
             return new PostgreSqlFetchedJob(
                 _connection,
                 _options,
-                fetchedJob.Id,
-                fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
-                fetchedJob.Queue);
+                markJobAsFetched.Id,
+                markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
+                markJobAsFetched.Queue);
         }
 
         public void Enqueue(string queue, string jobId)
@@ -119,6 +135,7 @@ VALUES (@jobId, @queue);
             public int Id { get; set; }
             public int JobId { get; set; }
             public string Queue { get; set; }
+            public DateTime? FetchedAt { get; set; }
         }
     }
 }
