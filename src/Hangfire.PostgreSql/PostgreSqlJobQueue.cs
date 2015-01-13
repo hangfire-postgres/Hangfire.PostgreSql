@@ -93,7 +93,6 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
                         }
                     },
                     out fetchedJob,
-                    int.MaxValue,
                     ex => ex is NpgsqlException && (ex as NpgsqlException).ErrorCode == 40001);
 
                 if (fetchedJob == null)
