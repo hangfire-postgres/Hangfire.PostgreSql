@@ -11,7 +11,7 @@ namespace Hangfire.PostgreSql
             int? tryCount = default(int?))
         {
             object futile;
-            return TryExecute(() => { action(); return null; }, out futile, tryCount, smoothExValidator);
+            return TryExecute(() => { action(); return null; }, out futile, smoothExValidator, tryCount);
         }
 
         public static bool TryExecute<T>(
