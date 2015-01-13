@@ -262,31 +262,34 @@ returning ""id"")
 insert into ""hangfire"".""jobqueue"" (""jobid"", ""queue"")
 select i.""id"", @queue from i;
 ";
+
+            var queueNames = new[] { "default", "critical" };
+
             UseConnection(connection =>
             {
                 connection.Execute(
                     arrangeSql,
                     new[]
                     {
-                        new { queue = "default", invocationData = "", arguments = "" },
-                        new { queue = "critical", invocationData = "", arguments = "" }
+                        new { queue = queueNames.First(), invocationData = "", arguments = "" },
+                        new { queue = queueNames.Last(), invocationData = "", arguments = "" }
                     });
 
                 var queue = CreateJobQueue(connection);
 
-                var critical = (PostgreSqlFetchedJob)queue.Dequeue(
-                    new[] { "critical", "default" },
+                var queueFirst = (PostgreSqlFetchedJob)queue.Dequeue(
+                    queueNames,
                     CreateTimingOutCancellationToken());
 
-                Assert.NotNull(critical.JobId);
-                Assert.Equal("critical", critical.Queue);
+                Assert.NotNull(queueFirst.JobId);
+                Assert.Contains(queueFirst.Queue, queueNames);
 
-                var @default = (PostgreSqlFetchedJob)queue.Dequeue(
-                    new[] { "critical", "default" },
+                var queueLast = (PostgreSqlFetchedJob)queue.Dequeue(
+                    queueNames,
                     CreateTimingOutCancellationToken());
 
-                Assert.NotNull(@default.JobId);
-                Assert.Equal("default", @default.Queue);
+                Assert.NotNull(queueLast.JobId);
+                Assert.Contains(queueLast.Queue, queueNames);
             });
         }
 

@@ -64,7 +64,6 @@ WHERE ""id"" IN (
     AND ""fetchedat"" {0} 
     ORDER BY ""fetchedat"", ""jobid""
     LIMIT 1
-    FOR UPDATE
 )
 RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
 ";
@@ -78,10 +77,20 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"";
 
                 string fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[currentQueryIndex]);
 
-                fetchedJob = _connection.Query<FetchedJob>(
-                    fetchJobSql,
-                    new { queues = queues.ToList() })
-                    .SingleOrDefault();
+                Utils.TryExecute(() =>
+                {
+                    using (var trx = _connection.BeginTransaction(IsolationLevel.RepeatableRead))
+                    {
+                        var jobToFetch = _connection.Query<FetchedJob>(
+                            fetchJobSql,
+                            new { queues = queues.ToList() }, trx)
+                            .SingleOrDefault();
+
+                        trx.Commit();
+
+                        return jobToFetch;
+                    }
+                }, out fetchedJob, int.MaxValue);
 
                 if (fetchedJob == null)
                 {
