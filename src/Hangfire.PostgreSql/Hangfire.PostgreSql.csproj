@@ -79,8 +79,8 @@
     <Compile Include="IPersistentJobQueueMonitoringApi.cs" />
     <Compile Include="IPersistentJobQueueProvider.cs" />
     <Compile Include="PersistentJobQueueProviderCollection.cs" />
-    <Compile Include="Properties\Annotations.cs" />
     <Compile Include="PostgreSqlJobQueue.cs" />
+    <Compile Include="Properties\Annotations.cs" />
     <Compile Include="PostgreSqlFetchedJob.cs" />
     <Compile Include="PostgreSqlDistributedLock.cs" />
     <Compile Include="PostgreSqlDistributedLockException.cs" />
@@ -93,6 +93,7 @@
     <Compile Include="PostgreSqlConnection.cs" />
     <Compile Include="PostgreSqlWriteOnlyTransaction.cs" />
     <Compile Include="PostgreSqlBootstrapperConfigurationExtensions.cs" />
+    <Compile Include="Utils\TryExecute.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
