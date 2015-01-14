@@ -29,13 +29,14 @@ namespace Hangfire.PostgreSql
     internal class PostgreSqlFetchedJob : IFetchedJob
     {
         private readonly IDbConnection _connection;
-
+        private readonly PostgreSqlStorageOptions _options;
         private bool _disposed;
         private bool _removedFromQueue;
         private bool _requeued;
 
         public PostgreSqlFetchedJob(
             IDbConnection connection, 
+            PostgreSqlStorageOptions options,
             int id, 
             string jobId, 
             string queue)
@@ -43,8 +44,10 @@ namespace Hangfire.PostgreSql
             if (connection == null) throw new ArgumentNullException("connection");
             if (jobId == null) throw new ArgumentNullException("jobId");
             if (queue == null) throw new ArgumentNullException("queue");
+            if (options == null) throw new ArgumentNullException("options");
 
             _connection = connection;
+            _options = options;
 
             Id = id;
             JobId = jobId;
@@ -59,7 +62,7 @@ namespace Hangfire.PostgreSql
         {
             _connection.Execute(
                 @"
-DELETE FROM ""hangfire"".""jobqueue"" 
+DELETE FROM """ + _options.SchemaName + @""".""jobqueue"" 
 WHERE ""id"" = @id;
 ",
                 new { id = Id });
@@ -71,7 +74,7 @@ WHERE ""id"" = @id;
         {
             _connection.Execute(
                 @"
-UPDATE ""hangfire"".""jobqueue"" 
+UPDATE """ + _options.SchemaName + @""".""jobqueue"" 
 SET ""fetchedat"" = NULL 
 WHERE ""id"" = @id;
 ",

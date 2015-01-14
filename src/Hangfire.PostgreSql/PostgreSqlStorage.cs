@@ -79,7 +79,7 @@ namespace Hangfire.PostgreSql
             {
                 using (var connection = CreateAndOpenConnection())
                 {
-                    PostgreSqlObjectsInstaller.Install(connection);
+                    PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
                 }
             }
 
@@ -92,14 +92,16 @@ namespace Hangfire.PostgreSql
         /// to query the data.
         /// </summary>
         /// <param name="existingConnection">Existing connection</param>
-        public PostgreSqlStorage(NpgsqlConnection existingConnection)
+        /// <param name="options">PostgreSqlStorageOptions</param>
+        public PostgreSqlStorage(NpgsqlConnection existingConnection, PostgreSqlStorageOptions options)
         {
             if (existingConnection == null) throw new ArgumentNullException("existingConnection");
+            if (options == null) throw new ArgumentNullException("options");
             var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
             if (connectionStringBuilder.Enlist) throw new ArgumentException("Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
             
             _existingConnection = existingConnection;
-            _options = new PostgreSqlStorageOptions();
+            _options = options;
 
             InitializeQueueProviders();
         }
@@ -109,18 +111,18 @@ namespace Hangfire.PostgreSql
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            return new PostgreSqlMonitoringApi(_connectionString, QueueProviders);
+            return new PostgreSqlMonitoringApi(_connectionString, _options, QueueProviders);
         }
 
         public override IStorageConnection GetConnection()
         {
             var connection = _existingConnection ?? CreateAndOpenConnection();
-            return new PostgreSqlConnection(connection, QueueProviders, _existingConnection == null);
+            return new PostgreSqlConnection(connection, QueueProviders, _options, _existingConnection == null);
         }
 
         public override IEnumerable<IServerComponent> GetComponents()
         {
-            yield return new ExpirationManager(this);
+            yield return new ExpirationManager(this, _options);
         }
 
         public override void WriteOptionsToLog(ILog logger)

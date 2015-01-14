@@ -31,7 +31,8 @@ namespace Hangfire.PostgreSql
         {
             QueuePollInterval = TimeSpan.FromSeconds(15);
             InvisibilityTimeout = TimeSpan.FromMinutes(30);
-
+            SchemaName = "hangfire";
+            UseNativeDatabaseTransactions = true;
             PrepareSchemaIfNecessary = true;
         }
 
@@ -58,7 +59,8 @@ namespace Hangfire.PostgreSql
         }
 
         public TimeSpan InvisibilityTimeout { get; set; }
-
+        public bool UseNativeDatabaseTransactions { get; set; }
         public bool PrepareSchemaIfNecessary { get; set; }
+        public string SchemaName { get; set; }
     }
 }

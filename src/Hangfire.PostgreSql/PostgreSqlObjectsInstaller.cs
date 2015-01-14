@@ -21,6 +21,7 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using Dapper;
@@ -34,17 +35,50 @@ namespace Hangfire.PostgreSql
     {
         private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
-        public static void Install(NpgsqlConnection connection)
+        public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
         {
             if (connection == null) throw new ArgumentNullException("connection");
 
             Log.Info("Start installing Hangfire SQL objects...");
 
-            var script = GetStringResource(
-                typeof(PostgreSqlObjectsInstaller).Assembly, 
-                "Hangfire.PostgreSql.Install.v3.sql");
 
-            connection.Execute(script, commandTimeout: 120);
+            int version = 3; //We started at version 3
+            bool scriptFound = true;
+
+            do
+            {
+                try
+                {
+
+                    var script = GetStringResource(
+                        typeof (PostgreSqlObjectsInstaller).Assembly,
+                        string.Format("Hangfire.PostgreSql.Install.v{0}.sql",
+                            version.ToString(CultureInfo.InvariantCulture)));
+                    if (schemaName != "hangfire")
+                    {
+                        script = script.Replace("'hangfire'", string.Format("'{0}'", schemaName))
+                            .Replace(@"""hangfire""", string.Format(@"""{0}""", schemaName));
+                    }
+
+                    try
+                    {
+                        connection.Execute(script, commandTimeout: 120);
+                    }
+                    catch (NpgsqlException ex)
+                    {
+                        if((ex.BaseMessage ?? "") != "version-already-applied")
+                        {
+                            throw;
+                        }
+                    }
+                }
+                catch
+                {
+                    scriptFound = false;
+                }
+
+                version++;
+            } while (scriptFound);
 
             Log.Info("Hangfire SQL objects installed.");
         }

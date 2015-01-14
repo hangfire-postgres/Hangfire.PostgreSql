@@ -11,16 +11,21 @@ namespace Hangfire.PostgreSql.Tests
     public class ExpirationManagerFacts
     {
         private readonly CancellationToken _token;
+        private readonly PostgreSqlStorageOptions _options;
 
         public ExpirationManagerFacts()
         {
             _token = new CancellationToken(true);
+            _options = new PostgreSqlStorageOptions()
+            {
+                SchemaName = GetSchemaName()
+            };
         }
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()
         {
-            Assert.Throws<ArgumentNullException>(() => new ExpirationManager(null));
+            Assert.Throws<ArgumentNullException>(() => new ExpirationManager(null, _options));
         }
 
         [Fact, CleanDatabase]
@@ -71,8 +76,8 @@ namespace Hangfire.PostgreSql.Tests
             using (var connection = CreateConnection())
             {
                 // Arrange
-                const string createSql = @"
-insert into ""hangfire"".""counter"" (""key"", ""value"", ""expireat"") 
+                string createSql = @"
+insert into """ + GetSchemaName() + @""".""counter"" (""key"", ""value"", ""expireat"") 
 values ('key', 1, @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -82,7 +87,7 @@ values ('key', 1, @expireAt)";
                 manager.Execute(_token);
 
                 // Assert
-                Assert.Equal(0, connection.Query<long>(@"select count(*) from ""hangfire"".""counter""").Single());
+                Assert.Equal(0, connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""counter""").Single());
             }
         }
 
@@ -92,8 +97,8 @@ values ('key', 1, @expireAt)";
             using (var connection = CreateConnection())
             {
                 // Arrange
-                const string createSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"") 
+                string createSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"") 
 values ('', '', now() at time zone 'utc', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -103,7 +108,7 @@ values ('', '', now() at time zone 'utc', @expireAt)";
                 manager.Execute(_token);
 
                 // Assert
-                Assert.Equal(0, connection.Query<long>(@"select count(*) from ""hangfire"".""job""").Single());
+                Assert.Equal(0, connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""job""").Single());
             }
         }
 
@@ -113,8 +118,8 @@ values ('', '', now() at time zone 'utc', @expireAt)";
             using (var connection = CreateConnection())
             {
                 // Arrange
-                const string createSql = @"
-insert into ""hangfire"".""list"" (""key"", ""expireat"") 
+                string createSql = @"
+insert into """ + GetSchemaName() + @""".""list"" (""key"", ""expireat"") 
 values ('key', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -124,7 +129,7 @@ values ('key', @expireAt)";
                 manager.Execute(_token);
 
                 // Assert
-                Assert.Equal(0, connection.Query<long>(@"select count(*) from ""hangfire"".""list""").Single());
+                Assert.Equal(0, connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single());
             }
         }
 
@@ -134,8 +139,8 @@ values ('key', @expireAt)";
             using (var connection = CreateConnection())
             {
                 // Arrange
-                const string createSql = @"
-insert into ""hangfire"".""set"" (""key"", ""score"", ""value"", ""expireat"") 
+                string createSql = @"
+insert into """ + GetSchemaName() + @""".""set"" (""key"", ""score"", ""value"", ""expireat"") 
 values ('key', 0, '', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -145,7 +150,7 @@ values ('key', 0, '', @expireAt)";
                 manager.Execute(_token);
 
                 // Assert
-                Assert.Equal(0, connection.Query<long>(@"select count(*) from ""hangfire"".""set""").Single());
+                Assert.Equal(0, connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""set""").Single());
             }
         }
 
@@ -155,8 +160,8 @@ values ('key', 0, '', @expireAt)";
             using (var connection = CreateConnection())
             {
                 // Arrange
-                const string createSql = @"
-insert into ""hangfire"".""hash"" (""key"", ""field"", ""value"", ""expireat"") 
+                string createSql = @"
+insert into """ + GetSchemaName() + @""".""hash"" (""key"", ""field"", ""value"", ""expireat"") 
 values ('key', 'field', '', @expireAt)";
                 connection.Execute(createSql, new { expireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -166,18 +171,18 @@ values ('key', 'field', '', @expireAt)";
                 manager.Execute(_token);
 
                 // Assert
-                Assert.Equal(0, connection.Query<long>(@"select count(*) from ""hangfire"".""hash""").Single());
+                Assert.Equal(0, connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""hash""").Single());
             }
         }
 
         private static int CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt)
         {
-            const string insertSqlNull = @"
-insert into ""hangfire"".""counter""(""key"", ""value"", ""expireat"")
+            string insertSqlNull = @"
+insert into """ + GetSchemaName() + @""".""counter""(""key"", ""value"", ""expireat"")
 values ('key', 1, null) returning ""id""";
 
-            const string insertSqlValue = @"
-insert into ""hangfire"".""counter""(""key"", ""value"", ""expireat"")
+            string insertSqlValue = @"
+insert into """ + GetSchemaName() + @""".""counter""(""key"", ""value"", ""expireat"")
 values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning ""id""";
 
             string insertSql = expireAt == null ? insertSqlNull : string.Format(insertSqlValue, ((long)(DateTime.UtcNow - expireAt.Value).TotalSeconds).ToString(CultureInfo.InvariantCulture));
@@ -190,7 +195,7 @@ values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning "
         private static bool IsEntryExpired(NpgsqlConnection connection, int entryId)
         {
             var count = connection.Query<long>(
-                    @"select count(*) from ""hangfire"".""counter"" where ""id"" = @id", new { id = entryId }).Single();
+                    @"select count(*) from """ + GetSchemaName() + @""".""counter"" where ""id"" = @id", new { id = entryId }).Single();
             return count == 0;
         }
 
@@ -198,11 +203,17 @@ values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning "
          {
              return ConnectionUtils.CreateConnection();
          }
+
+         private static string GetSchemaName()
+         {
+             return ConnectionUtils.GetSchemaName();
+         }
  
+
          private ExpirationManager CreateManager(NpgsqlConnection connection)
          {
-             var storage = new PostgreSqlStorage(connection);
-             return new ExpirationManager(storage);
+             var storage = new PostgreSqlStorage(connection, _options);
+             return new ExpirationManager(storage, _options);
          }
     }
 }

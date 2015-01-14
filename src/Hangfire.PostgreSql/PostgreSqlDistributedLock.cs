@@ -31,16 +31,18 @@ namespace Hangfire.PostgreSql
     {
         private readonly IDbConnection _connection;
         private readonly string _resource;
-
+        private readonly PostgreSqlStorageOptions _options;
         private bool _completed;
 
-        public PostgreSqlDistributedLock(string resource, TimeSpan timeout, IDbConnection connection)
+        public PostgreSqlDistributedLock(string resource, TimeSpan timeout, IDbConnection connection, PostgreSqlStorageOptions options)
         {
             if (String.IsNullOrEmpty(resource)) throw new ArgumentNullException("resource");
             if (connection == null) throw new ArgumentNullException("connection");
+            if (options == null) throw new ArgumentNullException("options");
 
             _resource = resource;
             _connection = connection;
+            _options = options;
 
             Stopwatch lockAcquiringTime = new Stopwatch();
             lockAcquiringTime.Start();
@@ -55,10 +57,10 @@ namespace Hangfire.PostgreSql
                     using (var trx = _connection.BeginTransaction(IsolationLevel.RepeatableRead))
                     {
                         rowsAffected = _connection.Execute(@"
-INSERT INTO ""hangfire"".""lock""(""resource"") 
+INSERT INTO """ + _options.SchemaName + @""".""lock""(""resource"") 
 SELECT @resource
 WHERE NOT EXISTS (
-    SELECT 1 FROM ""hangfire"".""lock"" 
+    SELECT 1 FROM """ + _options.SchemaName + @""".""lock"" 
     WHERE ""resource"" = @resource
 );
 ", new
@@ -100,7 +102,7 @@ WHERE NOT EXISTS (
             _completed = true;
 
             int rowsAffected = _connection.Execute(@"
-DELETE FROM ""hangfire"".""lock"" 
+DELETE FROM """ + _options.SchemaName + @""".""lock"" 
 WHERE ""resource"" = @resource;
 ", new
             {

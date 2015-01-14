@@ -14,6 +14,7 @@ namespace Hangfire.PostgreSql.Tests
     public class PostgreSqlWriteOnlyTransactionFacts
     {
         private readonly PersistentJobQueueProviderCollection _queueProviders;
+        private readonly PostgreSqlStorageOptions _options;
 
         public PostgreSqlWriteOnlyTransactionFacts()
         {
@@ -22,22 +23,36 @@ namespace Hangfire.PostgreSql.Tests
                 .Returns(new Mock<IPersistentJobQueue>().Object);
 
             _queueProviders = new PersistentJobQueueProviderCollection(defaultProvider.Object);
+            _options = new PostgreSqlStorageOptions()
+            {
+                SchemaName = GetSchemaName()
+            };
         }
 
         [Fact]
         public void Ctor_ThrowsAnException_IfConnectionIsNull()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlWriteOnlyTransaction(null, _queueProviders));
+                () => new PostgreSqlWriteOnlyTransaction(null, _options, _queueProviders));
 
             Assert.Equal("connection", exception.ParamName);
         }
+
+        [Fact]
+        public void Ctor_ThrowsAnException_IfOptionsIsNull()
+        {
+            var exception = Assert.Throws<ArgumentNullException>(
+                () => new PostgreSqlWriteOnlyTransaction(ConnectionUtils.CreateConnection(), null, _queueProviders));
+
+            Assert.Equal("options", exception.ParamName);
+        }
+
 
         [Fact, CleanDatabase]
         public void Ctor_ThrowsAnException_IfProvidersCollectionIsNull()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlWriteOnlyTransaction(ConnectionUtils.CreateConnection(), null));
+                () => new PostgreSqlWriteOnlyTransaction(ConnectionUtils.CreateConnection(), _options, null));
 
             Assert.Equal("queueProviders", exception.ParamName);
         }
@@ -45,8 +60,8 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void ExpireJob_SetsJobExpirationData()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job""(""invocationdata"", ""arguments"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job""(""invocationdata"", ""arguments"", ""createdat"")
 values ('', '', now() at time zone 'utc') returning ""id""";
 
             UseConnection(sql =>
@@ -67,8 +82,8 @@ values ('', '', now() at time zone 'utc') returning ""id""";
         [Fact, CleanDatabase]
         public void PersistJob_ClearsTheJobExpirationData()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
 values ('', '', now() at time zone 'utc', now() at time zone 'utc') returning ""id""";
 
 
@@ -90,8 +105,8 @@ values ('', '', now() at time zone 'utc', now() at time zone 'utc') returning ""
         [Fact, CleanDatabase]
         public void SetJobState_AppendsAStateAndSetItToTheJob()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
 values ('', '', now() at time zone 'utc') returning ""id""";
 
             UseConnection(sql =>
@@ -115,7 +130,7 @@ values ('', '', now() at time zone 'utc') returning ""id""";
                 Assert.Null(anotherJob.statename);
                 Assert.Null(anotherJob.stateid);
 
-                var jobState = sql.Query(@"select * from ""hangfire"".""state""").Single();
+                var jobState = sql.Query(@"select * from """ + GetSchemaName() + @""".""state""").Single();
                 Assert.Equal((string)jobId, jobState.jobid.ToString());
                 Assert.Equal("State", jobState.name);
                 Assert.Equal("Reason", jobState.reason);
@@ -127,8 +142,8 @@ values ('', '', now() at time zone 'utc') returning ""id""";
         [Fact, CleanDatabase]
         public void AddJobState_JustAddsANewRecordInATable()
         {
-            const string arrangeSql = @"
-insert into ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+            string arrangeSql = @"
+insert into """ + GetSchemaName() + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
 values ('', '', now() at time zone 'utc')
 returning ""id""";
 
@@ -148,7 +163,7 @@ returning ""id""";
                 Assert.Null(job.StateName);
                 Assert.Null(job.StateId);
 
-                var jobState = sql.Query(@"select * from ""hangfire"".""state""").Single();
+                var jobState = sql.Query(@"select * from """ + GetSchemaName() + @""".""state""").Single();
                 Assert.Equal((string)jobId, jobState.jobid.ToString(CultureInfo.InvariantCulture));
                 Assert.Equal("State", jobState.name);
                 Assert.Equal("Reason", jobState.reason);
@@ -178,7 +193,7 @@ returning ""id""";
         private static dynamic GetTestJob(IDbConnection connection, string jobId)
         {
             return connection
-                .Query(@"select * from ""hangfire"".""job"" where ""id"" = @id", new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) })
+                .Query(@"select * from """ + GetSchemaName() + @""".""job"" where ""id"" = @id", new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) })
                 .Single();
         }
 
@@ -189,7 +204,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.IncrementCounter("my-key"));
 
-                var record = sql.Query(@"select * from ""hangfire"".""counter""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""counter""").Single();
                 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal(1, record.value);
@@ -204,7 +219,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.IncrementCounter("my-key", TimeSpan.FromDays(1)));
 
-                var record = sql.Query(@"select * from ""hangfire"".""counter""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""counter""").Single();
 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal(1, record.value);
@@ -228,7 +243,7 @@ returning ""id""";
                     x.IncrementCounter("my-key");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""counter""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""counter""").Single();
                 
                 Assert.Equal(2, recordCount);
             });
@@ -241,7 +256,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.DecrementCounter("my-key"));
 
-                var record = sql.Query(@"select * from ""hangfire"".""counter""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""counter""").Single();
 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal(-1, record.value);
@@ -256,7 +271,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.DecrementCounter("my-key", TimeSpan.FromDays(1)));
 
-                var record = sql.Query(@"select * from ""hangfire"".""counter""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""counter""").Single();
 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal(-1, record.value);
@@ -280,7 +295,7 @@ returning ""id""";
                     x.DecrementCounter("my-key");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""counter""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""counter""").Single();
 
                 Assert.Equal(2, recordCount);
             });
@@ -293,7 +308,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.AddToSet("my-key", "my-value"));
 
-                var record = sql.Query(@"select * from ""hangfire"".""set""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal("my-value", record.value);
@@ -312,7 +327,7 @@ returning ""id""";
                     x.AddToSet("my-key", "another-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""set""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(2, recordCount);
             });
@@ -329,7 +344,7 @@ returning ""id""";
                     x.AddToSet("my-key", "my-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""set""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""set""").Single();
                 
                 Assert.Equal(1, recordCount);
             });
@@ -342,7 +357,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.AddToSet("my-key", "my-value", 3.2));
 
-                var record = sql.Query(@"select * from ""hangfire"".""set""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal("my-value", record.value);
@@ -361,7 +376,7 @@ returning ""id""";
                     x.AddToSet("my-key", "my-value", 3.2);
                 });
 
-                var record = sql.Query(@"select * from ""hangfire"".""set""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(3.2, record.score, 3);
             });
@@ -378,7 +393,7 @@ returning ""id""";
                     x.RemoveFromSet("my-key", "my-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""set""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(0, recordCount);
             });
@@ -395,7 +410,7 @@ returning ""id""";
                     x.RemoveFromSet("my-key", "different-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""set""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(1, recordCount);
             });
@@ -412,7 +427,7 @@ returning ""id""";
                     x.RemoveFromSet("different-key", "my-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""set""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(1, recordCount);
             });
@@ -425,7 +440,7 @@ returning ""id""";
             {
                 Commit(sql, x => x.InsertToList("my-key", "my-value"));
 
-                var record = sql.Query(@"select * from ""hangfire"".""list""").Single();
+                var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal("my-key", record.key);
                 Assert.Equal("my-value", record.value);
@@ -443,7 +458,7 @@ returning ""id""";
                     x.InsertToList("my-key", "my-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(2, recordCount);
             });
@@ -461,7 +476,7 @@ returning ""id""";
                     x.RemoveFromList("my-key", "my-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(0, recordCount);
             });
@@ -478,7 +493,7 @@ returning ""id""";
                     x.RemoveFromList("my-key", "different-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(1, recordCount);
             });
@@ -495,7 +510,7 @@ returning ""id""";
                     x.RemoveFromList("different-key", "my-value");
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(1, recordCount);
             });
@@ -515,7 +530,7 @@ returning ""id""";
                     x.TrimList("my-key", 1, 2);
                 });
 
-                var records = sql.Query(@"select * from ""hangfire"".""list""").ToArray();
+                var records = sql.Query(@"select * from """ + GetSchemaName() + @""".""list""").ToArray();
 
                 Assert.Equal(2, records.Length);
                 Assert.Equal("1", records[0].value);
@@ -536,7 +551,7 @@ returning ""id""";
                     x.TrimList("my-key", 1, 100);
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(2, recordCount);
             });
@@ -553,7 +568,7 @@ returning ""id""";
                     x.TrimList("my-key", 1, 100);
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(0, recordCount);
             });
@@ -570,7 +585,7 @@ returning ""id""";
                     x.TrimList("my-key", 1, 0);
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(0, recordCount);
             });
@@ -587,7 +602,7 @@ returning ""id""";
                     x.TrimList("another-key", 1, 0);
                 });
 
-                var recordCount = sql.Query<long>(@"select count(*) from ""hangfire"".""list""").Single();
+                var recordCount = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""list""").Single();
 
                 Assert.Equal(1, recordCount);
             });
@@ -629,7 +644,7 @@ returning ""id""";
                 }));
 
                 var result = sql.Query(
-                    @"select * from ""hangfire"".""hash"" where ""key"" = @key",
+                    @"select * from """ + GetSchemaName() + @""".""hash"" where ""key"" = @key",
                     new { key = "some-hash" })
                     .ToDictionary(x => (string)x.field, x => (string)x.value);
 
@@ -664,7 +679,7 @@ returning ""id""";
                 Commit(sql, x => x.RemoveHash("some-hash"));
 
                 // Assert
-                var count = sql.Query<long>(@"select count(*) from ""hangfire"".""hash""").Single();
+                var count = sql.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""hash""").Single();
                 Assert.Equal(0, count);
             });
         }
@@ -681,11 +696,17 @@ returning ""id""";
             NpgsqlConnection connection,
             Action<PostgreSqlWriteOnlyTransaction> action)
         {
-            using (var transaction = new PostgreSqlWriteOnlyTransaction(connection, _queueProviders))
+            using (var transaction = new PostgreSqlWriteOnlyTransaction(connection, _options, _queueProviders))
             {
                 action(transaction);
                 transaction.Commit();
             }
         }
+
+        private static string GetSchemaName()
+        {
+            return ConnectionUtils.GetSchemaName();
+        }
+
     }
 }

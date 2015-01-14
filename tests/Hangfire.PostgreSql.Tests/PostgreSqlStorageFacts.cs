@@ -37,7 +37,7 @@ namespace Hangfire.PostgreSql.Tests
         public void Ctor_CanCreateSqlServerStorage_WithExistingConnection()
         {
             var connection = ConnectionUtils.CreateConnection();
-            var storage = new PostgreSqlStorage(connection);
+            var storage = new PostgreSqlStorage(connection, _options);
 
             Assert.NotNull(storage);
         }
@@ -57,7 +57,7 @@ namespace Hangfire.PostgreSql.Tests
         public void GetConnection_ReturnsExistingConnection_WhenStorageUsesIt()
         {
             var connection = ConnectionUtils.CreateConnection();
-            var storage = new PostgreSqlStorage(connection);
+            var storage = new PostgreSqlStorage(connection, _options);
 
             using (var storageConnection = (PostgreSqlConnection)storage.GetConnection())
             {

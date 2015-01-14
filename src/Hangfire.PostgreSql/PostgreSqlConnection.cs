@@ -38,25 +38,29 @@ namespace Hangfire.PostgreSql
     {
         private readonly NpgsqlConnection _connection;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
-
+        private readonly PostgreSqlStorageOptions _options;
 
         public PostgreSqlConnection(
             NpgsqlConnection connection,
-            PersistentJobQueueProviderCollection queueProviders)
-            : this(connection, queueProviders, true)
+            PersistentJobQueueProviderCollection queueProviders,
+            PostgreSqlStorageOptions options)
+            : this(connection, queueProviders, options, true)
         {
         }
 
         public PostgreSqlConnection(
             NpgsqlConnection connection, 
             PersistentJobQueueProviderCollection queueProviders,
+            PostgreSqlStorageOptions options,
             bool ownsConnection)
         {
             if (connection == null) throw new ArgumentNullException("connection");
             if (queueProviders == null) throw new ArgumentNullException("queueProviders");
+            if (options == null) throw new ArgumentNullException("options");
 
             _connection = connection;
             _queueProviders = queueProviders;
+            _options = options;
             OwnsConnection = ownsConnection;
         }
 
@@ -73,7 +77,7 @@ namespace Hangfire.PostgreSql
 
         public IWriteOnlyTransaction CreateWriteTransaction()
         {
-            return new PostgreSqlWriteOnlyTransaction(_connection, _queueProviders);
+            return new PostgreSqlWriteOnlyTransaction(_connection, _options, _queueProviders);
         }
 
         public IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
@@ -81,7 +85,8 @@ namespace Hangfire.PostgreSql
             return new PostgreSqlDistributedLock(
                 String.Format("HangFire:{0}", resource),
                 timeout,
-                _connection);
+                _connection,
+                _options);
         }
 
         public IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
@@ -113,8 +118,8 @@ namespace Hangfire.PostgreSql
             if (job == null) throw new ArgumentNullException("job");
             if (parameters == null) throw new ArgumentNullException("parameters");
 
-            const string createJobSql = @"
-INSERT INTO ""hangfire"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
+            string createJobSql = @"
+INSERT INTO """ + _options.SchemaName + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
 VALUES (@invocationData, @arguments, @createdAt, @expireAt) 
 RETURNING ""id"";
 ";
@@ -145,8 +150,8 @@ RETURNING ""id"";
                     };
                 }
 
-                const string insertParameterSql = @"
-INSERT INTO ""hangfire"".""jobparameter"" (""jobid"", ""name"", ""value"")
+                string insertParameterSql = @"
+INSERT INTO """ + _options.SchemaName + @""".""jobparameter"" (""jobid"", ""name"", ""value"")
 VALUES (@jobId, @name, @value);
 ";
 
@@ -160,10 +165,10 @@ VALUES (@jobId, @name, @value);
         {
             if (id == null) throw new ArgumentNullException("id");
 
-            const string sql = 
+            string sql = 
                 @"
 SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
-FROM ""hangfire"".""job"" 
+FROM """ + _options.SchemaName + @""".""job"" 
 WHERE ""id"" = @id;
 ";
 
@@ -201,10 +206,10 @@ WHERE ""id"" = @id;
         {
             if (jobId == null) throw new ArgumentNullException("jobId");
 
-            const string sql = @"
+            string sql = @"
 SELECT s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
-FROM ""hangfire"".""state"" s
-INNER JOIN ""hangfire"".""job"" j on j.""stateid"" = s.""id""
+FROM """ + _options.SchemaName + @""".""state"" s
+INNER JOIN """ + _options.SchemaName + @""".""job"" j on j.""stateid"" = s.""id""
 WHERE j.""id"" = @jobId;
 ";
 
@@ -227,18 +232,18 @@ WHERE j.""id"" = @jobId;
             if (id == null) throw new ArgumentNullException("id");
             if (name == null) throw new ArgumentNullException("name");
 
-            const string sql = @"
+            string sql = @"
 WITH ""inputvalues"" AS (
     SELECT @jobid ""jobid"", @name ""name"", @value ""value""
 ), ""updatedrows"" AS ( 
-    UPDATE ""hangfire"".""jobparameter"" ""updatetarget""
+    UPDATE """ + _options.SchemaName + @""".""jobparameter"" ""updatetarget""
     SET ""value"" = ""inputvalues"".""value""
     FROM ""inputvalues""
     WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
     AND ""updatetarget"".""name"" = ""inputvalues"".""name""
     RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
 )
-INSERT INTO ""hangfire"".""jobparameter""(""jobid"", ""name"", ""value"")
+INSERT INTO """ + _options.SchemaName + @""".""jobparameter""(""jobid"", ""name"", ""value"")
 SELECT ""jobid"", ""name"", ""value"" 
 FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
@@ -260,7 +265,7 @@ WHERE NOT EXISTS (
                         return _connection.Query<string>(
                             @"
 SELECT ""value"" 
-FROM ""hangfire"".""jobparameter"" 
+FROM """ + _options.SchemaName + @""".""jobparameter"" 
 WHERE ""jobid"" = @id 
 AND ""name"" = @name;
 ",
@@ -275,7 +280,7 @@ AND ""name"" = @name;
                         var result = _connection.Query<string>(
                             @"
 SELECT ""value"" 
-FROM ""hangfire"".""set"" 
+FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = @key;
 ",
                             new { key });
@@ -291,7 +296,7 @@ WHERE ""key"" = @key;
                         return _connection.Query<string>(
                             @"
 SELECT ""value"" 
-FROM ""hangfire"".""set"" 
+FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = @key 
 AND ""score"" BETWEEN @from AND @to 
 ORDER BY ""score"" LIMIT 1;
@@ -305,18 +310,18 @@ ORDER BY ""score"" LIMIT 1;
                         if (key == null) throw new ArgumentNullException("key");
                         if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
 
-                        const string sql = @"
+                        string sql = @"
 WITH ""inputvalues"" AS (
     SELECT @key ""key"", @field ""field"", @value ""value""
 ), ""updatedrows"" AS ( 
-    UPDATE ""hangfire"".""hash"" ""updatetarget""
+    UPDATE """ + _options.SchemaName + @""".""hash"" ""updatetarget""
     SET ""value"" = ""inputvalues"".""value""
     FROM ""inputvalues""
     WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
     AND ""updatetarget"".""field"" = ""inputvalues"".""field""
     RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
 )
-INSERT INTO ""hangfire"".""hash""(""key"", ""field"", ""value"")
+INSERT INTO """ + _options.SchemaName + @""".""hash""(""key"", ""field"", ""value"")
 SELECT ""key"", ""field"", ""value"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
     SELECT 1 
@@ -343,7 +348,7 @@ WHERE NOT EXISTS (
             var result = _connection.Query<SqlHash>(
                 @"
 SELECT ""field"" ""Field"", ""value"" ""Value"" 
-FROM ""hangfire"".""hash"" 
+FROM """ + _options.SchemaName + @""".""hash"" 
 WHERE ""key"" = @key;
 ",
                 new { key })
@@ -364,17 +369,17 @@ WHERE ""key"" = @key;
                 StartedAt = DateTime.UtcNow,
             };
 
-            const string sql = @"
+            string sql = @"
 WITH ""inputvalues"" AS (
     SELECT @id ""id"", @data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
 ), ""updatedrows"" AS ( 
-    UPDATE ""hangfire"".""server"" ""updatetarget""
+    UPDATE """ + _options.SchemaName + @""".""server"" ""updatetarget""
     SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
     FROM ""inputvalues""
     WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
     RETURNING ""updatetarget"".""id""
 )
-INSERT INTO ""hangfire"".""server""(""id"", ""data"", ""lastheartbeat"")
+INSERT INTO """ + _options.SchemaName + @""".""server""(""id"", ""data"", ""lastheartbeat"")
 SELECT ""id"", ""data"", ""lastheartbeat"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
     SELECT 1 
@@ -393,7 +398,7 @@ WHERE NOT EXISTS (
 
             _connection.Execute(
                 @"
-DELETE FROM ""hangfire"".""server"" 
+DELETE FROM """ + _options.SchemaName + @""".""server"" 
 WHERE ""id"" = @id;
 ",
                 new { id = serverId });
@@ -405,7 +410,7 @@ WHERE ""id"" = @id;
 
             _connection.Execute(
                 @"
-UPDATE ""hangfire"".""server"" 
+UPDATE """ + _options.SchemaName + @""".""server"" 
 SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
 WHERE ""id"" = @id;
 ",
@@ -421,7 +426,7 @@ WHERE ""id"" = @id;
 
             return _connection.Execute(
                 string.Format(@"
-DELETE FROM ""hangfire"".""server"" 
+DELETE FROM """ + _options.SchemaName + @""".""server"" 
 WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{0} MILLISECONDS');
 ", (long)timeOut.TotalMilliseconds));
         }
