@@ -15,6 +15,7 @@ $$;
 UPDATE "schema" SET "version" = '4' WHERE "version" = '3';
 
 ALTER TABLE "counter" ADD COLUMN "updatecount" integer NOT NULL DEFAULT 0;
+ALTER TABLE "lock" ADD COLUMN "updatecount" integer NOT NULL DEFAULT 0;
 ALTER TABLE "hash" ADD COLUMN "updatecount" integer NOT NULL DEFAULT 0;
 ALTER TABLE "job" ADD COLUMN "updatecount" integer NOT NULL DEFAULT 0;
 ALTER TABLE "jobparameter" ADD COLUMN "updatecount" integer NOT NULL DEFAULT 0;
