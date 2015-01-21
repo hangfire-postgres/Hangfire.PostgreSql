@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Hangfire.PostgreSql</id>
-    <version>1.3.0</version>
+    <version>1.3.1</version>
     <title>Hangfire PostgreSql Storage</title>
     <authors>Frank Hommers</authors>
     <owners>frankhommers</owners>
@@ -15,16 +15,12 @@
     <releaseNotes>
       https://github.com/frankhommers/Hangfire.PostgreSql/releases
 
-      1.3.0
-      * Breaking - Use 'Hangfire.Core' 1.3.0.
-      * Breaking - Use 'LibLog' package instead of 'Common.Logging' for logging.
-      * Changed - 'Npgsql' package updated to 2.2.3.
-      * Changed - 'Dapper' package updated to 1.38.
-      * Changed - Mirrored the functionality of 'Hangfire.SqlServer' 1.3.0.
+      1.3.1
+      * Breaking - Use 'Hangfire.Core' 1.3.1.
     </releaseNotes>
     <dependencies>
-      <dependency id="Hangfire.Core" version="1.3.0" />
-      <dependency id="Dapper" version="1.13" />
+      <dependency id="Hangfire.Core" version="1.3.1" />
+      <dependency id="Dapper" version="1.38" />
       <dependency id="Npgsql" version="2.2.3" />
     </dependencies>
   </metadata>
