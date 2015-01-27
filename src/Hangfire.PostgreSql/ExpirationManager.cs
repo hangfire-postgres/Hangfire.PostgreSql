@@ -21,6 +21,7 @@
 
 using System;
 using System.Data;
+using System.Globalization;
 using System.Threading;
 using Dapper;
 using Hangfire.Logging;
@@ -30,14 +31,17 @@ namespace Hangfire.PostgreSql
 {
     internal class ExpirationManager : IServerComponent
     {
+        private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
+        private const int NumberOfRecordsInSinglePass = 1000;
+
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
         private static readonly string[] ProcessedTables =
         {
-            "Counter",
-            "Job",
-            "List",
-            "Set",
-            "Hash",
+            "counter",
+            "job",
+            "list",
+            "set",
+            "hash",
         };
 
         private readonly PostgreSqlStorage _storage;
@@ -52,7 +56,7 @@ namespace Hangfire.PostgreSql
         public ExpirationManager(PostgreSqlStorage storage,  PostgreSqlStorageOptions options, TimeSpan checkInterval)
         {
             if (storage == null) throw new ArgumentNullException("storage");
-            if (options == null) throw new ArgumentNullException("storage");
+            if (options == null) throw new ArgumentNullException("options");
 
             _options = options;
             _storage = storage;
@@ -61,24 +65,42 @@ namespace Hangfire.PostgreSql
 
         public void Execute(CancellationToken cancellationToken)
         {
-            using (var storageConnection = (PostgreSqlConnection)_storage.GetConnection())
-            {
-                foreach (var table in ProcessedTables)
-                {
-                    Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
-                    using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted)) { 
-                        int rowsAffected = storageConnection.Connection.Execute(
-                            string.Format(@"
+            foreach (var table in ProcessedTables)
+            {
+                Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
+
+                int removedCount = 0;
+
+                do
+                {
+                    using (var storageConnection = (PostgreSqlConnection) _storage.GetConnection())
+                    {
+                        using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                        {
+                            removedCount = storageConnection.Connection.Execute(
+                                    string.Format(@"
 DELETE FROM """ + _options.SchemaName + @""".""{0}"" 
-WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC';
-", table.ToLower()), transaction);
-                        transaction.Commit();
-                        Logger.DebugFormat("Removed {0} outdated records from table '{1}'...", rowsAffected, table);
+WHERE ""id"" IN (
+    SELECT ""id"" 
+    FROM """ + _options.SchemaName + @""".""{0}"" 
+    WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
+    LIMIT {1}
+)", table, NumberOfRecordsInSinglePass.ToString(CultureInfo.InvariantCulture)), transaction);
+
+                            transaction.Commit();
+                        }
                     }
 
+                    if (removedCount > 0)
+                    {
+                        Logger.Info(String.Format("Removed {0} outdated record(s) from '{1}' table.", removedCount,
+                            table));
 
-                }
+                        cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                } while (removedCount != 0);
             }
 
             cancellationToken.WaitHandle.WaitOne(_checkInterval);

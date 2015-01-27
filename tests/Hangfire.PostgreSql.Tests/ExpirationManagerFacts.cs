@@ -15,7 +15,8 @@ namespace Hangfire.PostgreSql.Tests
 
         public ExpirationManagerFacts()
         {
-            _token = new CancellationToken(true);
+            var cts = new CancellationTokenSource();
+            _token = cts.Token;            
             _options = new PostgreSqlStorageOptions()
             {
                 SchemaName = GetSchemaName()
@@ -213,7 +214,7 @@ values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning "
          private ExpirationManager CreateManager(NpgsqlConnection connection)
          {
              var storage = new PostgreSqlStorage(connection, _options);
-             return new ExpirationManager(storage, _options);
+             return new ExpirationManager(storage, _options, TimeSpan.Zero);
          }
     }
 }
