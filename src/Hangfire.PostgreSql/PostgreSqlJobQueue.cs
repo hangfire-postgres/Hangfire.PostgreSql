@@ -103,7 +103,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
                     }
                 },
                     out fetchedJob,
-                    ex => ex is NpgsqlException && (ex as NpgsqlException).ErrorCode == 40001);
+                    ex => ex is NpgsqlException && (ex as NpgsqlException).Code == "40001");
 
                 if (fetchedJob == null)
                 {
