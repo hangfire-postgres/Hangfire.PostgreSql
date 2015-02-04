@@ -142,8 +142,10 @@ namespace Hangfire.PostgreSql
                 var builder = new StringBuilder();
 
                 builder.Append(connectionStringBuilder.Host);
-                builder.Append("@");
+                builder.Append(", database: ");
                 builder.Append(connectionStringBuilder.Database);
+                builder.Append(", schema: ");
+                builder.Append(_options.SchemaName);
 
                 return builder.Length != 0
                     ? String.Format("PostgreSQL Server: {0}", builder)
