@@ -1,5 +1,5 @@
 // This file is part of Hangfire.PostgreSql.
-// Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
+// Copyright Â© 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as 
@@ -141,9 +141,12 @@ namespace Hangfire.PostgreSql
                 var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString);
                 var builder = new StringBuilder();
 
+                builder.Append("Host: ");
                 builder.Append(connectionStringBuilder.Host);
-                builder.Append("@");
+                builder.Append(", DB: ");
                 builder.Append(connectionStringBuilder.Database);
+                builder.Append(", Schema: ");
+                builder.Append(_options.SchemaName);
 
                 return builder.Length != 0
                     ? String.Format("PostgreSQL Server: {0}", builder)
