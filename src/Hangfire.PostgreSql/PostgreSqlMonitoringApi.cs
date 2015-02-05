@@ -398,33 +398,9 @@ WHERE ""key"" = 'recurring-jobs';
                 endDate = endDate.AddHours(-1);
             }
 
-            var keys = dates.Select(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd-HH"))).ToList();
+            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd-HH")), x => x);
 
-            string sqlQuery = @"
-SELECT ""key"", COUNT(""value"") AS ""count"" 
-FROM """ + _options.SchemaName + @""".""counter""
-GROUP BY ""key""
-HAVING ""key"" = ANY @keys;
-";
-
-            var valuesMap = connection.Query(
-                sqlQuery,
-                new { keys = keys })
-                .ToDictionary(x => (string)x.key, x => (long)x.count);
-
-            foreach (var key in keys)
-            {
-                if (!valuesMap.ContainsKey(key)) valuesMap.Add(key, 0);
-            }
-
-            var result = new Dictionary<DateTime, long>();
-            for (var i = 0; i < dates.Count; i++)
-            {
-                var value = valuesMap[valuesMap.Keys.ElementAt(i)];
-                result.Add(dates[i], value);
-            }
-
-            return result;
+            return GetTimelineStats(connection, keyMaps);
         }
 
         private Dictionary<DateTime, long> GetTimelineStats(
@@ -432,18 +408,20 @@ HAVING ""key"" = ANY @keys;
             string type)
         {
             var endDate = DateTime.UtcNow.Date;
-            var startDate = endDate.AddDays(-7);
             var dates = new List<DateTime>();
 
-            while (startDate <= endDate)
+            for (var i = 0; i < 7; i++)
             {
                 dates.Add(endDate);
                 endDate = endDate.AddDays(-1);
             }
+            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd")), x => x);
+ 
+            return GetTimelineStats(connection, keyMaps);
+        }
 
-            var stringDates = dates.Select(x => x.ToString("yyyy-MM-dd")).ToList();
-            var keys = stringDates.Select(x => String.Format("stats:{0}:{1}", type, x)).ToList();
-
+        private Dictionary<DateTime, long> GetTimelineStats(NpgsqlConnection connection, Dictionary<string, DateTime> keyMaps)
+        {
             string sqlQuery = @"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
 FROM """ + _options.SchemaName + @""".""counter""
@@ -453,19 +431,19 @@ HAVING ""key"" = ANY @keys;
 
             var valuesMap = connection.Query(
                 sqlQuery,
-                new { keys = keys })
+                new { keys = keyMaps.Keys })
                 .ToDictionary(x => (string)x.key, x => (long)x.count);
 
-            foreach (var key in keys)
+            foreach (var key in keyMaps.Keys)
             {
                 if (!valuesMap.ContainsKey(key)) valuesMap.Add(key, 0);
             }
 
             var result = new Dictionary<DateTime, long>();
-            for (var i = 0; i < stringDates.Count; i++)
+            for (var i = 0; i < keyMaps.Count; i++)
             {
-                var value = valuesMap[valuesMap.Keys.ElementAt(i)];
-                result.Add(dates[i], value);
+                var value = valuesMap[keyMaps.ElementAt(i).Key];
+                result.Add(keyMaps.ElementAt(i).Value, value);
             }
 
             return result;

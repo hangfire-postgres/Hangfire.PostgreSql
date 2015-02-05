@@ -14,15 +14,16 @@
     <tags>Hangfire PostgreSql Postgres</tags>
     <releaseNotes>
       https://github.com/frankhommers/Hangfire.PostgreSql/releases
-
-      1.3.2
-      * Breaking - Use 'Hangfire.Core' 1.3.2.
-      * Expiration Manager - Now deletes max 1000 records at a time.
+      1.3.4
+      * Breaking - Use 'Hangfire.Core' 1.3.4.
+      * Breaking - Use 'Npgsql' 2.2.4.1.
+      * Shows schema name in dashboard
+      * Fix GetTimelineStats / GetHourlyTimelineStats incorrect order
     </releaseNotes>
     <dependencies>
-      <dependency id="Hangfire.Core" version="1.3.2" />
+      <dependency id="Hangfire.Core" version="1.3.4" />
       <dependency id="Dapper" version="1.38" />
-      <dependency id="Npgsql" version="2.2.3" />
+      <dependency id="Npgsql" version="2.2.4.1" />
     </dependencies>
   </metadata>
   <files>
