@@ -112,6 +112,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Install.v4.sql" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Install.v5.sql" />
+  </ItemGroup>
   <!-- <Import Project="..\Common\Hangfire.targets" /> -->
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
