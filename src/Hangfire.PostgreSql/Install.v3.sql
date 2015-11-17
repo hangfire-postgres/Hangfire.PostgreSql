@@ -30,10 +30,6 @@ BEGIN
     END IF;
 END
 $$;
- 
-INSERT INTO "schema"("version")
-SELECT 3 "version" WHERE NOT EXISTS (SELECT 1 FROM "schema");
--- version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
 
 --
 -- Table structure for table `Counter`
