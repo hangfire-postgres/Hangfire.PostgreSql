@@ -71,7 +71,7 @@ SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
 WHERE ""id"" IN (
     SELECT ""id"" 
     FROM """ + _options.SchemaName + @""".""jobqueue"" 
-    WHERE ""queue"" = ANY @queues 
+    WHERE ""queue"" = ANY (@queues)
     AND ""fetchedat"" {0} 
     ORDER BY ""fetchedat"", ""jobid""
     LIMIT 1
@@ -140,7 +140,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
             string jobToFetchSqlTemplate = @"
 SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
 FROM """ + _options.SchemaName + @""".""jobqueue"" 
-WHERE ""queue"" = ANY @queues 
+WHERE ""queue"" = ANY (@queues)
 AND ""fetchedat"" {0} 
 ORDER BY ""fetchedat"", ""jobid"" 
 LIMIT 1;
