@@ -426,12 +426,12 @@ WHERE ""key"" = 'recurring-jobs';
 SELECT ""key"", COUNT(""value"") AS ""count"" 
 FROM """ + _options.SchemaName + @""".""counter""
 GROUP BY ""key""
-HAVING ""key"" = ANY @keys;
+HAVING ""key"" = ANY (@keys);
 ";
 
             var valuesMap = connection.Query(
                 sqlQuery,
-                new { keys = keyMaps.Keys })
+                new { keys = keyMaps.Keys.ToList() })
                 .ToDictionary(x => (string)x.key, x => (long)x.count);
 
             foreach (var key in keyMaps.Keys)
@@ -476,13 +476,13 @@ SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments""
 FROM """ + _options.SchemaName + @""".""job"" j
 LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON s.""id"" = j.""stateid""
 LEFT JOIN """ + _options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
-WHERE j.""id"" = ANY @jobIds 
+WHERE j.""id"" = ANY (@jobIds)
 AND jq.""fetchedat"" IS NULL;
 ";
 
             var jobs = connection.Query<SqlJob>(
                 enqueuedJobsSql,
-                new { jobIds = jobIds })
+                new { jobIds = jobIds.ToList() })
                 .ToList();
 
             return DeserializeJobs(
@@ -576,13 +576,13 @@ SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments""
 FROM """ + _options.SchemaName + @""".""job"" j
 LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
 LEFT JOIN """ + _options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
-WHERE j.""id"" = ANY @jobIds 
+WHERE j.""id"" = ANY (@jobIds)
 AND ""jq"".""fetchedat"" IS NOT NULL;
 ";
 
             var jobs = connection.Query<SqlJob>(
                 fetchedJobsSql,
-                new { jobIds = jobIds })
+                new { jobIds = jobIds.ToList() })
                 .ToList();
 
             var result = new List<KeyValuePair<string, FetchedJobDto>>(jobs.Count);

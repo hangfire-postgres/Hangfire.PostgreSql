@@ -20,6 +20,7 @@
 //    Special thanks goes to him.
 
 using System;
+using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
@@ -41,15 +42,15 @@ namespace Hangfire.PostgreSql
 
             Log.Info("Start installing Hangfire SQL objects...");
 
-
-            int version = 3; //We started at version 3
+            // version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
+            int version = 3;
+            int previousVersion = 1;
             bool scriptFound = true;
 
             do
             {
                 try
                 {
-
                     var script = GetStringResource(
                         typeof (PostgreSqlObjectsInstaller).Assembly,
                         string.Format("Hangfire.PostgreSql.Install.v{0}.sql",
@@ -60,15 +61,34 @@ namespace Hangfire.PostgreSql
                             .Replace(@"""hangfire""", string.Format(@"""{0}""", schemaName));
                     }
 
-                    try
+                    using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
+                    using (var command = new NpgsqlCommand(script, connection, transaction))
                     {
-                        connection.Execute(script, commandTimeout: 120);
-                    }
-                    catch (NpgsqlException ex)
-                    {
-                        if((ex.BaseMessage ?? "") != "version-already-applied")
+                        command.CommandTimeout = 120;
+                        try
                         {
-                            throw;
+                            command.ExecuteNonQuery();
+
+                            // Due to https://github.com/npgsql/npgsql/issues/641 , it's not possible to send
+                            // CREATE objects and use the same object in the same command
+                            // So bump the version in another command
+                            var bumpVersionSql = string.Format(
+                                "INSERT INTO \"{0}\".\"schema\"(\"version\") " +
+                                "SELECT @version \"version\" WHERE NOT EXISTS (SELECT @previousVersion FROM \"{0}\".\"schema\")", schemaName);
+                            using (var versionCommand = new NpgsqlCommand(bumpVersionSql, connection, transaction))
+                            {
+                                versionCommand.Parameters.AddWithValue("version", version);
+                                versionCommand.Parameters.AddWithValue("previousVersion", version);
+                                versionCommand.ExecuteNonQuery();
+                            }
+                            transaction.Commit();
+                        }
+                        catch (NpgsqlException ex)
+                        {
+                            if ((ex.BaseMessage ?? "") != "version-already-applied")
+                            {
+                                throw;
+                            }
                         }
                     }
                 }
@@ -77,6 +97,7 @@ namespace Hangfire.PostgreSql
                     scriptFound = false;
                 }
 
+                previousVersion = version;
                 version++;
             } while (scriptFound);
 
