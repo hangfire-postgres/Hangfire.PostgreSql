@@ -420,7 +420,8 @@ WHERE ""key"" = 'recurring-jobs';
             return GetTimelineStats(connection, keyMaps);
         }
 
-        private Dictionary<DateTime, long> GetTimelineStats(NpgsqlConnection connection, Dictionary<string, DateTime> keyMaps)
+        private Dictionary<DateTime, long> GetTimelineStats(NpgsqlConnection connection,
+            IDictionary<string, DateTime> keyMaps)
         {
             string sqlQuery = @"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
