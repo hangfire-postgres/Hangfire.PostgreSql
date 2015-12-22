@@ -85,7 +85,7 @@ namespace Hangfire.PostgreSql
                         }
                         catch (NpgsqlException ex)
                         {
-                            if ((ex.BaseMessage ?? "") != "version-already-applied")
+                            if ((ex.MessageText ?? "") != "version-already-applied")
                             {
                                 throw;
                             }
