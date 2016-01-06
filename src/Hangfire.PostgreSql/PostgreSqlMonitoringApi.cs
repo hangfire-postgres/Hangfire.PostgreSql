@@ -433,6 +433,7 @@ HAVING ""key"" = ANY (@keys);
             var valuesMap = connection.Query(
                 sqlQuery,
                 new { keys = keyMaps.Keys.ToList() })
+                .ToList()
                 .ToDictionary(x => (string)x.key, x => (long)x.count);
 
             foreach (var key in keyMaps.Keys)
