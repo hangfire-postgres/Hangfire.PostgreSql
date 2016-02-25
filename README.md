@@ -26,7 +26,7 @@ Related Projects
 License
 --------
 
-Copyright © 2014-2016 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql> and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask).
+Copyright © 2014-2016 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql> and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)).
 
 Hangfire.PostgreSql is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as 
