@@ -12,13 +12,13 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
 
 [assembly: AssemblyProduct("Hangfire.PostgreSql")]
-[assembly: AssemblyCompany("Frank Hommers")]
-[assembly: AssemblyCopyright("Copyright © 2014 Frank Hommers")]
+[assembly: AssemblyCompany("Frank Hommers, Vytautas Kasparavičius")]
+[assembly: AssemblyCopyright("Copyright © 2014-2016 Frank Hommers, Vytautas Kasparavičius")]
 [assembly: AssemblyCulture("")]
 
 [assembly: ComVisible(false)]
 [assembly: CLSCompliant(false)]
 
-[assembly: AssemblyVersion("1.3.4")]
-[assembly: AssemblyInformationalVersion("1.3.4")]
+[assembly: AssemblyVersion("1.4.0")]
+[assembly: AssemblyInformationalVersion("1.4.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]

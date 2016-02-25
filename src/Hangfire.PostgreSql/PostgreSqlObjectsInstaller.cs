@@ -92,8 +92,13 @@ namespace Hangfire.PostgreSql
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+					if(ex.Source.Equals("Npgsql"))
+					{
+						Log.ErrorException("Error while executing install/upgrade", ex);
+					}
+
                     scriptFound = false;
                 }
 

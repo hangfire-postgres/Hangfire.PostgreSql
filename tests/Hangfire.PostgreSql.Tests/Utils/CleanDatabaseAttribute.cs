@@ -6,6 +6,7 @@ using System.Threading;
 using Dapper;
 using Npgsql;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Hangfire.PostgreSql.Tests
 {
@@ -66,6 +67,11 @@ namespace Hangfire.PostgreSql.Tests
             using (var connection = new NpgsqlConnection(
                 ConnectionUtils.GetConnectionString()))
             {
+				if(connection.State == ConnectionState.Closed)
+				{
+					connection.Open();
+				}
+
                 PostgreSqlObjectsInstaller.Install(connection);
                 PostgreSqlTestObjectsInitializer.CleanTables(connection);
             }
@@ -73,8 +79,7 @@ namespace Hangfire.PostgreSql.Tests
 
         private static void CleanTables()
         {
-            using (var connection = new NpgsqlConnection(
-                ConnectionUtils.GetConnectionString()))
+            using (var connection = ConnectionUtils.CreateConnection())
             {
                 PostgreSqlTestObjectsInitializer.CleanTables(connection);
             }

@@ -21,11 +21,8 @@ namespace MyWebApplication
     {
         public void Configuration(IAppBuilder app)
         {
-            app.UseHangfire(config =>
-            {
-                config.UsePostgreSqlStorage("<name or connection string>");
-                config.UseServer();
-            });
+           app.UseHangfireServer(new BackgroundJobServerOptions(), new PostgreSqlStorage("<connection string or its name>"));
+           app.UseHangfireDashboard();;
         }
     }
 }
