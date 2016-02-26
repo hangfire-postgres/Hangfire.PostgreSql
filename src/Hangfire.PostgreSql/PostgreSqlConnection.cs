@@ -31,10 +31,11 @@ using Hangfire.PostgreSql.Entities;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
+using Hangfire.Annotations;
 
 namespace Hangfire.PostgreSql
 {
-    internal class PostgreSqlConnection : IStorageConnection
+    public class PostgreSqlConnection : JobStorageConnection, IStorageConnection
     {
         private readonly NpgsqlConnection _connection;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
@@ -67,20 +68,21 @@ namespace Hangfire.PostgreSql
         public bool OwnsConnection { get; private set; }
         public NpgsqlConnection Connection { get { return _connection; } }
 
-        public void Dispose()
+        public override void Dispose()
         {
+            base.Dispose();
             if (OwnsConnection)
             { 
                  _connection.Dispose();
             }
         }
 
-        public IWriteOnlyTransaction CreateWriteTransaction()
+        public override IWriteOnlyTransaction CreateWriteTransaction()
         {
             return new PostgreSqlWriteOnlyTransaction(_connection, _options, _queueProviders);
         }
 
-        public IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
+        public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
         {
             return new PostgreSqlDistributedLock(
                 String.Format("HangFire:{0}", resource),
@@ -89,7 +91,7 @@ namespace Hangfire.PostgreSql
                 _options);
         }
 
-        public IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
+        public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
         {
             if (queues == null || queues.Length == 0) throw new ArgumentNullException("queues");
 
@@ -109,7 +111,7 @@ namespace Hangfire.PostgreSql
             return persistentQueue.Dequeue(queues, cancellationToken);
         }
 
-        public string CreateExpiredJob(
+        public override string CreateExpiredJob(
             Job job,
             IDictionary<string, string> parameters, 
             DateTime createdAt,
@@ -161,7 +163,7 @@ VALUES (@jobId, @name, @value);
             return jobId;
         }
 
-        public JobData GetJobData(string id)
+        public override JobData GetJobData(string id)
         {
             if (id == null) throw new ArgumentNullException("id");
 
@@ -202,7 +204,7 @@ WHERE ""id"" = @id;
             };
         }
 
-        public StateData GetStateData(string jobId)
+        public override StateData GetStateData(string jobId)
         {
             if (jobId == null) throw new ArgumentNullException("jobId");
 
@@ -227,7 +229,7 @@ WHERE j.""id"" = @jobId;
             };
         }
 
-        public void SetJobParameter(string id, string name, string value)
+        public override void SetJobParameter(string id, string name, string value)
         {
             if (id == null) throw new ArgumentNullException("id");
             if (name == null) throw new ArgumentNullException("name");
@@ -257,7 +259,7 @@ WHERE NOT EXISTS (
                             new { jobId = Convert.ToInt32(id, CultureInfo.InvariantCulture), name, value });
                     }
 
-                    public string GetJobParameter(string id, string name)
+        public override string GetJobParameter(string id, string name)
                     {
                         if (id == null) throw new ArgumentNullException("id");
                         if (name == null) throw new ArgumentNullException("name");
@@ -269,11 +271,11 @@ FROM """ + _options.SchemaName + @""".""jobparameter""
 WHERE ""jobid"" = @id 
 AND ""name"" = @name;
 ",
-                            new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture), name = name })
+                new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture), name = name })
                             .SingleOrDefault();
-                    }
+        }
 
-                    public HashSet<string> GetAllItemsFromSet(string key)
+        public override HashSet<string> GetAllItemsFromSet(string key)
                     {
                         if (key == null) throw new ArgumentNullException("key");
 
@@ -288,7 +290,7 @@ WHERE ""key"" = @key;
                         return new HashSet<string>(result);
                     }
 
-                    public string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
+        public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
                     {
                         if (key == null) throw new ArgumentNullException("key");
                         if (toScore < fromScore) throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
@@ -305,7 +307,7 @@ ORDER BY ""score"" LIMIT 1;
                             .SingleOrDefault();
                     }
 
-                    public void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
+                    public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
                     {
                         if (key == null) throw new ArgumentNullException("key");
                         if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
@@ -341,7 +343,7 @@ WHERE NOT EXISTS (
             }
         }
 
-        public Dictionary<string, string> GetAllEntriesFromHash(string key)
+        public override Dictionary<string, string> GetAllEntriesFromHash(string key)
         {
             if (key == null) throw new ArgumentNullException("key");
 
@@ -357,7 +359,7 @@ WHERE ""key"" = @key;
             return result.Count != 0 ? result : null;
         }
 
-        public void AnnounceServer(string serverId, ServerContext context)
+        public override void AnnounceServer(string serverId, ServerContext context)
         {
             if (serverId == null) throw new ArgumentNullException("serverId");
             if (context == null) throw new ArgumentNullException("context");
@@ -392,7 +394,7 @@ WHERE NOT EXISTS (
                 new { id = serverId, data = JobHelper.ToJson(data) });
         }
 
-        public void RemoveServer(string serverId)
+        public override void RemoveServer(string serverId)
         {
             if (serverId == null) throw new ArgumentNullException("serverId");
 
@@ -404,7 +406,7 @@ WHERE ""id"" = @id;
                 new { id = serverId });
         }
 
-        public void Heartbeat(string serverId)
+        public override void Heartbeat(string serverId)
         {
             if (serverId == null) throw new ArgumentNullException("serverId");
 
@@ -417,7 +419,7 @@ WHERE ""id"" = @id;
                 new { id = serverId });
         }
 
-        public int RemoveTimedOutServers(TimeSpan timeOut)
+        public override int RemoveTimedOutServers(TimeSpan timeOut)
         {
             if (timeOut.Duration() != timeOut)
             {
@@ -429,6 +431,79 @@ WHERE ""id"" = @id;
 DELETE FROM """ + _options.SchemaName + @""".""server"" 
 WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{0} MILLISECONDS');
 ", (long)timeOut.TotalMilliseconds));
+        }
+
+
+
+        ///////////////
+        public override long GetSetCount([NotNull] string key)
+        {
+            string sql = @" SELECT count(*) FROM """ + _options.SchemaName + @""".""set"" WHERE ""key"" = @key;";
+            return  _connection.Query<int>(sql, new { key = key }).SingleOrDefault();
+        }
+
+        public override List<string> GetRangeFromSet([NotNull] string key, int startingFrom, int endingAt)
+        {
+            string sql = @" SELECT value FROM """ + _options.SchemaName + @""".""set"" WHERE ""key"" = @key ORDER BY value LIMIT @count OFFSET @start ;";
+            return  _connection.Query<string>(sql, new { key = key, start=startingFrom,count=(endingAt-startingFrom+1) }).ToList();
+            //throw new NotSupportedException();
+        }
+
+        public override TimeSpan GetSetTtl([NotNull] string key)
+        {
+            string sql = @"SELECT min(expireat) FROM """ + _options.SchemaName + @""".""set"" WHERE ""key"" = @key;";
+            return  _connection.Query<TimeSpan>(sql, new { key = key }).SingleOrDefault();
+        }
+
+
+        public override string GetValueFromHash([NotNull] string key, [NotNull] string name)
+        {
+            string sql = @" SELECT value FROM """ + _options.SchemaName + @""".""hash"" WHERE ""key"" = @key AND field = @field;";
+            return  _connection.Query<string>(sql, new { key = key, field = name }).SingleOrDefault();
+        }
+
+        public override long GetHashCount([NotNull] string key)
+        {
+            string sql = @" SELECT count(*) FROM """ + _options.SchemaName + @""".""hash"" WHERE ""key"" = @key;";
+            return  _connection.Query<long>(sql, new { key = key }).SingleOrDefault();
+        }
+
+        public override TimeSpan GetHashTtl([NotNull] string key)
+        {
+            string sql = @"SELECT min(expireat) FROM """ + _options.SchemaName + @""".""hash"" WHERE ""key"" = @key;";
+            return  _connection.Query<TimeSpan>(sql, new { key = key }).SingleOrDefault();
+        }
+
+        // Lists
+        public override long GetListCount([NotNull] string key)
+        {
+            string sql = @" SELECT count(*) FROM """ + _options.SchemaName + @""".""list"" WHERE ""key"" = @key;";
+            return  _connection.Query<int>(sql, new { key = key }).SingleOrDefault();
+        }
+
+        public override List<string> GetAllItemsFromList([NotNull] string key)
+        {
+            string sql = @" SELECT value FROM """ + _options.SchemaName + @""".""list"" WHERE ""key"" = @key ORDER BY id DESC;";
+            return  _connection.Query<string>(sql, new { key = key}).ToList();
+        }
+
+        public override List<string> GetRangeFromList([NotNull] string key, int startingFrom, int endingAt)
+        {
+            string sql = @" SELECT value FROM """ + _options.SchemaName + @""".""list"" WHERE ""key"" = @key ORDER BY id DESC LIMIT @count OFFSET @start ;";
+            return  _connection.Query<string>(sql, new { key = key, start=startingFrom,count=(endingAt-startingFrom+1) }).ToList();
+        }
+
+        public override TimeSpan GetListTtl([NotNull] string key)
+        {   
+            string sql = @"SELECT min(expireat) FROM """ + _options.SchemaName + @""".""list"" WHERE ""key"" = @key;";
+            return  _connection.Query<TimeSpan>(sql, new { key = key }).SingleOrDefault();
+        }
+
+        // Counters
+        public override long GetCounter([NotNull] string key)
+        {            
+            string sql = string.Format(@"select sum(value) from ""{0}"".counter where key = @key", _options.SchemaName);
+            return _connection.Query<long>(sql, new { key = key }).SingleOrDefault();
         }
     }
 }
