@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0"?>
 <package >
   <metadata>
-    <id>Hangfire.PostgreSql</id>
+    <id>Hangfire.PostgreSql.Revised</id>
     <version>1.4.0</version>
     <title>Hangfire PostgreSql Storage Revised</title>
     <authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
