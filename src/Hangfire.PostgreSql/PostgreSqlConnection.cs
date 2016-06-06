@@ -343,8 +343,8 @@ WHERE NOT EXISTS (
 			var result = _connection.Query<SqlHash>(
 				$@"SELECT ""field"" ""Field"", ""value"" ""Value"" 
 					FROM ""{_options.SchemaName}"".""hash"" 
-					WHERE ""key"" = @key;
-					",
+WHERE ""key"" = @key;
+",
 				new { key })
 				.ToDictionary(x => x.Field, x => x.Value);
 
@@ -401,7 +401,7 @@ WHERE NOT EXISTS (
 
 			_connection.Execute(
 				$@"UPDATE ""{_options.SchemaName}"".""server"" 
-				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
+SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
 				WHERE ""id"" = @id;",
 				new { id = serverId });
 		}
@@ -426,14 +426,14 @@ WHERE NOT EXISTS (
 		}
 
 		public override List<string> GetAllItemsFromList(string key)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			return _connection.Query<string>($@"select ""value"" from ""{_options.SchemaName}"".""list"" where ""key"" = @key order by ""id"" desc", new { key }).ToList();
 		}
 
 		public override long GetCounter(string key)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			///TODO: maybe add this functionality (and aggregated counter table) later...
@@ -450,16 +450,16 @@ WHERE NOT EXISTS (
 		}
 
 		public override long GetListCount(string key)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select count(""id"") from ""{_options.SchemaName}"".""list"" where ""key"" = @key";
 
 			return _connection.Query<long>(query, new { key }).Single();
-		}
+        }
 
 		public override TimeSpan GetListTtl(string key)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select min(""expireat"") from ""{_options.SchemaName}"".""list"" where ""key"" = @key";
@@ -468,10 +468,10 @@ WHERE NOT EXISTS (
 			if (!result.HasValue) return TimeSpan.FromSeconds(-1);
 
 			return result.Value - DateTime.UtcNow;
-		}
+        }
 
 		public override List<string> GetRangeFromList(string key, int startingFrom, int endingAt)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select ""value"" from (
@@ -481,19 +481,19 @@ WHERE NOT EXISTS (
 				) as s where s.row_num between @startingFrom and @endingAt";
 
 			return _connection.Query<string>(query, new {key, startingFrom = startingFrom + 1, endingAt = endingAt + 1}).ToList();
-		}
+        }
 
 		public override long GetHashCount(string key)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select count(""id"") from ""{_options.SchemaName}"".""hash"" where ""key"" = @key";
 
 			return _connection.Query<long>(query, new { key }).Single();
-		}
+        }
 
 		public override TimeSpan GetHashTtl(string key)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select min(""expireat"") from ""{_options.SchemaName}"".""hash"" where ""key"" = @key";
@@ -502,10 +502,10 @@ WHERE NOT EXISTS (
 			if (!result.HasValue) return TimeSpan.FromSeconds(-1);
 
 			return result.Value - DateTime.UtcNow;
-		}
+        }
 
 		public override List<string> GetRangeFromSet(string key, int startingFrom, int endingAt)
-		{
+        {
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select ""value"" from (
@@ -515,10 +515,10 @@ WHERE NOT EXISTS (
 				) as s where s.row_num between @startingFrom and @endingAt";
 
 			return _connection.Query<string>(query, new { key, startingFrom = startingFrom + 1, endingAt = endingAt + 1 }).ToList();
-		}
+        }
 
 		public override TimeSpan GetSetTtl(string key)
-		{
+        {   
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			string query = $@"select min(""expireat"") from ""{_options.SchemaName}"".""set"" where ""key"" = @key";
@@ -527,16 +527,16 @@ WHERE NOT EXISTS (
 			if (!result.HasValue) return TimeSpan.FromSeconds(-1);
 
 			return result.Value - DateTime.UtcNow;
-		}
+        }
 
 		public override string GetValueFromHash(string key, string name)
-		{
+        {            
 			if (key == null) throw new ArgumentNullException(nameof(key));
 			if (name == null) throw new ArgumentNullException(nameof(name));
 
 			string query = $@"select ""value"" from ""{_options.SchemaName}"".""hash"" where ""key"" = @key and ""field"" = @field";
 
 			return _connection.Query<string>(query, new { key, field = name }).SingleOrDefault();
-		}
-	}
+        }
+    }
 }

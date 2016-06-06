@@ -56,8 +56,8 @@ namespace Hangfire.PostgreSql
 
 		public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options, TimeSpan checkInterval)
 		{
-			if (storage == null) throw new ArgumentNullException("storage");
-			if (options == null) throw new ArgumentNullException("options");
+			if (storage == null) throw new ArgumentNullException(nameof(storage));
+			if (options == null) throw new ArgumentNullException(nameof(options));
 
 			_options = options;
 			_storage = storage;
