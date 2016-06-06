@@ -1,32 +1,33 @@
 ﻿<?xml version="1.0"?>
 <package >
   <metadata>
-    <id>Hangfire.PostgreSql.Revised</id>
-    <version>1.4.0</version>
-    <title>Hangfire PostgreSql Storage Revised</title>
-    <authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
-    <owners>vytautask</owners>
-    <projectUrl>https://github.com/vytautask/Hangfire.PostgreSql</projectUrl>
-    <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <licenseUrl>https://github.com/vytautask/Hangfire.PostgreSql/blob/master/LICENSE.md</licenseUrl>
-    <description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).</description>
-    <copyright>Copyright &#169; 2014-2016 Frank Hommers and others</copyright>
-    <tags>Hangfire PostgreSql Postgres</tags>
-    <releaseNotes>
+	<id>Hangfire.PostgreSql.Revised</id>
+	<version>1.4.1</version>
+	<title>Hangfire PostgreSql Storage Revised</title>
+	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
+	<owners>vytautask</owners>
+	<projectUrl>https://github.com/vytautask/Hangfire.PostgreSql</projectUrl>
+	<requireLicenseAcceptance>false</requireLicenseAcceptance>
+	<licenseUrl>https://github.com/vytautask/Hangfire.PostgreSql/blob/master/LICENSE.md</licenseUrl>
+	<description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).</description>
+	<copyright>Copyright &#169; 2014-2016 Frank Hommers and others</copyright>
+	<tags>Hangfire PostgreSql Postgres</tags>
+	<releaseNotes>
 		https://github.com/vytautask/Hangfire.PostgreSql/releases
-		1.4.0
-		* Breaking - Use 'Hangfire.Core' 1.5.3
-		* Breaking - Use 'Npgsql' 3.0.5.0
-		* Breaking - .NET 4.5.2
+		1.4.1
+		* Breaking - Uses 'Hangfire.Core' 1.5.7
+		* Breaking - Uses 'Npgsql' 3.1.3
+		* Updated to Newtonsoft.Json 8.0.3
+		* Updated Moq to 4.5.8
 	</releaseNotes>
-    <dependencies>
-      <dependency id="Hangfire.Core" version="1.5.3" />
-      <dependency id="Dapper" version="1.40" />
-      <dependency id="Npgsql" version="3.0.5.0" />
-    </dependencies>
+	<dependencies>
+	  <dependency id="Hangfire.Core" version="1.5.7" />
+	  <dependency id="Dapper" version="1.40" />
+	  <dependency id="Npgsql" version="3.1.3" />
+	</dependencies>
   </metadata>
   <files>
-    <file src="Net45\Hangfire.PostgreSql.dll" target="lib\net452" />
-    <file src="Net45\Hangfire.PostgreSql.xml" target="lib\net452" />
+	<file src="Net45\Hangfire.PostgreSql.dll" target="lib\net452" />
+	<file src="Net45\Hangfire.PostgreSql.xml" target="lib\net452" />
   </files>
 </package>

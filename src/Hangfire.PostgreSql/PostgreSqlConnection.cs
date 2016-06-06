@@ -34,401 +34,400 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-    internal class PostgreSqlConnection : IStorageConnection
-    {
-        private readonly NpgsqlConnection _connection;
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
-        private readonly PostgreSqlStorageOptions _options;
+	internal class PostgreSqlConnection : JobStorageConnection
+	{
+		private readonly NpgsqlConnection _connection;
+		private readonly PersistentJobQueueProviderCollection _queueProviders;
+		private readonly PostgreSqlStorageOptions _options;
 
-        public PostgreSqlConnection(
-            NpgsqlConnection connection,
-            PersistentJobQueueProviderCollection queueProviders,
-            PostgreSqlStorageOptions options)
-            : this(connection, queueProviders, options, true)
-        {
-        }
+		public PostgreSqlConnection(
+			NpgsqlConnection connection,
+			PersistentJobQueueProviderCollection queueProviders,
+			PostgreSqlStorageOptions options)
+			: this(connection, queueProviders, options, true)
+		{
+		}
 
-        public PostgreSqlConnection(
-            NpgsqlConnection connection, 
-            PersistentJobQueueProviderCollection queueProviders,
-            PostgreSqlStorageOptions options,
-            bool ownsConnection)
-        {
-            if (connection == null) throw new ArgumentNullException("connection");
-            if (queueProviders == null) throw new ArgumentNullException("queueProviders");
-            if (options == null) throw new ArgumentNullException("options");
+		public PostgreSqlConnection(
+			NpgsqlConnection connection,
+			PersistentJobQueueProviderCollection queueProviders,
+			PostgreSqlStorageOptions options,
+			bool ownsConnection)
+		{
+			if (connection == null) throw new ArgumentNullException(nameof(connection));
+			if (queueProviders == null) throw new ArgumentNullException(nameof(queueProviders));
+			if (options == null) throw new ArgumentNullException(nameof(options));
 
-            _connection = connection;
-            _queueProviders = queueProviders;
-            _options = options;
-            OwnsConnection = ownsConnection;
-        }
+			_connection = connection;
+			_queueProviders = queueProviders;
+			_options = options;
+			OwnsConnection = ownsConnection;
+		}
 
-        public bool OwnsConnection { get; private set; }
-        public NpgsqlConnection Connection { get { return _connection; } }
+		public bool OwnsConnection { get; private set; }
+		public NpgsqlConnection Connection => _connection;
 
-        public void Dispose()
-        {
-            if (OwnsConnection)
-            { 
-                 _connection.Dispose();
-            }
-        }
+		public override void Dispose()
+		{
+			if (OwnsConnection)
+			{
+				_connection.Dispose();
+			}
+		}
 
-        public IWriteOnlyTransaction CreateWriteTransaction()
-        {
-            return new PostgreSqlWriteOnlyTransaction(_connection, _options, _queueProviders);
-        }
+		public override IWriteOnlyTransaction CreateWriteTransaction()
+		{
+			return new PostgreSqlWriteOnlyTransaction(_connection, _options, _queueProviders);
+		}
 
-        public IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
-        {
-            return new PostgreSqlDistributedLock(
-                String.Format("HangFire:{0}", resource),
-                timeout,
-                _connection,
-                _options);
-        }
+		public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
+		{
+			return new PostgreSqlDistributedLock(
+				$"HangFire:{resource}",
+				timeout,
+				_connection,
+				_options);
+		}
 
-        public IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
-        {
-            if (queues == null || queues.Length == 0) throw new ArgumentNullException("queues");
+		public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
+		{
+			if (queues == null || queues.Length == 0) throw new ArgumentNullException(nameof(queues));
 
-            var providers = queues
-                .Select(queue => _queueProviders.GetProvider(queue))
-                .Distinct()
-                .ToArray();
+			var providers = queues
+				.Select(queue => _queueProviders.GetProvider(queue))
+				.Distinct()
+				.ToArray();
 
-            if (providers.Length != 1)
-            {
-                throw new InvalidOperationException(String.Format(
-                    "Multiple provider instances registered for queues: {0}. You should choose only one type of persistent queues per server instance.",
-                    String.Join(", ", queues)));
-            }
+			if (providers.Length != 1)
+			{
+				throw new InvalidOperationException(
+					$"Multiple provider instances registered for queues: {String.Join(", ", queues)}. You should choose only one type of persistent queues per server instance.");
+			}
 
-            var persistentQueue = providers[0].GetJobQueue(_connection); 
-            return persistentQueue.Dequeue(queues, cancellationToken);
-        }
+			var persistentQueue = providers[0].GetJobQueue(_connection);
+			return persistentQueue.Dequeue(queues, cancellationToken);
+		}
 
-        public string CreateExpiredJob(
-            Job job,
-            IDictionary<string, string> parameters, 
-            DateTime createdAt,
-            TimeSpan expireIn)
-        {
-            if (job == null) throw new ArgumentNullException("job");
-            if (parameters == null) throw new ArgumentNullException("parameters");
+		public override string CreateExpiredJob(
+			Job job,
+			IDictionary<string, string> parameters,
+			DateTime createdAt,
+			TimeSpan expireIn)
+		{
+			if (job == null) throw new ArgumentNullException(nameof(job));
+			if (parameters == null) throw new ArgumentNullException(nameof(parameters));
 
-            string createJobSql = @"
+			string createJobSql = @"
 INSERT INTO """ + _options.SchemaName + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
 VALUES (@invocationData, @arguments, @createdAt, @expireAt) 
 RETURNING ""id"";
 ";
 
-            var invocationData = InvocationData.Serialize(job);
+			var invocationData = InvocationData.Serialize(job);
 
-            var jobId = _connection.Query<int>(
-                createJobSql,
-                new
-                {
-                    invocationData = JobHelper.ToJson(invocationData),
-                    arguments = invocationData.Arguments,
-                    createdAt = createdAt,
-                    expireAt = createdAt.Add(expireIn)
-                }).Single().ToString(CultureInfo.InvariantCulture);
+			var jobId = _connection.Query<int>(
+				createJobSql,
+				new
+				{
+					invocationData = JobHelper.ToJson(invocationData),
+					arguments = invocationData.Arguments,
+					createdAt = createdAt,
+					expireAt = createdAt.Add(expireIn)
+				}).Single().ToString(CultureInfo.InvariantCulture);
 
-            if (parameters.Count > 0)
-            {
-                var parameterArray = new object[parameters.Count];
-                int parameterIndex = 0;
-                foreach (var parameter in parameters)
-                {
-                    parameterArray[parameterIndex++] = new
-                    {
-                        jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture),
-                        name = parameter.Key,
-                        value = parameter.Value
-                    };
-                }
+			if (parameters.Count > 0)
+			{
+				var parameterArray = new object[parameters.Count];
+				int parameterIndex = 0;
+				foreach (var parameter in parameters)
+				{
+					parameterArray[parameterIndex++] = new
+					{
+						jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture),
+						name = parameter.Key,
+						value = parameter.Value
+					};
+				}
 
-                string insertParameterSql = @"
+				string insertParameterSql = @"
 INSERT INTO """ + _options.SchemaName + @""".""jobparameter"" (""jobid"", ""name"", ""value"")
 VALUES (@jobId, @name, @value);
 ";
 
-                _connection.Execute(insertParameterSql, parameterArray);
-            }
+				_connection.Execute(insertParameterSql, parameterArray);
+			}
 
-            return jobId;
-        }
+			return jobId;
+		}
 
-        public JobData GetJobData(string id)
-        {
-            if (id == null) throw new ArgumentNullException("id");
+		public override JobData GetJobData(string id)
+		{
+			if (id == null) throw new ArgumentNullException("id");
 
-            string sql = 
-                @"
+			string sql =
+				@"
 SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
 FROM """ + _options.SchemaName + @""".""job"" 
 WHERE ""id"" = @id;
 ";
 
-            var jobData = _connection.Query<SqlJob>(sql, new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture) })
-                .SingleOrDefault();
+			var jobData = _connection.Query<SqlJob>(sql, new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture) })
+				.SingleOrDefault();
 
-            if (jobData == null) return null;
+			if (jobData == null) return null;
 
-            // TODO: conversion exception could be thrown.
-            var invocationData = JobHelper.FromJson<InvocationData>(jobData.InvocationData);
-            invocationData.Arguments = jobData.Arguments;
+			// TODO: conversion exception could be thrown.
+			var invocationData = JobHelper.FromJson<InvocationData>(jobData.InvocationData);
+			invocationData.Arguments = jobData.Arguments;
 
-            Job job = null;
-            JobLoadException loadException = null;
+			Job job = null;
+			JobLoadException loadException = null;
 
-            try
-            {
-                job = invocationData.Deserialize();
-            }
-            catch (JobLoadException ex)
-            {
-                loadException = ex;
-            }
+			try
+			{
+				job = invocationData.Deserialize();
+			}
+			catch (JobLoadException ex)
+			{
+				loadException = ex;
+			}
 
-            return new JobData
-            {
-                Job = job,
-                State = jobData.StateName,
-                CreatedAt = jobData.CreatedAt,
-                LoadException = loadException
-            };
-        }
+			return new JobData
+			{
+				Job = job,
+				State = jobData.StateName,
+				CreatedAt = jobData.CreatedAt,
+				LoadException = loadException
+			};
+		}
 
-        public StateData GetStateData(string jobId)
-        {
-            if (jobId == null) throw new ArgumentNullException("jobId");
+		public override StateData GetStateData(string jobId)
+		{
+			if (jobId == null) throw new ArgumentNullException(nameof(jobId));
 
-            string sql = @"
+			string sql = @"
 SELECT s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
 FROM """ + _options.SchemaName + @""".""state"" s
 INNER JOIN """ + _options.SchemaName + @""".""job"" j on j.""stateid"" = s.""id""
 WHERE j.""id"" = @jobId;
 ";
 
-            var sqlState = _connection.Query<SqlState>(sql, new { jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) }).SingleOrDefault();
-            if (sqlState == null)
-            {
-                return null;
-            }
+			var sqlState = _connection.Query<SqlState>(sql, new { jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) }).SingleOrDefault();
+			if (sqlState == null)
+			{
+				return null;
+			}
 
-            return new StateData
-            {
-                Name = sqlState.Name,
-                Reason = sqlState.Reason,
-                Data = JobHelper.FromJson<Dictionary<string, string>>(sqlState.Data)
-            };
-        }
+			return new StateData
+			{
+				Name = sqlState.Name,
+				Reason = sqlState.Reason,
+				Data = JobHelper.FromJson<Dictionary<string, string>>(sqlState.Data)
+			};
+		}
 
-        public void SetJobParameter(string id, string name, string value)
-        {
-            if (id == null) throw new ArgumentNullException("id");
-            if (name == null) throw new ArgumentNullException("name");
+		public override void SetJobParameter(string id, string name, string value)
+		{
+			if (id == null) throw new ArgumentNullException(nameof(id));
+			if (name == null) throw new ArgumentNullException(nameof(name));
 
-            string sql = @"
+			string sql = @"
 WITH ""inputvalues"" AS (
-    SELECT @jobid ""jobid"", @name ""name"", @value ""value""
+	SELECT @jobid ""jobid"", @name ""name"", @value ""value""
 ), ""updatedrows"" AS ( 
-    UPDATE """ + _options.SchemaName + @""".""jobparameter"" ""updatetarget""
-    SET ""value"" = ""inputvalues"".""value""
-    FROM ""inputvalues""
-    WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
-    AND ""updatetarget"".""name"" = ""inputvalues"".""name""
-    RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
+	UPDATE """ + _options.SchemaName + @""".""jobparameter"" ""updatetarget""
+	SET ""value"" = ""inputvalues"".""value""
+	FROM ""inputvalues""
+	WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
+	AND ""updatetarget"".""name"" = ""inputvalues"".""name""
+	RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
 )
 INSERT INTO """ + _options.SchemaName + @""".""jobparameter""(""jobid"", ""name"", ""value"")
 SELECT ""jobid"", ""name"", ""value"" 
 FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
-    SELECT 1 
-    FROM ""updatedrows"" 
-    WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
-    AND ""updatedrows"".""name"" = ""insertvalues"".""name""
+	SELECT 1 
+	FROM ""updatedrows"" 
+	WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
+	AND ""updatedrows"".""name"" = ""insertvalues"".""name""
 );";
 
-                        _connection.Execute(sql,
-                            new { jobId = Convert.ToInt32(id, CultureInfo.InvariantCulture), name, value });
-                    }
+			_connection.Execute(sql,
+				new { jobId = Convert.ToInt32(id, CultureInfo.InvariantCulture), name, value });
+		}
 
-                    public string GetJobParameter(string id, string name)
-                    {
-                        if (id == null) throw new ArgumentNullException("id");
-                        if (name == null) throw new ArgumentNullException("name");
+		public override string GetJobParameter(string id, string name)
+		{
+			if (id == null) throw new ArgumentNullException(nameof(id));
+			if (name == null) throw new ArgumentNullException(nameof(name));
 
-                        return _connection.Query<string>(
-                            @"
+			return _connection.Query<string>(
+				@"
 SELECT ""value"" 
 FROM """ + _options.SchemaName + @""".""jobparameter"" 
 WHERE ""jobid"" = @id 
 AND ""name"" = @name;
 ",
-                            new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture), name = name })
-                            .SingleOrDefault();
-                    }
+				new { id = Convert.ToInt32(id, CultureInfo.InvariantCulture), name = name })
+				.SingleOrDefault();
+		}
 
-                    public HashSet<string> GetAllItemsFromSet(string key)
-                    {
-                        if (key == null) throw new ArgumentNullException("key");
+		public override HashSet<string> GetAllItemsFromSet(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
 
-                        var result = _connection.Query<string>(
-                            @"
+			var result = _connection.Query<string>(
+				@"
 SELECT ""value"" 
 FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = @key;
 ",
-                            new { key });
-            
-                        return new HashSet<string>(result);
-                    }
+				new { key });
 
-                    public string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
-                    {
-                        if (key == null) throw new ArgumentNullException("key");
-                        if (toScore < fromScore) throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
+			return new HashSet<string>(result);
+		}
 
-                        return _connection.Query<string>(
-                            @"
+		public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+			if (toScore < fromScore) throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
+
+			return _connection.Query<string>(
+				@"
 SELECT ""value"" 
 FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = @key 
 AND ""score"" BETWEEN @from AND @to 
 ORDER BY ""score"" LIMIT 1;
 ",
-                            new { key, from = fromScore, to = toScore })
-                            .SingleOrDefault();
-                    }
+				new { key, from = fromScore, to = toScore })
+				.SingleOrDefault();
+		}
 
-                    public void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
-                    {
-                        if (key == null) throw new ArgumentNullException("key");
-                        if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
+		public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+			if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
 
-                        string sql = @"
+			string sql = @"
 WITH ""inputvalues"" AS (
-    SELECT @key ""key"", @field ""field"", @value ""value""
+	SELECT @key ""key"", @field ""field"", @value ""value""
 ), ""updatedrows"" AS ( 
-    UPDATE """ + _options.SchemaName + @""".""hash"" ""updatetarget""
-    SET ""value"" = ""inputvalues"".""value""
-    FROM ""inputvalues""
-    WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
-    AND ""updatetarget"".""field"" = ""inputvalues"".""field""
-    RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
+	UPDATE """ + _options.SchemaName + @""".""hash"" ""updatetarget""
+	SET ""value"" = ""inputvalues"".""value""
+	FROM ""inputvalues""
+	WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
+	AND ""updatetarget"".""field"" = ""inputvalues"".""field""
+	RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
 )
 INSERT INTO """ + _options.SchemaName + @""".""hash""(""key"", ""field"", ""value"")
 SELECT ""key"", ""field"", ""value"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
-    SELECT 1 
-    FROM ""updatedrows"" 
-    WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
-    AND ""updatedrows"".""field"" = ""insertvalues"".""field""
+	SELECT 1 
+	FROM ""updatedrows"" 
+	WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
+	AND ""updatedrows"".""field"" = ""insertvalues"".""field""
 );
 ";
 
-            using (var transaction = _connection.BeginTransaction(IsolationLevel.Serializable))
-            {
-                foreach (var keyValuePair in keyValuePairs)
-                {
-                    _connection.Execute(sql, new { key = key, field = keyValuePair.Key, value = keyValuePair.Value }, transaction);
-                }
-                transaction.Commit();
-            }
-        }
+			using (var transaction = _connection.BeginTransaction(IsolationLevel.Serializable))
+			{
+				foreach (var keyValuePair in keyValuePairs)
+				{
+					_connection.Execute(sql, new { key = key, field = keyValuePair.Key, value = keyValuePair.Value }, transaction);
+				}
+				transaction.Commit();
+			}
+		}
 
-        public Dictionary<string, string> GetAllEntriesFromHash(string key)
-        {
-            if (key == null) throw new ArgumentNullException("key");
+		public override Dictionary<string, string> GetAllEntriesFromHash(string key)
+		{
+			if (key == null) throw new ArgumentNullException("key");
 
-            var result = _connection.Query<SqlHash>(
-                @"
+			var result = _connection.Query<SqlHash>(
+				@"
 SELECT ""field"" ""Field"", ""value"" ""Value"" 
 FROM """ + _options.SchemaName + @""".""hash"" 
 WHERE ""key"" = @key;
 ",
-                new { key })
-                .ToDictionary(x => x.Field, x => x.Value);
+				new { key })
+				.ToDictionary(x => x.Field, x => x.Value);
 
-            return result.Count != 0 ? result : null;
-        }
+			return result.Count != 0 ? result : null;
+		}
 
-        public void AnnounceServer(string serverId, ServerContext context)
-        {
-            if (serverId == null) throw new ArgumentNullException("serverId");
-            if (context == null) throw new ArgumentNullException("context");
+		public override void AnnounceServer(string serverId, ServerContext context)
+		{
+			if (serverId == null) throw new ArgumentNullException(nameof(serverId));
+			if (context == null) throw new ArgumentNullException(nameof(context));
 
-            var data = new ServerData
-            {
-                WorkerCount = context.WorkerCount,
-                Queues = context.Queues,
-                StartedAt = DateTime.UtcNow,
-            };
+			var data = new ServerData
+			{
+				WorkerCount = context.WorkerCount,
+				Queues = context.Queues,
+				StartedAt = DateTime.UtcNow,
+			};
 
-            string sql = @"
+			string sql = @"
 WITH ""inputvalues"" AS (
-    SELECT @id ""id"", @data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
+	SELECT @id ""id"", @data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
 ), ""updatedrows"" AS ( 
-    UPDATE """ + _options.SchemaName + @""".""server"" ""updatetarget""
-    SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
-    FROM ""inputvalues""
-    WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
-    RETURNING ""updatetarget"".""id""
+	UPDATE """ + _options.SchemaName + @""".""server"" ""updatetarget""
+	SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
+	FROM ""inputvalues""
+	WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
+	RETURNING ""updatetarget"".""id""
 )
 INSERT INTO """ + _options.SchemaName + @""".""server""(""id"", ""data"", ""lastheartbeat"")
 SELECT ""id"", ""data"", ""lastheartbeat"" FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
-    SELECT 1 
-    FROM ""updatedrows"" 
-    WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
+	SELECT 1 
+	FROM ""updatedrows"" 
+	WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
 );
 ";
 
-            _connection.Execute(sql,
-                new { id = serverId, data = JobHelper.ToJson(data) });
-        }
+			_connection.Execute(sql,
+				new { id = serverId, data = JobHelper.ToJson(data) });
+		}
 
-        public void RemoveServer(string serverId)
-        {
-            if (serverId == null) throw new ArgumentNullException("serverId");
+		public override void RemoveServer(string serverId)
+		{
+			if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
-            _connection.Execute(
-                @"
+			_connection.Execute(
+				@"
 DELETE FROM """ + _options.SchemaName + @""".""server"" 
 WHERE ""id"" = @id;
 ",
-                new { id = serverId });
-        }
+				new { id = serverId });
+		}
 
-        public void Heartbeat(string serverId)
-        {
-            if (serverId == null) throw new ArgumentNullException("serverId");
+		public override void Heartbeat(string serverId)
+		{
+			if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
-            _connection.Execute(
-                @"
+			_connection.Execute(
+				@"
 UPDATE """ + _options.SchemaName + @""".""server"" 
 SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
 WHERE ""id"" = @id;
 ",
-                new { id = serverId });
-        }
+				new { id = serverId });
+		}
 
-        public int RemoveTimedOutServers(TimeSpan timeOut)
-        {
-            if (timeOut.Duration() != timeOut)
-            {
-                throw new ArgumentException("The `timeOut` value must be positive.", "timeOut");
-            }
+		public override int RemoveTimedOutServers(TimeSpan timeOut)
+		{
+			if (timeOut.Duration() != timeOut)
+			{
+				throw new ArgumentException("The `timeOut` value must be positive.", nameof(timeOut));
+			}
 
-            return _connection.Execute(
-                string.Format(@"
+			return _connection.Execute(
+				string.Format(@"
 DELETE FROM """ + _options.SchemaName + @""".""server"" 
 WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{0} MILLISECONDS');
 ", (long)timeOut.TotalMilliseconds));
-        }
-    }
+		}
+	}
 }

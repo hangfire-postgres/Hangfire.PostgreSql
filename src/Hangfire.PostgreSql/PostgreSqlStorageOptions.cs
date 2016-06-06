@@ -23,44 +23,42 @@ using System;
 
 namespace Hangfire.PostgreSql
 {
-    public class PostgreSqlStorageOptions
-    {
-        private TimeSpan _queuePollInterval;
+	public class PostgreSqlStorageOptions
+	{
+		private TimeSpan _queuePollInterval;
 
-        public PostgreSqlStorageOptions()
-        {
-            QueuePollInterval = TimeSpan.FromSeconds(15);
-            InvisibilityTimeout = TimeSpan.FromMinutes(30);
-            SchemaName = "hangfire";
-            UseNativeDatabaseTransactions = true;
-            PrepareSchemaIfNecessary = true;
-        }
+		public PostgreSqlStorageOptions()
+		{
+			QueuePollInterval = TimeSpan.FromSeconds(15);
+			InvisibilityTimeout = TimeSpan.FromMinutes(30);
+			SchemaName = "hangfire";
+			UseNativeDatabaseTransactions = true;
+			PrepareSchemaIfNecessary = true;
+		}
 
-        public TimeSpan QueuePollInterval
-        {
-            get { return _queuePollInterval; }
-            set
-            {
-                var message = String.Format(
-                    "The QueuePollInterval property value should be positive. Given: {0}.",
-                    value);
+		public TimeSpan QueuePollInterval
+		{
+			get { return _queuePollInterval; }
+			set
+			{
+				var message = $"The QueuePollInterval property value should be positive. Given: {value}.";
 
-                if (value == TimeSpan.Zero)
-                {
-                    throw new ArgumentException(message, "value");
-                }
-                if (value != value.Duration())
-                {
-                    throw new ArgumentException(message, "value");
-                }
+				if (value == TimeSpan.Zero)
+				{
+					throw new ArgumentException(message, nameof(value));
+				}
+				if (value != value.Duration())
+				{
+					throw new ArgumentException(message, nameof(value));
+				}
 
-                _queuePollInterval = value;
-            }
-        }
+				_queuePollInterval = value;
+			}
+		}
 
-        public TimeSpan InvisibilityTimeout { get; set; }
-        public bool UseNativeDatabaseTransactions { get; set; }
-        public bool PrepareSchemaIfNecessary { get; set; }
-        public string SchemaName { get; set; }
-    }
+		public TimeSpan InvisibilityTimeout { get; set; }
+		public bool UseNativeDatabaseTransactions { get; set; }
+		public bool PrepareSchemaIfNecessary { get; set; }
+		public string SchemaName { get; set; }
+	}
 }
