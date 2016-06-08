@@ -2,7 +2,7 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql.Revised</id>
-	<version>1.4.1</version>
+	<version>1.4.2</version>
 	<title>Hangfire PostgreSql Storage Revised</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>vytautask</owners>
@@ -10,15 +10,13 @@
 	<requireLicenseAcceptance>false</requireLicenseAcceptance>
 	<licenseUrl>https://github.com/vytautask/Hangfire.PostgreSql/blob/master/LICENSE.md</licenseUrl>
 	<description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).</description>
+	<summary>Latest build of Hangfire.PostgreSql with many fixes and new PostgreSql driver support.</summary>
 	<copyright>Copyright &#169; 2014-2016 Frank Hommers and others</copyright>
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
 		https://github.com/vytautask/Hangfire.PostgreSql/releases
-		1.4.1
-		* Breaking - Uses 'Hangfire.Core' 1.5.7
-		* Breaking - Uses 'Npgsql' 3.1.3
-		* Updated to Newtonsoft.Json 8.0.3
-		* Updated Moq to 4.5.8
+		1.4.2
+		* Fixes "NotSupportedException: Specified method is not supported." error in dashboard.
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />

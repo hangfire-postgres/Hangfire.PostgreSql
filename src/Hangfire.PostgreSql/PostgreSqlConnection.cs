@@ -277,11 +277,7 @@ AND ""name"" = @name;
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			var result = _connection.Query<string>(
-				@"
-SELECT ""value"" 
-FROM """ + _options.SchemaName + @""".""set"" 
-WHERE ""key"" = @key;
-",
+				$@"SELECT ""value"" FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @key;",
 				new { key });
 
 			return new HashSet<string>(result);
@@ -342,14 +338,13 @@ WHERE NOT EXISTS (
 
 		public override Dictionary<string, string> GetAllEntriesFromHash(string key)
 		{
-			if (key == null) throw new ArgumentNullException("key");
+			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			var result = _connection.Query<SqlHash>(
-				@"
-SELECT ""field"" ""Field"", ""value"" ""Value"" 
-FROM """ + _options.SchemaName + @""".""hash"" 
-WHERE ""key"" = @key;
-",
+				$@"SELECT ""field"" ""Field"", ""value"" ""Value"" 
+					FROM ""{_options.SchemaName}"".""hash"" 
+					WHERE ""key"" = @key;
+					",
 				new { key })
 				.ToDictionary(x => x.Field, x => x.Value);
 
@@ -396,10 +391,7 @@ WHERE NOT EXISTS (
 			if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
 			_connection.Execute(
-				@"
-DELETE FROM """ + _options.SchemaName + @""".""server"" 
-WHERE ""id"" = @id;
-",
+				$@"DELETE FROM ""{_options.SchemaName}"".""server"" WHERE ""id"" = @id;",
 				new { id = serverId });
 		}
 
@@ -408,11 +400,9 @@ WHERE ""id"" = @id;
 			if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
 			_connection.Execute(
-				@"
-UPDATE """ + _options.SchemaName + @""".""server"" 
-SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
-WHERE ""id"" = @id;
-",
+				$@"UPDATE ""{_options.SchemaName}"".""server"" 
+				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
+				WHERE ""id"" = @id;",
 				new { id = serverId });
 		}
 
@@ -424,10 +414,129 @@ WHERE ""id"" = @id;
 			}
 
 			return _connection.Execute(
-				string.Format(@"
-DELETE FROM """ + _options.SchemaName + @""".""server"" 
-WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{0} MILLISECONDS');
-", (long)timeOut.TotalMilliseconds));
+				$@"DELETE FROM ""{_options.SchemaName}"".""server"" 
+				WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{(long)timeOut.TotalMilliseconds} MILLISECONDS');");
+		}
+
+		public override long GetSetCount(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			return _connection.Query<long>($@"select count(""key"") from ""{_options.SchemaName}"".""set"" where ""key"" = @key", new {key}).First();
+		}
+
+		public override List<string> GetAllItemsFromList(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			return _connection.Query<string>($@"select ""value"" from ""{_options.SchemaName}"".""list"" where ""key"" = @key order by ""id"" desc", new { key }).ToList();
+		}
+
+		public override long GetCounter(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			///TODO: maybe add this functionality (and aggregated counter table) later...
+//			string query = $@"
+//select sum(s.""Value"") from (select sum(""Value"") as ""Value"" from ""{_options.SchemaName}"".""Counter""
+//where ""Key"" = @key
+//union all
+//select ""Value"" from ""{_options.SchemaName}"".""AggregatedCounter""
+//where ""Key"" = @key) as s";
+
+			string query = $@"select sum(s.""Value"") from (select sum(""value"") as ""Value"" from ""{_options.SchemaName}"".""counter"" where ""key"" = @key) s";
+
+			return _connection.Query<long?>(query, new {key}).Single() ?? 0;
+		}
+
+		public override long GetListCount(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select count(""id"") from ""{_options.SchemaName}"".""list"" where ""key"" = @key";
+
+			return _connection.Query<long>(query, new { key }).Single();
+		}
+
+		public override TimeSpan GetListTtl(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select min(""expireat"") from ""{_options.SchemaName}"".""list"" where ""key"" = @key";
+
+			var result = _connection.Query<DateTime?>(query, new {key}).Single();
+			if (!result.HasValue) return TimeSpan.FromSeconds(-1);
+
+			return result.Value - DateTime.UtcNow;
+		}
+
+		public override List<string> GetRangeFromList(string key, int startingFrom, int endingAt)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select ""value"" from (
+					select ""value"", row_number() over (order by ""id"" desc) as row_num 
+					from ""{_options.SchemaName}"".""list""
+					where ""key"" = @key 
+				) as s where s.row_num between @startingFrom and @endingAt";
+
+			return _connection.Query<string>(query, new {key, startingFrom = startingFrom + 1, endingAt = endingAt + 1}).ToList();
+		}
+
+		public override long GetHashCount(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select count(""id"") from ""{_options.SchemaName}"".""hash"" where ""key"" = @key";
+
+			return _connection.Query<long>(query, new { key }).Single();
+		}
+
+		public override TimeSpan GetHashTtl(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select min(""expireat"") from ""{_options.SchemaName}"".""hash"" where ""key"" = @key";
+
+			var result = _connection.Query<DateTime?>(query, new { key }).Single();
+			if (!result.HasValue) return TimeSpan.FromSeconds(-1);
+
+			return result.Value - DateTime.UtcNow;
+		}
+
+		public override List<string> GetRangeFromSet(string key, int startingFrom, int endingAt)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select ""value"" from (
+					select ""value"", row_number() over (order by ""id"" ASC) as row_num 
+					from ""{_options.SchemaName}"".""set""
+					where ""key"" = @key 
+				) as s where s.row_num between @startingFrom and @endingAt";
+
+			return _connection.Query<string>(query, new { key, startingFrom = startingFrom + 1, endingAt = endingAt + 1 }).ToList();
+		}
+
+		public override TimeSpan GetSetTtl(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"select min(""expireat"") from ""{_options.SchemaName}"".""set"" where ""key"" = @key";
+
+			var result = _connection.Query<DateTime?>(query, new { key }).Single();
+			if (!result.HasValue) return TimeSpan.FromSeconds(-1);
+
+			return result.Value - DateTime.UtcNow;
+		}
+
+		public override string GetValueFromHash(string key, string name)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+			if (name == null) throw new ArgumentNullException(nameof(name));
+
+			string query = $@"select ""value"" from ""{_options.SchemaName}"".""hash"" where ""key"" = @key and ""field"" = @field";
+
+			return _connection.Query<string>(query, new { key, field = name }).SingleOrDefault();
 		}
 	}
 }

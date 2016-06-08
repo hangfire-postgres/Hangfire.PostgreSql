@@ -19,6 +19,6 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 [assembly: CLSCompliant(false)]
 
-[assembly: AssemblyVersion("1.4.1")]
-[assembly: AssemblyInformationalVersion("1.4.1")]
+[assembly: AssemblyVersion("1.4.2")]
+[assembly: AssemblyInformationalVersion("1.4.2")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
