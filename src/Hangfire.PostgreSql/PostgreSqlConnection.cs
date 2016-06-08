@@ -343,8 +343,8 @@ WHERE NOT EXISTS (
 			var result = _connection.Query<SqlHash>(
 				$@"SELECT ""field"" ""Field"", ""value"" ""Value"" 
 					FROM ""{_options.SchemaName}"".""hash"" 
-WHERE ""key"" = @key;
-",
+					WHERE ""key"" = @key;
+					",
 				new { key })
 				.ToDictionary(x => x.Field, x => x.Value);
 
@@ -401,7 +401,7 @@ WHERE NOT EXISTS (
 
 			_connection.Execute(
 				$@"UPDATE ""{_options.SchemaName}"".""server"" 
-SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
+				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
 				WHERE ""id"" = @id;",
 				new { id = serverId });
 		}
@@ -430,7 +430,7 @@ SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC'
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			return _connection.Query<string>($@"select ""value"" from ""{_options.SchemaName}"".""list"" where ""key"" = @key order by ""id"" desc", new { key }).ToList();
-		}
+	}
 
 		public override long GetCounter(string key)
         {
@@ -447,7 +447,7 @@ SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC'
 			string query = $@"select sum(s.""Value"") from (select sum(""value"") as ""Value"" from ""{_options.SchemaName}"".""counter"" where ""key"" = @key) s";
 
 			return _connection.Query<long?>(query, new {key}).Single() ?? 0;
-		}
+}
 
 		public override long GetListCount(string key)
         {
