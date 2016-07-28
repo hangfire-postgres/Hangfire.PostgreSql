@@ -104,7 +104,20 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 					}
 				},
 					out fetchedJob,
-					ex => ex is NpgsqlException && (ex as NpgsqlException).ErrorCode == 40001);
+					ex =>
+					{
+						NpgsqlException npgSqlException = ex as NpgsqlException;
+						PostgresException postgresException = ex as PostgresException;
+						bool smoothException = npgSqlException?.ErrorCode == 40001;
+
+						if (postgresException != null && !smoothException)
+						{
+							if (postgresException.SqlState.Equals("40001"))
+								smoothException = true;
+						}
+
+						return smoothException;
+					});
 
 				if (fetchedJob == null)
 				{
