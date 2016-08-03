@@ -31,15 +31,23 @@ using Npgsql;
 namespace Hangfire.PostgreSql
 {
 	[ExcludeFromCodeCoverage]
-	internal static class PostgreSqlObjectsInstaller
+	internal class PostgreSqlObjectsInstaller
 	{
-		private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
+		private readonly ILog _log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
+		private NpgsqlConnection _connection = null;
+		private string _schemaName = null;
 
-		public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
+		public PostgreSqlObjectsInstaller(NpgsqlConnection connection, string schemaName = "hangfire")
 		{
-			if (connection == null) throw new ArgumentNullException(nameof(connection));
+			_connection = connection;
+			_schemaName = schemaName;
+		}
 
-			Log.Info("Start installing Hangfire SQL objects...");
+		public void Install()
+		{
+			if (_connection == null) throw new ArgumentNullException(nameof(_connection));
+
+			_log.Info("Start installing Hangfire SQL objects...");
 
 			// version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
 			int version = 3;
@@ -53,13 +61,13 @@ namespace Hangfire.PostgreSql
 					var script = GetStringResource(
 						typeof(PostgreSqlObjectsInstaller).Assembly, 
 						$"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
-					if (schemaName != "hangfire")
+					if (_schemaName != "hangfire")
 					{
-						script = script.Replace("'hangfire'", $"'{schemaName}'").Replace(@"""hangfire""", $@"""{schemaName}""");
+						script = script.Replace("'hangfire'", $"'{_schemaName}'").Replace(@"""hangfire""", $@"""{_schemaName}""");
 					}
 
-					using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
-					using (var command = new NpgsqlCommand(script, connection, transaction))
+					using (var transaction = _connection.BeginTransaction(IsolationLevel.Serializable))
+					using (var command = new NpgsqlCommand(script, _connection, transaction))
 					{
 						command.CommandTimeout = 120;
 						try
@@ -71,8 +79,8 @@ namespace Hangfire.PostgreSql
 							// So bump the version in another command
 							var bumpVersionSql = string.Format(
 								"INSERT INTO \"{0}\".\"schema\"(\"version\") " +
-								"SELECT @version \"version\" WHERE NOT EXISTS (SELECT @previousVersion FROM \"{0}\".\"schema\")", schemaName);
-							using (var versionCommand = new NpgsqlCommand(bumpVersionSql, connection, transaction))
+								"SELECT @version \"version\" WHERE NOT EXISTS (SELECT @previousVersion FROM \"{0}\".\"schema\")", _schemaName);
+							using (var versionCommand = new NpgsqlCommand(bumpVersionSql, _connection, transaction))
 							{
 								versionCommand.Parameters.AddWithValue("version", version);
 								versionCommand.Parameters.AddWithValue("previousVersion", version);
@@ -80,9 +88,9 @@ namespace Hangfire.PostgreSql
 							}
 							transaction.Commit();
 						}
-						catch (NpgsqlException ex)
+						catch (PostgresException ex)
 						{
-							if ((ex.Message ?? "") != "version-already-applied")
+							if (!(ex.MessageText ?? "").Equals("version-already-applied"))
 							{
 								throw;
 							}
@@ -93,7 +101,7 @@ namespace Hangfire.PostgreSql
 				{
 					if (ex.Source.Equals("Npgsql"))
 					{
-						Log.ErrorException("Error while executing install/upgrade", ex);
+						_log.ErrorException("Error while executing install/upgrade", ex);
 					}
 
 					scriptFound = false;
@@ -103,10 +111,10 @@ namespace Hangfire.PostgreSql
 				version++;
 			} while (scriptFound);
 
-			Log.Info("Hangfire SQL objects installed.");
+			_log.Info("Hangfire SQL objects installed.");
 		}
 
-		private static string GetStringResource(Assembly assembly, string resourceName)
+		private string GetStringResource(Assembly assembly, string resourceName)
 		{
 			using (var stream = assembly.GetManifestResourceStream(resourceName))
 			{

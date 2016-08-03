@@ -1,5 +1,7 @@
 ﻿using System;
 using Dapper;
+using Hangfire.Logging;
+using Moq;
 using Npgsql;
 using Xunit;
 
@@ -8,7 +10,7 @@ namespace Hangfire.PostgreSql.Tests
 	public class PostgreSqlInstallerFacts
 	{
 		[Fact]
-		public void InstallingSchemaShouldNotThrowAnException()
+		public void InstallingSchema_ShouldNotThrowAnException()
 		{
 			var ex = Record.Exception(() =>
 			{
@@ -16,7 +18,8 @@ namespace Hangfire.PostgreSql.Tests
 				{
 					string schemaName = "hangfire_tests_" + System.Guid.NewGuid().ToString().Replace("-", "_").ToLower();
 
-					PostgreSqlObjectsInstaller.Install(connection, schemaName);
+					var installer = new PostgreSqlObjectsInstaller(connection, schemaName);
+					installer.Install();
 
 					connection.Execute($@"DROP SCHEMA ""{schemaName}"" CASCADE;");
 				});
@@ -24,7 +27,6 @@ namespace Hangfire.PostgreSql.Tests
 
 			Assert.Null(ex);
 		}
-
 
 		private static void UseConnection(Action<NpgsqlConnection> action)
 		{

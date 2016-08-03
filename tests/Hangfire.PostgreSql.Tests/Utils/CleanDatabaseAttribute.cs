@@ -67,7 +67,8 @@ namespace Hangfire.PostgreSql.Tests
 					connection.Open();
 				}
 
-				PostgreSqlObjectsInstaller.Install(connection);
+				var installer = new PostgreSqlObjectsInstaller(connection);
+				installer.Install();
 				PostgreSqlTestObjectsInitializer.CleanTables(connection);
 			}
 		}

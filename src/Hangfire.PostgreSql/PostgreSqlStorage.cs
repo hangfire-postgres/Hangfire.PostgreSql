@@ -78,7 +78,8 @@ namespace Hangfire.PostgreSql
 			{
 				using (var connection = CreateAndOpenConnection())
 				{
-					PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
+					var installer = new PostgreSqlObjectsInstaller(connection, options.SchemaName);
+					installer.Install();
 				}
 			}
 

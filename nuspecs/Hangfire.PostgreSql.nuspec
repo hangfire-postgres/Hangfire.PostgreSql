@@ -2,7 +2,7 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql.Revised</id>
-	<version>1.4.3.1-beta1</version>
+	<version>1.4.4</version>
 	<title>Hangfire PostgreSql Storage Revised</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>vytautask</owners>
@@ -15,8 +15,8 @@
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
 		https://github.com/vytautask/Hangfire.PostgreSql/releases
-		1.4.3.1-beta1
-		* Should fix Worker execute error bug #3 (https://github.com/vytautask/Hangfire.PostgreSql/issues/3)
+		1.4.4
+		* Errors while executing install/upgrade #4 (https://github.com/vytautask/Hangfire.PostgreSql/issues/4)
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />
