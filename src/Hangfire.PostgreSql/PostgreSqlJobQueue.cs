@@ -33,6 +33,7 @@ namespace Hangfire.PostgreSql
 {
     internal class PostgreSqlJobQueue : IPersistentJobQueue
     {
+        internal static readonly AutoResetEvent NewItemInQueueEvent = new AutoResetEvent(true);
         private readonly PostgreSqlStorageOptions _options;
         private readonly IDbConnection _connection;
 
@@ -109,7 +110,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
                 {
                     if (currentQueryIndex == fetchConditions.Length - 1)
                     {
-                        cancellationToken.WaitHandle.WaitOne(_options.QueuePollInterval);
+                        WaitHandle.WaitAny(new []{cancellationToken.WaitHandle, NewItemInQueueEvent},_options.QueuePollInterval);
                         cancellationToken.ThrowIfCancellationRequested();
                     }
                 }
