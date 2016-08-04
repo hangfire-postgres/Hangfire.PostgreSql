@@ -1,20 +1,20 @@
 ﻿<?xml version="1.0"?>
 <package >
   <metadata>
-	<id>Hangfire.PostgreSql.Revised</id>
+	<id>Hangfire.PostgreSql</id>
 	<version>1.4.4</version>
-	<title>Hangfire PostgreSql Storage Revised</title>
+	<title>Hangfire PostgreSql Storage</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
-	<owners>vytautask</owners>
-	<projectUrl>https://github.com/vytautask/Hangfire.PostgreSql</projectUrl>
+	<owners>frankhommers</owners>
+	<projectUrl>https://github.com/frankhommers/Hangfire.PostgreSql</projectUrl>
 	<requireLicenseAcceptance>false</requireLicenseAcceptance>
-	<licenseUrl>https://github.com/vytautask/Hangfire.PostgreSql/blob/master/LICENSE.md</licenseUrl>
+	<licenseUrl>https://github.com/frankhommers/Hangfire.PostgreSql/blob/master/LICENSE.md</licenseUrl>
 	<description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).</description>
 	<summary>Latest build of Hangfire.PostgreSql with many fixes and new PostgreSql driver support.</summary>
 	<copyright>Copyright &#169; 2014-2016 Frank Hommers and others</copyright>
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
-		https://github.com/vytautask/Hangfire.PostgreSql/releases
+		https://github.com/frankhommers/Hangfire.PostgreSql/releases
 		1.4.4
 		* Errors while executing install/upgrade #4 (https://github.com/vytautask/Hangfire.PostgreSql/issues/4)
 	</releaseNotes>
