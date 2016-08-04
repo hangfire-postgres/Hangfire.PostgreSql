@@ -1,4 +1,4 @@
-Hangfire.PostgreSql
+Hangfire.PostgreSql.Revised
 ===================
 This is an plugin to the Hangfire to enable PostgreSQL as a storage system.
 Read about hangfire here: https://github.com/HangfireIO/Hangfire#hangfire-
@@ -21,6 +21,7 @@ Related Projects
 -----------------
 
 * [Hangfire.Core](https://github.com/HangfireIO/Hangfire)
+* Original [Hangfire.PostgreSql](https://github.com/frankhommers/Hangfire.PostgreSql) by frankhommers
 
 License
 --------
