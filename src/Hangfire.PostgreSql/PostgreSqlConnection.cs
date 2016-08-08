@@ -31,6 +31,7 @@ using Hangfire.PostgreSql.Entities;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
+using Hangfire.Annotations;
 
 namespace Hangfire.PostgreSql
 {
@@ -69,6 +70,7 @@ namespace Hangfire.PostgreSql
 
 		public override void Dispose()
 		{
+            base.Dispose();
 			if (OwnsConnection)
 			{
 				_connection.Dispose();
