@@ -25,103 +25,101 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using Dapper;
 using Hangfire.Logging;
 using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-    [ExcludeFromCodeCoverage]
-    internal static class PostgreSqlObjectsInstaller
-    {
-        private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
+	[ExcludeFromCodeCoverage]
+	internal static class PostgreSqlObjectsInstaller
+	{
+		private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
-        public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
-        {
-            if (connection == null) throw new ArgumentNullException("connection");
+		public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
+		{
+			if (connection == null) throw new ArgumentNullException(nameof(connection));
 
-            Log.Info("Start installing Hangfire SQL objects...");
+			Log.Info("Start installing Hangfire SQL objects...");
 
-            // version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
-            int version = 3;
-            int previousVersion = 1;
-            bool scriptFound = true;
+			// version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
+			int version = 3;
+			int previousVersion = 1;
+			bool scriptFound = true;
 
-            do
-            {
-                try
-                {
-                    var script = GetStringResource(
-                        typeof (PostgreSqlObjectsInstaller).Assembly,
-                        string.Format("Hangfire.PostgreSql.Install.v{0}.sql",
-                            version.ToString(CultureInfo.InvariantCulture)));
-                    if (schemaName != "hangfire")
-                    {
-                        script = script.Replace("'hangfire'", string.Format("'{0}'", schemaName))
-                            .Replace(@"""hangfire""", string.Format(@"""{0}""", schemaName));
-                    }
+			do
+			{
+				try
+				{
+					var script = GetStringResource(
+						typeof(PostgreSqlObjectsInstaller).Assembly, 
+						$"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
+					if (schemaName != "hangfire")
+					{
+						script = script.Replace("'hangfire'", $"'{schemaName}'").Replace(@"""hangfire""", $@"""{schemaName}""");
+					}
 
-                    using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
-                    using (var command = new NpgsqlCommand(script, connection, transaction))
-                    {
-                        command.CommandTimeout = 120;
-                        try
-                        {
-                            command.ExecuteNonQuery();
+					using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
+					using (var command = new NpgsqlCommand(script, connection, transaction))
+					{
+						command.CommandTimeout = 120;
+						try
+						{
+							command.ExecuteNonQuery();
 
-                            // Due to https://github.com/npgsql/npgsql/issues/641 , it's not possible to send
-                            // CREATE objects and use the same object in the same command
-                            // So bump the version in another command
-                            var bumpVersionSql = string.Format(
-                                "INSERT INTO \"{0}\".\"schema\"(\"version\") " +
-                                "SELECT @version \"version\" WHERE NOT EXISTS (SELECT @previousVersion FROM \"{0}\".\"schema\")", schemaName);
-                            using (var versionCommand = new NpgsqlCommand(bumpVersionSql, connection, transaction))
-                            {
-                                versionCommand.Parameters.AddWithValue("version", version);
-                                versionCommand.Parameters.AddWithValue("previousVersion", version);
-                                versionCommand.ExecuteNonQuery();
-                            }
-                            transaction.Commit();
-                        }
-                        catch (NpgsqlException ex)
-                        {
-                            if ((ex.MessageText ?? "") != "version-already-applied")
-                            {
-                                throw;
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    scriptFound = false;
-                }
+							// Due to https://github.com/npgsql/npgsql/issues/641 , it's not possible to send
+							// CREATE objects and use the same object in the same command
+							// So bump the version in another command
+							var bumpVersionSql = string.Format(
+								"INSERT INTO \"{0}\".\"schema\"(\"version\") " +
+								"SELECT @version \"version\" WHERE NOT EXISTS (SELECT @previousVersion FROM \"{0}\".\"schema\")", schemaName);
+							using (var versionCommand = new NpgsqlCommand(bumpVersionSql, connection, transaction))
+							{
+								versionCommand.Parameters.AddWithValue("version", version);
+								versionCommand.Parameters.AddWithValue("previousVersion", version);
+								versionCommand.ExecuteNonQuery();
+							}
+							transaction.Commit();
+						}
+						catch (NpgsqlException ex)
+						{
+							if ((ex.Message ?? "") != "version-already-applied")
+							{
+								throw;
+							}
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					if (ex.Source.Equals("Npgsql"))
+					{
+						Log.ErrorException("Error while executing install/upgrade", ex);
+					}
 
-                previousVersion = version;
-                version++;
-            } while (scriptFound);
+					scriptFound = false;
+				}
 
-            Log.Info("Hangfire SQL objects installed.");
-        }
+				previousVersion = version;
+				version++;
+			} while (scriptFound);
 
-        private static string GetStringResource(Assembly assembly, string resourceName)
-        {
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
-            {
-                if (stream == null) 
-                {
-                    throw new InvalidOperationException(String.Format(
-                        "Requested resource `{0}` was not found in the assembly `{1}`.",
-                        resourceName,
-                        assembly));
-                }
+			Log.Info("Hangfire SQL objects installed.");
+		}
 
-                using (var reader = new StreamReader(stream))
-                {
-                    return reader.ReadToEnd();
-                }
-            }
-        }
+		private static string GetStringResource(Assembly assembly, string resourceName)
+		{
+			using (var stream = assembly.GetManifestResourceStream(resourceName))
+			{
+				if (stream == null)
+				{
+					throw new InvalidOperationException($"Requested resource `{resourceName}` was not found in the assembly `{assembly}`.");
+				}
 
-    }
+				using (var reader = new StreamReader(stream))
+				{
+					return reader.ReadToEnd();
+				}
+			}
+		}
+	}
 }

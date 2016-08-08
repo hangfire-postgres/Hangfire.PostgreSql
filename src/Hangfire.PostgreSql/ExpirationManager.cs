@@ -29,57 +29,62 @@ using Hangfire.Server;
 
 namespace Hangfire.PostgreSql
 {
-    internal class ExpirationManager : IServerComponent
-    {
-        private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
-        private const int NumberOfRecordsInSinglePass = 1000;
+	internal class ExpirationManager : IBackgroundProcess, IServerComponent
+	{
+		private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
+		private const int NumberOfRecordsInSinglePass = 1000;
 
-        private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
-        private static readonly string[] ProcessedTables =
-        {
-            "counter",
-            "job",
-            "list",
-            "set",
-            "hash",
-        };
+		private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
 
-        private readonly PostgreSqlStorage _storage;
-        private readonly TimeSpan _checkInterval;
-        private readonly PostgreSqlStorageOptions _options;
+		private static readonly string[] ProcessedTables =
+		{
+			"counter",
+			"job",
+			"list",
+			"set",
+			"hash",
+		};
 
-        public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
-            : this(storage, options, TimeSpan.FromHours(1))
-        {
-        }
+		private readonly PostgreSqlStorage _storage;
+		private readonly TimeSpan _checkInterval;
+		private readonly PostgreSqlStorageOptions _options;
 
-        public ExpirationManager(PostgreSqlStorage storage,  PostgreSqlStorageOptions options, TimeSpan checkInterval)
-        {
-            if (storage == null) throw new ArgumentNullException("storage");
-            if (options == null) throw new ArgumentNullException("options");
+		public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+			: this(storage, options, TimeSpan.FromHours(1))
+		{
+		}
 
-            _options = options;
-            _storage = storage;
-            _checkInterval = checkInterval;
-        }
+		public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options, TimeSpan checkInterval)
+		{
+			if (storage == null) throw new ArgumentNullException(nameof(storage));
+			if (options == null) throw new ArgumentNullException(nameof(options));
 
-        public void Execute(CancellationToken cancellationToken)
-        {
+			_options = options;
+			_storage = storage;
+			_checkInterval = checkInterval;
+		}
 
-            foreach (var table in ProcessedTables)
-            {
-                Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
+		public void Execute(BackgroundProcessContext context)
+		{
+			Execute(context.CancellationToken);
+		}
 
-                int removedCount = 0;
+		public void Execute(CancellationToken cancellationToken)
+		{
+			foreach (var table in ProcessedTables)
+			{
+				Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
-                do
-                {
-                    using (var storageConnection = (PostgreSqlConnection) _storage.GetConnection())
-                    {
-                        using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                        {
-                            removedCount = storageConnection.Connection.Execute(
-                                    string.Format(@"
+				int removedCount = 0;
+
+				do
+				{
+					using (var storageConnection = (PostgreSqlConnection)_storage.GetConnection())
+					{
+						using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
+						{
+							removedCount = storageConnection.Connection.Execute(
+								string.Format(@"
 DELETE FROM """ + _options.SchemaName + @""".""{0}"" 
 WHERE ""id"" IN (
     SELECT ""id"" 
@@ -88,27 +93,26 @@ WHERE ""id"" IN (
     LIMIT {1}
 )", table, NumberOfRecordsInSinglePass.ToString(CultureInfo.InvariantCulture)), transaction);
 
-                            transaction.Commit();
-                        }
-                    }
+							transaction.Commit();
+						}
+					}
 
-                    if (removedCount > 0)
-                    {
-                        Logger.Info(String.Format("Removed {0} outdated record(s) from '{1}' table.", removedCount,
-                            table));
+					if (removedCount > 0)
+					{
+						Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
-                        cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-                } while (removedCount != 0);
-            }
+						cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
+						cancellationToken.ThrowIfCancellationRequested();
+					}
+				} while (removedCount != 0);
+			}
 
-            cancellationToken.WaitHandle.WaitOne(_checkInterval);
-        }
+			cancellationToken.WaitHandle.WaitOne(_checkInterval);
+		}
 
-        public override string ToString()
-        {
-            return "SQL Records Expiration Manager";
-        }
-    }
+		public override string ToString()
+		{
+			return "SQL Records Expiration Manager";
+		}
+	}
 }

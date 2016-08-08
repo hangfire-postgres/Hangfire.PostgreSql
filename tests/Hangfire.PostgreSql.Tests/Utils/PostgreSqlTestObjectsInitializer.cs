@@ -25,6 +25,7 @@ using System.IO;
 using System.Reflection;
 using Dapper;
 using Npgsql;
+using System.Data;
 
 namespace Hangfire.PostgreSql.Tests
 {
@@ -37,10 +38,25 @@ namespace Hangfire.PostgreSql.Tests
 
             var script = GetStringResource(
                 typeof (PostgreSqlTestObjectsInitializer).Assembly,
-                "Hangfire.PostgreSql.Tests.Clean.sql").Replace("'hangfire'", ConnectionUtils.GetSchemaName());
-            
-            connection.Execute(script);
-        }
+                "Hangfire.PostgreSql.Tests.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
+
+			//connection.Execute(script);
+
+			using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
+			using (var command = new NpgsqlCommand(script, connection, transaction))
+			{
+				command.CommandTimeout = 120;
+				try
+				{
+					command.ExecuteNonQuery();
+					transaction.Commit();
+				}
+				catch (NpgsqlException ex)
+				{
+					throw;
+				}
+			}
+		}
 
         private static string GetStringResource(Assembly assembly, string resourceName)
         {

@@ -12,11 +12,8 @@ Download all files from this repository, add the Hangfire.PostgreSql.csproj to y
 Reference it in your project, and you are ready to go by using:
 
 ```csharp
-app.UseHangfire(config =>
-{
-    config.UsePostgreSqlStorage("<connection string or its name>");
-    config.UseServer();
-});
+app.UseHangfireServer(new BackgroundJobServerOptions(), new PostgreSqlStorage("<connection string or its name>"));
+app.UseHangfireDashboard();
 ```
 
 
@@ -24,11 +21,12 @@ Related Projects
 -----------------
 
 * [Hangfire.Core](https://github.com/HangfireIO/Hangfire)
+* [Hangfire.PostgreSql] by frankhommers (https://github.com/frankhommers/Hangfire.PostgreSql)
 
 License
 --------
 
-Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
+Copyright © 2014-2016 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql> and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask).
 
 Hangfire.PostgreSql is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as 
