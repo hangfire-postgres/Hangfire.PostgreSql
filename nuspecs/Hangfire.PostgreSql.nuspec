@@ -16,7 +16,8 @@
 	<releaseNotes>
 		https://github.com/frankhommers/Hangfire.PostgreSql/releases
 		1.4.0
-		* Errors while executing install/upgrade #4 (https://github.com/vytautask/Hangfire.PostgreSql/issues/4)
+		* Compatibility with new Npgsql #33 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/33)
+		* Fixed "Could not place a lock on the resource: Lock timeout" #31 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/31)
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />
