@@ -3,7 +3,8 @@ solution: ./Hangfire.PostgreSql.sln
 
 install:
   - sudo apt-get install nunit-console
-  - ./.nuget/NuGet.exe restore ./Hangfire.PostgreSql.sln
+  - nuget update -self
+  - nuget restore ./Hangfire.PostgreSql.sln
 
 script:
   - xbuild ./Hangfire.PostgreSql.sln
