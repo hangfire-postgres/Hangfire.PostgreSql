@@ -1,0 +1,10 @@
+language: csharp
+solution: ./Hangfire.PostgreSql.sln
+
+install:
+  - sudo apt-get install nunit-console
+  - nuget restore ./Hangfire.PostgreSql.sln
+
+script:
+  - xbuild ./Hangfire.PostgreSql.sln
+  - nunit-console ./tests/Hangfire.PostgreSql.Tests/bin/Debug/Hangfire.PostgreSql.Tests.dll
