@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0"?>
 <package >
   <metadata>
-    <id>Hangfire.PostgreSql</id>
-	<version>1.4.2</version>
-	<title>Hangfire PostgreSql Storage Revised</title>
+	<id>Hangfire.PostgreSql</id>
+	<version>1.4.0</version>
+	<title>Hangfire PostgreSql Storage</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>vytautask</owners>
 	<projectUrl>https://github.com/vytautask/Hangfire.PostgreSql</projectUrl>
@@ -14,9 +14,9 @@
 	<copyright>Copyright &#169; 2014-2016 Frank Hommers and others</copyright>
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
-		https://github.com/vytautask/Hangfire.PostgreSql/releases
-		1.4.2
-		* Fixes "NotSupportedException: Specified method is not supported." error in dashboard.
+		https://github.com/frankhommers/Hangfire.PostgreSql/releases
+		1.4.0
+		* Errors while executing install/upgrade #4 (https://github.com/vytautask/Hangfire.PostgreSql/issues/4)
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />
