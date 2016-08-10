@@ -25,11 +25,13 @@ CREATE TABLE IF NOT EXISTS "schema" (  "version" INT NOT NULL ,
 DO
 $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM "schema" WHERE "version" = '3') THEN
+    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 3) THEN
         RAISE EXCEPTION 'version-already-applied';
     END IF;
 END
 $$;
+
+INSERT INTO "schema"("version") values('1');
 
 --
 -- Table structure for table `Counter`

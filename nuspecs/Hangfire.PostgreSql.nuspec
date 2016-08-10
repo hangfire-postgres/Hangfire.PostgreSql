@@ -2,7 +2,7 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql</id>
-	<version>1.4.0</version>
+	<version>1.4.1</version>
 	<title>Hangfire PostgreSql Storage</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>frankhommers</owners>
@@ -15,9 +15,8 @@
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
 		https://github.com/frankhommers/Hangfire.PostgreSql/releases
-		1.4.0
-		* Compatibility with new Npgsql #33 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/33)
-		* Fixed "Could not place a lock on the resource: Lock timeout" #31 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/31)
+		1.4.1
+		* Fixed schema version not updated #38 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/38)
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />

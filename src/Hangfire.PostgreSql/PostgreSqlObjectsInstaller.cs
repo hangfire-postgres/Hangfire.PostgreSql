@@ -69,20 +69,18 @@ namespace Hangfire.PostgreSql
 							// Due to https://github.com/npgsql/npgsql/issues/641 , it's not possible to send
 							// CREATE objects and use the same object in the same command
 							// So bump the version in another command
-							var bumpVersionSql = string.Format(
-								"INSERT INTO \"{0}\".\"schema\"(\"version\") " +
-								"SELECT @version \"version\" WHERE NOT EXISTS (SELECT @previousVersion FROM \"{0}\".\"schema\")", schemaName);
+							var bumpVersionSql = $@"UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion";
 							using (var versionCommand = new NpgsqlCommand(bumpVersionSql, connection, transaction))
 							{
 								versionCommand.Parameters.AddWithValue("version", version);
-								versionCommand.Parameters.AddWithValue("previousVersion", version);
+								versionCommand.Parameters.AddWithValue("previousVersion", previousVersion);
 								versionCommand.ExecuteNonQuery();
 							}
 							transaction.Commit();
 						}
-						catch (NpgsqlException ex)
+						catch (PostgresException ex)
 						{
-							if ((ex.Message ?? "") != "version-already-applied")
+							if ((ex.MessageText ?? "") != "version-already-applied")
 							{
 								throw;
 							}

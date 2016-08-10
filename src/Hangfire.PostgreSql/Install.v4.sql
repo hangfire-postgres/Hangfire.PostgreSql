@@ -6,7 +6,7 @@
 DO
 $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM "schema" WHERE "version" = '4') THEN
+    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 4) THEN
         RAISE EXCEPTION 'version-already-applied';
     END IF;
 END
