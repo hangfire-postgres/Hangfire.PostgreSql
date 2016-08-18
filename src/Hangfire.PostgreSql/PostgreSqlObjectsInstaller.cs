@@ -27,6 +27,8 @@ using System.IO;
 using System.Reflection;
 using Hangfire.Logging;
 using Npgsql;
+using System.Resources;
+using Dapper;
 
 namespace Hangfire.PostgreSql
 {
@@ -41,19 +43,26 @@ namespace Hangfire.PostgreSql
 
 			Log.Info("Start installing Hangfire SQL objects...");
 
-			// version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
+			// starts with version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
 			int version = 3;
 			int previousVersion = 1;
-			bool scriptFound = true;
-
 			do
 			{
 				try
 				{
-					var script = GetStringResource(
-						typeof(PostgreSqlObjectsInstaller).Assembly, 
-						$"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
-					if (schemaName != "hangfire")
+				  string script = null;
+				  try
+				  {
+				    script = GetStringResource(
+				      typeof (PostgreSqlObjectsInstaller).Assembly,
+				      $"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
+				  }
+				  catch(MissingManifestResourceException)
+				  {
+				    break;
+				  }
+
+          if (schemaName != "hangfire")
 					{
 						script = script.Replace("'hangfire'", $"'{schemaName}'").Replace(@"""hangfire""", $@"""{schemaName}""");
 					}
@@ -69,14 +78,9 @@ namespace Hangfire.PostgreSql
 							// Due to https://github.com/npgsql/npgsql/issues/641 , it's not possible to send
 							// CREATE objects and use the same object in the same command
 							// So bump the version in another command
-							var bumpVersionSql = $@"UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion";
-							using (var versionCommand = new NpgsqlCommand(bumpVersionSql, connection, transaction))
-							{
-								versionCommand.Parameters.AddWithValue("version", version);
-								versionCommand.Parameters.AddWithValue("previousVersion", previousVersion);
-								versionCommand.ExecuteNonQuery();
-							}
-							transaction.Commit();
+						  connection.Execute($@"UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion", new {version, previousVersion}, transaction);
+
+              transaction.Commit();
 						}
 						catch (PostgresException ex)
 						{
@@ -93,13 +97,11 @@ namespace Hangfire.PostgreSql
 					{
 						Log.ErrorException("Error while executing install/upgrade", ex);
 					}
-
-					scriptFound = false;
 				}
 
 				previousVersion = version;
 				version++;
-			} while (scriptFound);
+			} while (true);
 
 			Log.Info("Hangfire SQL objects installed.");
 		}
@@ -110,7 +112,7 @@ namespace Hangfire.PostgreSql
 			{
 				if (stream == null)
 				{
-					throw new InvalidOperationException($"Requested resource `{resourceName}` was not found in the assembly `{assembly}`.");
+					throw new MissingManifestResourceException($"Requested resource `{resourceName}` was not found in the assembly `{assembly}`.");
 				}
 
 				using (var reader = new StreamReader(stream))
