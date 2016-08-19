@@ -24,7 +24,6 @@ Related Projects
 -----------------
 
 * [Hangfire.Core](https://github.com/HangfireIO/Hangfire)
-* [Hangfire.PostgreSql] by frankhommers (https://github.com/frankhommers/Hangfire.PostgreSql)
 
 License
 --------
