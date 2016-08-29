@@ -2,9 +2,9 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql</id>
-	<version>1.4.1</version>
+	<version>1.4.2</version>
 	<title>Hangfire PostgreSql Storage</title>
-	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask)</authors>
+	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>frankhommers</owners>
 	<projectUrl>http://hmm.rs/Hangfire.PostgreSql</projectUrl>
 	<requireLicenseAcceptance>false</requireLicenseAcceptance>
@@ -15,12 +15,13 @@
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
 		https://github.com/frankhommers/Hangfire.PostgreSql/releases
-		1.4.1
-		* Fixed schema version not updated #38 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/38)
+		1.4.2
+		* Added indices #39 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/39)
+		* Improved install script handling
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />
-	  <dependency id="Dapper" version="1.40" />
+	  <dependency id="Dapper" version="1.42" />
 	  <dependency id="Npgsql" version="3.1.3" />
 	</dependencies>
   </metadata>
