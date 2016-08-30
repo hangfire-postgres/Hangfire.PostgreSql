@@ -20,9 +20,11 @@
 //    Special thanks goes to him.
 
 using System;
+using Hangfire.PostgreSql.Annotations;
 
 namespace Hangfire.PostgreSql.Entities
 {
+    [UsedImplicitly]
     internal class SqlHash
     {
         public int Id { get; set; }

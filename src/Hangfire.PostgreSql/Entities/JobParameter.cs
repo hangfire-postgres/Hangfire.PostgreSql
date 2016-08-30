@@ -19,8 +19,11 @@
 //   
 //    Special thanks goes to him.
 
+using Hangfire.PostgreSql.Annotations;
+
 namespace Hangfire.PostgreSql.Entities
 {
+    [UsedImplicitly]
     internal class JobParameter
     {
         public int JobId { get; set; }

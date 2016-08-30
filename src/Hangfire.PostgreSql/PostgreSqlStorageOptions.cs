@@ -23,42 +23,68 @@ using System;
 
 namespace Hangfire.PostgreSql
 {
-	public class PostgreSqlStorageOptions
-	{
-		private TimeSpan _queuePollInterval;
+    public class PostgreSqlStorageOptions
+    {
+        private TimeSpan _queuePollInterval;
+        private TimeSpan _invisibilityTimeout;
+        private TimeSpan _distributedLockTimeout;
 
-		public PostgreSqlStorageOptions()
-		{
-			QueuePollInterval = TimeSpan.FromSeconds(15);
-			InvisibilityTimeout = TimeSpan.FromMinutes(30);
-			SchemaName = "hangfire";
-			UseNativeDatabaseTransactions = true;
-			PrepareSchemaIfNecessary = true;
-		}
+        public PostgreSqlStorageOptions()
+        {
+            QueuePollInterval = TimeSpan.FromSeconds(15);
+            InvisibilityTimeout = TimeSpan.FromMinutes(30);
+            DistributedLockTimeout = TimeSpan.FromMinutes(10);
+            SchemaName = "hangfire";
+            UseNativeDatabaseTransactions = true;
+            PrepareSchemaIfNecessary = true;
+        }
 
-		public TimeSpan QueuePollInterval
-		{
-			get { return _queuePollInterval; }
-			set
-			{
-				var message = $"The QueuePollInterval property value should be positive. Given: {value}.";
+        public TimeSpan QueuePollInterval
+        {
+            get { return _queuePollInterval; }
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(QueuePollInterval));
+                _queuePollInterval = value;
+            }
+        }
 
-				if (value == TimeSpan.Zero)
-				{
-					throw new ArgumentException(message, nameof(value));
-				}
-				if (value != value.Duration())
-				{
-					throw new ArgumentException(message, nameof(value));
-				}
+        public TimeSpan InvisibilityTimeout
+        {
+            get { return _invisibilityTimeout; }
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(InvisibilityTimeout));
+                _invisibilityTimeout = value;
+            }
+        }
 
-				_queuePollInterval = value;
-			}
-		}
+        public TimeSpan DistributedLockTimeout
+        {
+            get { return _distributedLockTimeout; }
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(DistributedLockTimeout));
+                _distributedLockTimeout = value;
+            }
+        }
 
-		public TimeSpan InvisibilityTimeout { get; set; }
-		public bool UseNativeDatabaseTransactions { get; set; }
-		public bool PrepareSchemaIfNecessary { get; set; }
-		public string SchemaName { get; set; }
-	}
+        public bool UseNativeDatabaseTransactions { get; set; }
+        public bool PrepareSchemaIfNecessary { get; set; }
+        public string SchemaName { get; set; }
+
+        private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
+        {
+            var message = $"The {fieldName} property value should be positive. Given: {value}.";
+
+            if (value == TimeSpan.Zero)
+            {
+                throw new ArgumentException(message, nameof(value));
+            }
+            if (value != value.Duration())
+            {
+                throw new ArgumentException(message, nameof(value));
+            }
+        }
+    }
 }
