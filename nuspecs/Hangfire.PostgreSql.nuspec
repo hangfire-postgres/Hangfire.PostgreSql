@@ -2,7 +2,7 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql</id>
-	<version>1.4.2</version>
+	<version>1.4.3</version>
 	<title>Hangfire PostgreSql Storage</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>frankhommers</owners>
@@ -15,9 +15,8 @@
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
 		https://github.com/frankhommers/Hangfire.PostgreSql/releases
-		1.4.2
-		* Added indices #39 (https://github.com/frankhommers/Hangfire.PostgreSql/issues/39)
-		* Improved install script handling
+		1.4.3
+		* Implemented distributed lock timeout (#44) (https://github.com/frankhommers/Hangfire.PostgreSql/issues/44)
 	</releaseNotes>
 	<dependencies>
 	  <dependency id="Hangfire.Core" version="1.5.7" />
