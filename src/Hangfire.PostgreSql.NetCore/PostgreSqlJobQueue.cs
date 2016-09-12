@@ -31,7 +31,7 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-	internal class PostgreSqlJobQueue : IPersistentJobQueue
+	public class PostgreSqlJobQueue : IPersistentJobQueue
 	{
         internal static readonly AutoResetEvent NewItemInQueueEvent = new AutoResetEvent(true);
 		private readonly PostgreSqlStorageOptions _options;

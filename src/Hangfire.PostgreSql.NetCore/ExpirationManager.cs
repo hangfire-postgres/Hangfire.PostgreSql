@@ -29,7 +29,12 @@ using Hangfire.Server;
 
 namespace Hangfire.PostgreSql
 {
-	internal class ExpirationManager : IBackgroundProcess, IServerComponent
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+	public
+#else
+	internal
+#endif
+	class ExpirationManager : IBackgroundProcess, IServerComponent
 	{
 		private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
 		private const int NumberOfRecordsInSinglePass = 1000;

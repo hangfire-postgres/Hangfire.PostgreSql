@@ -14,7 +14,7 @@ namespace Hangfire.PostgreSql.Tests
 			{
 				UseConnection(connection =>
 				{
-					string schemaName = "hangfire_tests_" + System.Guid.NewGuid().ToString().Replace("-", "_").ToLower();
+					string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
 
 					PostgreSqlObjectsInstaller.Install(connection, schemaName);
 

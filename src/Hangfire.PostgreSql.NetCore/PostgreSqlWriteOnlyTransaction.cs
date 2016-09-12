@@ -31,7 +31,7 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-    internal class PostgreSqlWriteOnlyTransaction : IWriteOnlyTransaction
+    public class PostgreSqlWriteOnlyTransaction : IWriteOnlyTransaction
     {
         private readonly Queue<Action<NpgsqlConnection, NpgsqlTransaction>> _commandQueue
             = new Queue<Action<NpgsqlConnection, NpgsqlTransaction>>();

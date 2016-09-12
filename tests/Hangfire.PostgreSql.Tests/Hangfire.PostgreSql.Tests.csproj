@@ -85,26 +85,52 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="PersistentJobQueueProviderCollectionFacts.cs" />
-    <Compile Include="PostgreSqlInstallerFacts.cs" />
-    <Compile Include="PostgreSqlConnectionFacts.cs" />
-    <Compile Include="ExpirationManagerFacts.cs" />
-    <Compile Include="PostgreSqlJobQueueFacts.cs" />
-    <Compile Include="PostgreSqlFetchedJobFacts.cs" />
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\ExpirationManagerFacts.cs">
+      <Link>ExpirationManagerFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PersistentJobQueueProviderCollectionFacts.cs">
+      <Link>PersistentJobQueueProviderCollectionFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlConnectionFacts.cs">
+      <Link>PostgreSqlConnectionFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlDistributedLockFacts.cs">
+      <Link>PostgreSqlDistributedLockFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlFetchedJobFacts.cs">
+      <Link>PostgreSqlFetchedJobFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlInstallerFacts.cs">
+      <Link>PostgreSqlInstallerFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlJobQueueFacts.cs">
+      <Link>PostgreSqlJobQueueFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlStorageFacts.cs">
+      <Link>PostgreSqlStorageFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlStorageOptionsFacts.cs">
+      <Link>PostgreSqlStorageOptionsFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\PostgreSqlWriteOnlyTransactionFacts.cs">
+      <Link>PostgreSqlWriteOnlyTransactionFacts.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\Utils\CleanDatabaseAttribute.cs">
+      <Link>Utils\CleanDatabaseAttribute.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\Utils\ConnectionUtils.cs">
+      <Link>Utils\ConnectionUtils.cs</Link>
+    </Compile>
+    <Compile Include="..\Hangfire.PostgreSql.NetCore.Tests\Utils\PostgreSqlTestObjectsInitializer.cs">
+      <Link>Utils\PostgreSqlTestObjectsInitializer.cs</Link>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="PostgreSqlDistributedLockFacts.cs" />
-    <Compile Include="PostgreSqlStorageFacts.cs" />
-    <Compile Include="PostgreSqlStorageOptionsFacts.cs" />
-    <Compile Include="Utils\ConnectionUtils.cs" />
-    <Compile Include="Utils\CleanDatabaseAttribute.cs" />
-    <Compile Include="PostgreSqlWriteOnlyTransactionFacts.cs" />
-    <Compile Include="Utils\PostgreSqlTestObjectsInitializer.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app.config" />
-    <None Include="packages.config">
-      <SubType>Designer</SubType>
+    <None Include="..\Hangfire.PostgreSql.NetCore.Tests\packages.config">
+      <Link>packages.config</Link>
     </None>
+    <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hangfire.PostgreSql\Hangfire.PostgreSql.csproj">
@@ -116,7 +142,9 @@
     <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Clean.sql" />
+    <EmbeddedResource Include="..\Hangfire.PostgreSql.NetCore.Tests\Clean.sql">
+      <Link>Clean.sql</Link>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="..\..\src\Common\HangFire.targets" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

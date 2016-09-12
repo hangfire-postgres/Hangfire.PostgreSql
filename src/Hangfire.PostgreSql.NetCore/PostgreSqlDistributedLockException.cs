@@ -24,7 +24,12 @@ using System;
 namespace Hangfire.PostgreSql
 {
     [Serializable]
-    internal class PostgreSqlDistributedLockException : Exception
+    #if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+	public
+#else
+	internal
+#endif 
+	class PostgreSqlDistributedLockException : Exception
     {
         public PostgreSqlDistributedLockException(string message)
             : base(message)

@@ -29,16 +29,23 @@ using System.Data;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    [ExcludeFromCodeCoverage]
     internal static class PostgreSqlTestObjectsInitializer
     {
         public static void CleanTables(NpgsqlConnection connection)
         {
-            if (connection == null) throw new ArgumentNullException("connection");
+            if (connection == null) throw new ArgumentNullException(nameof(connection));
 
-            var script = GetStringResource(
+			string script = null;
+
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+			script = GetStringResource(
+			  typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
+			  $"Hangfire.PostgreSql.NetCore.Tests.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
+#else
+               script = GetStringResource(
                 typeof (PostgreSqlTestObjectsInitializer).Assembly,
                 "Hangfire.PostgreSql.Tests.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
+#endif
 
 			//connection.Execute(script);
 
@@ -51,7 +58,7 @@ namespace Hangfire.PostgreSql.Tests
 					command.ExecuteNonQuery();
 					transaction.Commit();
 				}
-				catch (NpgsqlException ex)
+				catch (NpgsqlException)
 				{
 					throw;
 				}

@@ -35,7 +35,7 @@ using Hangfire.Annotations;
 
 namespace Hangfire.PostgreSql
 {
-	internal class PostgreSqlConnection : JobStorageConnection
+	public class PostgreSqlConnection : JobStorageConnection
 	{
 		private readonly NpgsqlConnection _connection;
 		private readonly PersistentJobQueueProviderCollection _queueProviders;

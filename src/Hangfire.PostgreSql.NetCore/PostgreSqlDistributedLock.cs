@@ -27,7 +27,12 @@ using Dapper;
 
 namespace Hangfire.PostgreSql
 {
-    internal sealed class PostgreSqlDistributedLock : IDisposable
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+	public
+#else
+	internal
+#endif
+	sealed class PostgreSqlDistributedLock : IDisposable
     {
         private readonly string _resource;
         private readonly IDbConnection _connection;

@@ -26,7 +26,12 @@ using Hangfire.Storage;
 
 namespace Hangfire.PostgreSql
 {
-    internal class PostgreSqlFetchedJob : IFetchedJob
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+	public
+#else
+	internal
+#endif
+	class PostgreSqlFetchedJob : IFetchedJob
     {
         private readonly IDbConnection _connection;
         private readonly PostgreSqlStorageOptions _options;

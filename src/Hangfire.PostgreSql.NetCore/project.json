@@ -1,0 +1,25 @@
+﻿{
+	"version": "1.4.3-*",
+	"buildOptions": {
+		"embed": "*.sql",
+		"define": [ "NETCORE1" ]
+	},
+	"dependencies": {
+		"Dapper": "1.50.2",
+		"Hangfire.AspNetCore": "1.6.3",
+		"Hangfire.Core": "1.6.3",
+		"Newtonsoft.Json": "9.0.1",
+		"Npgsql": "3.1.7",
+		"System.Runtime.Serialization.Formatters": "4.0.0-rc3-24212-01"
+	},
+	"frameworks": {
+		"netcoreapp1.0": {
+			"dependencies": {
+				"Microsoft.NETCore.App": {
+					"version": "1.0.0-*",
+					"type": "platform"
+				}
+			}
+		}
+	}
+}
