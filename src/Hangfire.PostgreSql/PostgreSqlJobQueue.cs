@@ -109,9 +109,12 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 					{
 						NpgsqlException npgSqlException = ex as NpgsqlException;
 						PostgresException postgresException = ex as PostgresException;
-						bool smoothException = npgSqlException?.ErrorCode == 40001;
-
-						if (postgresException != null && !smoothException)
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+                        bool smoothException = false;
+#else
+                        bool smoothException = npgSqlException?.ErrorCode == 40001;
+#endif
+                        if (postgresException != null && !smoothException)
 						{
 							if (postgresException.SqlState.Equals("40001"))
 								smoothException = true;
