@@ -221,3 +221,5 @@ docs/_build
 #Jekyll site builds
 _site
 *.userprefs
+src/Hangfire.PostgreSql/.vs/restore.dg
+src/Hangfire.PostgreSql/project.lock.json

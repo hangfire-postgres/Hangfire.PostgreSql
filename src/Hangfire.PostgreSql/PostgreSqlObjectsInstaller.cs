@@ -32,8 +32,11 @@ using Dapper;
 
 namespace Hangfire.PostgreSql
 {
-	[ExcludeFromCodeCoverage]
-	internal static class PostgreSqlObjectsInstaller
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#else
+    [ExcludeFromCodeCoverage]
+#endif
+    internal static class PostgreSqlObjectsInstaller
 	{
 		private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
@@ -53,10 +56,16 @@ namespace Hangfire.PostgreSql
 				  string script = null;
 				  try
 				  {
-				    script = GetStringResource(
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+                    script = GetStringResource(
+				      typeof (PostgreSqlObjectsInstaller).GetTypeInfo().Assembly,
+				      $"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
+#else
+                    script = GetStringResource(
 				      typeof (PostgreSqlObjectsInstaller).Assembly,
 				      $"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
-				  }
+#endif
+                    }
 				  catch(MissingManifestResourceException)
 				  {
 				    break;

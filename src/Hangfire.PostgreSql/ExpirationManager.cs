@@ -34,9 +34,12 @@ namespace Hangfire.PostgreSql
 		private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
 		private const int NumberOfRecordsInSinglePass = 1000;
 
-		private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
-
-		private static readonly string[] ProcessedTables =
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+        private static readonly ILog Logger = LogProvider.GetLogger(typeof(ExpirationManager));
+#else
+        private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+#endif
+        private static readonly string[] ProcessedTables =
 		{
 			"counter",
 			"job",

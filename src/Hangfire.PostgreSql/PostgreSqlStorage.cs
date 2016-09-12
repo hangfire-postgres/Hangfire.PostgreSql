@@ -21,7 +21,10 @@
 
 using System;
 using System.Collections.Generic;
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#else
 using System.Configuration;
+#endif
 using System.Text;
 using Hangfire.Logging;
 using Hangfire.Server;
@@ -64,10 +67,13 @@ namespace Hangfire.PostgreSql
 			{
 				_connectionString = nameOrConnectionString;
 			}
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#else
 			else if (IsConnectionStringInConfiguration(nameOrConnectionString))
 			{
 				_connectionString = ConfigurationManager.ConnectionStrings[nameOrConnectionString].ConnectionString;
 			}
+#endif
 			else
 			{
 				throw new ArgumentException(
@@ -198,9 +204,13 @@ namespace Hangfire.PostgreSql
 
 		private bool IsConnectionStringInConfiguration(string connectionStringName)
 		{
-			var connectionStringSetting = ConfigurationManager.ConnectionStrings[connectionStringName];
+#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+            return false;
+#else
+            var connectionStringSetting = ConfigurationManager.ConnectionStrings[connectionStringName];
 
-			return connectionStringSetting != null;
-		}
+            return connectionStringSetting != null;
+#endif
+        }
 	}
 }
