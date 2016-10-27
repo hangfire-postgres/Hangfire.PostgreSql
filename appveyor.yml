@@ -8,9 +8,6 @@ init:
 
     $env:Path += ";c:\program files\postgresql\9.5\bin"
 services: postgresql
-install:
-- ps: >-
-    appveyor DownloadFile "https://dist.nuget.org/win-x86-commandline/v3.5.0-beta2/NuGet.exe"
 build_script:
 - ps: >-
     psql -U postgres -c "CREATE ROLE appveyor LOGIN SUPERUSER CREATEDB CREATEROLE;"
@@ -19,4 +16,4 @@ build_script:
 
     .nuget\NuGet.exe install .nuget\packages.config -OutputDirectory packages
 
-    powershell.exe -NoProfile -ExecutionPolicy unrestricted -Command "& {Import-Module '.\packages\psake.*\tools\psake.psm1'; invoke-psake .\psake-project.ps1 -framework "4.6" compile; if ($LastExitCode -and $LastExitCode -ne 0) {write-host "ERROR CODE: $LastExitCode" -fore RED; exit $lastexitcode} }"
+    powershell.exe -NoProfile -ExecutionPolicy unrestricted -Command "& {Import-Module '.\packages\psake.*\tools\psake.psm1'; invoke-psake .\psake-project.ps1 -framework "4.6" test; if ($LastExitCode -and $LastExitCode -ne 0) {write-host "ERROR CODE: $LastExitCode" -fore RED; exit $lastexitcode} }"
