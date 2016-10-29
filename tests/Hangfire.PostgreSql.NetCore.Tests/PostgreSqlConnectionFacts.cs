@@ -241,18 +241,19 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
 			{
 				var job = Job.FromExpression(() => SampleMethod("wrong"));
 
-				var jobId = sql.Query(
+                var jobId = (int) sql.Query(
 					arrangeSql,
 					new
 					{
 						invocationData = JobHelper.ToJson(InvocationData.Serialize(job)),
 						stateName = "Succeeded",
-						arguments = "['Arguments']"
-					}).Single();
+						arguments = "[\"\\\"Arguments\\\"\"]"
+                    }).Single().id;
 
-				var result = connection.GetJobData(((int) jobId.id).ToString());
+				var result = connection.GetJobData(jobId.ToString());
+                var now = DateTime.UtcNow.AddMinutes(-1);
 
-				Assert.NotNull(result);
+                Assert.NotNull(result);
 				Assert.NotNull(result.Job);
 				Assert.Equal("Succeeded", result.State);
 				Assert.Equal("Arguments", result.Job.Args[0]);
@@ -269,7 +270,7 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
 				connection => Assert.Throws<ArgumentNullException>(
 					() => connection.GetStateData(null)));
 		}
-
+        
 		[Fact, CleanDatabase]
 		public void GetStateData_ReturnsNull_IfThereIsNoSuchState()
 		{
