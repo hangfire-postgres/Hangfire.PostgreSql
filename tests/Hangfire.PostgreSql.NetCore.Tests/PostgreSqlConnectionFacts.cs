@@ -270,7 +270,7 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
 				connection => Assert.Throws<ArgumentNullException>(
 					() => connection.GetStateData(null)));
 		}
-
+        
 		[Fact, CleanDatabase]
 		public void GetStateData_ReturnsNull_IfThereIsNoSuchState()
 		{
