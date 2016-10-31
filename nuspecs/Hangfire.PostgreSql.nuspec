@@ -2,7 +2,7 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql</id>
-	<version>1.4.3</version>
+	<version>1.4.4</version>
 	<title>Hangfire PostgreSql Storage</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>frankhommers</owners>
@@ -15,13 +15,15 @@
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
 		https://github.com/frankhommers/Hangfire.PostgreSql/releases
-		1.4.3
-		* Implemented distributed lock timeout (#44) (https://github.com/frankhommers/Hangfire.PostgreSql/issues/44)
+		1.4.4
+		* Compiles with .net core #42 (https://github.com/frankhommers/Hangfire.PostgreSql/commit/24cdba20dcd9e44e33a367207348e30573d353e9). Thanks to zhongzf
+		* Added IGlobalConfiguration overloads to UsePostgreSqlStorage #47 (https://github.com/frankhommers/Hangfire.PostgreSql/pull/47). Thanks to ericgreenmix
+		* Updated to use Hangfire 1.6.6, Npgsql 3.1.8
 	</releaseNotes>
 	<dependencies>
-	  <dependency id="Hangfire.Core" version="1.5.7" />
-	  <dependency id="Dapper" version="1.42" />
-	  <dependency id="Npgsql" version="3.1.3" />
+	  <dependency id="Hangfire.Core" version="1.6.6" />
+	  <dependency id="Dapper" version="1.50.2" />
+	  <dependency id="Npgsql" version="3.1.8" />
 	</dependencies>
   </metadata>
   <files>
