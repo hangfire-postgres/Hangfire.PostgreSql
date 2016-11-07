@@ -15,7 +15,8 @@ Download all files from this repository, add the Hangfire.PostgreSql.csproj to y
 Reference it in your project, and you are ready to go by using:
 
 ```csharp
-app.UseHangfireServer(new BackgroundJobServerOptions(), new PostgreSqlStorage("<connection string or its name>"));
+app.UseHangfireServer(new BackgroundJobServerOptions(), 
+  new PostgreSqlStorage("<connection string or its name>"));
 app.UseHangfireDashboard();
 ```
 
