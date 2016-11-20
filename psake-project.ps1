@@ -42,7 +42,7 @@ Task Merge -Depends Test -Description "Run ILMerge /internalize to merge assembl
 
 Task Collect -Depends Merge -Description "Copy all artifacts to the build folder." {
     Collect-Assembly "Hangfire.PostgreSql" "Net45"
-
+	Collect-Assembly "Hangfire.PostgreSql.NetCore" "netcoreapp1.0"
     Collect-Content "content\readme.txt"
 }
 

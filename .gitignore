@@ -224,3 +224,6 @@ _site
 src/Hangfire.PostgreSql/.vs/restore.dg
 src/Hangfire.PostgreSql/project.lock.json
 /src/Hangfire.PostgreSql.NetCore/project.lock.json
+
+# dotnet core
+*.lock.json
