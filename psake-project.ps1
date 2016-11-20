@@ -27,7 +27,7 @@ Properties {
     $sharedAssemblyInfo = "$src_dir\SharedAssemblyInfo.cs"
 }
 
-Task Default -Depends Collect
+Task Default -Depends Pack
 
 Task Test -Depends Compile -Description "Run unit and integration tests." {
     Run-XunitTests "Hangfire.PostgreSql.Tests"
@@ -166,7 +166,13 @@ function Collect-Assembly($project, $version) {
 
     "Collecting assembly '$assembly.dll' into '$version'..."
 
-    $source = (Get-SrcOutputDir $projectDir) + "\$assembly.*"
+	$fullProjectDir = Get-SrcOutputDir $projectDir
+	if (Test-Path "$fullProjectDir\$version"){
+		$source = "$fullProjectDir\$version\$assembly.*"
+	}
+	else{
+		$source = "$fullProjectDir\$assembly.*"
+	}
     $destination = "$build_dir\$version"
 
     Create-Directory $destination
