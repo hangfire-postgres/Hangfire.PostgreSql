@@ -27,7 +27,7 @@ Properties {
     $sharedAssemblyInfo = "$src_dir\SharedAssemblyInfo.cs"
 }
 
-Task Default -Depends Collect
+Task Default -Depends Pack
 
 Task Test -Depends Compile -Description "Run unit and integration tests." {
     Run-XunitTests "Hangfire.PostgreSql.Tests"
@@ -42,7 +42,7 @@ Task Merge -Depends Test -Description "Run ILMerge /internalize to merge assembl
 
 Task Collect -Depends Merge -Description "Copy all artifacts to the build folder." {
     Collect-Assembly "Hangfire.PostgreSql" "Net45"
-
+	Collect-Assembly "Hangfire.PostgreSql.NetCore" "netcoreapp1.0"
     Collect-Content "content\readme.txt"
 }
 
@@ -166,7 +166,13 @@ function Collect-Assembly($project, $version) {
 
     "Collecting assembly '$assembly.dll' into '$version'..."
 
-    $source = (Get-SrcOutputDir $projectDir) + "\$assembly.*"
+	$fullProjectDir = Get-SrcOutputDir $projectDir
+	if (Test-Path "$fullProjectDir\$version"){
+		$source = "$fullProjectDir\$version\$assembly.*"
+	}
+	else{
+		$source = "$fullProjectDir\$assembly.*"
+	}
     $destination = "$build_dir\$version"
 
     Create-Directory $destination
