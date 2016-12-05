@@ -71,10 +71,15 @@ UPDATE """ + _options.SchemaName + @""".""jobqueue""
 SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
 WHERE ""id"" IN (
     SELECT ""id"" 
-    FROM """ + _options.SchemaName + @""".""jobqueue"" 
+    FROM """ + _options.SchemaName + $@""".""jobqueue"" 
     WHERE ""queue"" = ANY (@queues)
-    AND ""fetchedat"" {0} 
-    ORDER BY ""fetchedat"", ""jobid""
+    AND ""fetchedat"" {{0}}
+    ORDER BY
+    CASE ""queue""
+        {string.Join("\n", queues.Select((q, i) => $"WHEN '{q}' THEN {i}"))}
+        ELSE {queues.Length}
+    END,
+    ""fetchedat"", ""jobid""
     LIMIT 1
 )
 RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
@@ -157,10 +162,15 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 
 			string jobToFetchSqlTemplate = @"
 SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
-FROM """ + _options.SchemaName + @""".""jobqueue"" 
+FROM """ + _options.SchemaName + $@""".""jobqueue"" 
 WHERE ""queue"" = ANY (@queues)
-AND ""fetchedat"" {0} 
-ORDER BY ""fetchedat"", ""jobid"" 
+AND ""fetchedat"" {{0}} 
+ORDER BY
+CASE ""queue""
+    {string.Join("\n", queues.Select((q, i) => $"WHEN '{q}' THEN {i}"))}
+    ELSE {queues.Length}
+END,
+""fetchedat"", ""jobid"" 
 LIMIT 1;
 ";
 
