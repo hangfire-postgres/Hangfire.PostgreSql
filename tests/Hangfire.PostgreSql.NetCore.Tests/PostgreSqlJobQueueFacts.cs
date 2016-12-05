@@ -46,7 +46,25 @@ namespace Hangfire.PostgreSql.Tests
 			});
 		}
 
-		[Fact, CleanDatabase]
+        [Fact, CleanDatabase]
+        public void Dequeue_ShouldFetchAJob_FromQueueWithHigherPriority()
+        {
+            UseConnection(connection =>
+            {
+                var queue = CreateJobQueue(connection, false);
+                var token = CreateTimingOutCancellationToken();
+
+                queue.Enqueue("1", "1");
+                queue.Enqueue("2", "2");
+                queue.Enqueue("3", "3");
+
+                Assert.Equal("1", queue.Dequeue(new[] { "1", "2", "3" }, token).JobId);
+                Assert.Equal("2", queue.Dequeue(new[] { "2", "3", "1" }, token).JobId);
+                Assert.Equal("3", queue.Dequeue(new[] { "3", "1", "2" }, token).JobId);
+            });
+        }
+
+        [Fact, CleanDatabase]
 		private void Dequeue_ShouldThrowAnException_WhenQueuesCollectionIsEmpty_WithUseNativeDatabaseTransactions()
 		{
 			Dequeue_ShouldThrowAnException_WhenQueuesCollectionIsEmpty(true);
