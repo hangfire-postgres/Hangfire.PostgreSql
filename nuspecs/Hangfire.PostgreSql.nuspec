@@ -2,7 +2,7 @@
 <package >
   <metadata>
 	<id>Hangfire.PostgreSql</id>
-	<version>1.4.4</version>
+	<version>1.4.5</version>
 	<title>Hangfire PostgreSql Storage</title>
 	<authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)</authors>
 	<owners>frankhommers</owners>
@@ -14,20 +14,33 @@
 	<copyright>Copyright &#169; 2014-2016 Frank Hommers and others</copyright>
 	<tags>Hangfire PostgreSql Postgres</tags>
 	<releaseNotes>
-		https://github.com/frankhommers/Hangfire.PostgreSql/releases
-		1.4.4
-		* Compiles with .net core #42 (https://github.com/frankhommers/Hangfire.PostgreSql/commit/24cdba20dcd9e44e33a367207348e30573d353e9). Thanks to zhongzf
-		* Added IGlobalConfiguration overloads to UsePostgreSqlStorage #47 (https://github.com/frankhommers/Hangfire.PostgreSql/pull/47). Thanks to ericgreenmix
-		* Updated to use Hangfire 1.6.6, Npgsql 3.1.8
-	</releaseNotes>
+    https://github.com/frankhommers/Hangfire.PostgreSql/releases
+    1.4.5
+    * Produce XML documentation for NetCore
+    * Switch to stable dependency in NetCore (System.Runtime.Serialization.Formatters)
+    * Added target 'netcoreapp1.0' to the package
+  </releaseNotes>
 	<dependencies>
-	  <dependency id="Hangfire.Core" version="1.6.6" />
-	  <dependency id="Dapper" version="1.50.2" />
-	  <dependency id="Npgsql" version="3.1.8" />
+    <group targetFramework="net45">
+      <dependency id="Hangfire.Core" version="1.6.6" />
+      <dependency id="Dapper" version="1.50.2" />
+      <dependency id="Npgsql" version="3.1.8" />
+    </group>
+    <group targetFramework="netcoreapp1.0">
+      <dependency id="Microsoft.NETCore.App" version="[1.0.1, )" />
+      <dependency id="Hangfire.Core" version="1.6.6" />
+      <dependency id="Hangfire.AspNetCore" version="1.6.6" />
+      <dependency id="Dapper" version="1.50.2" />
+      <dependency id="Npgsql" version="3.1.8" />
+      <dependency id="Newtonsoft.Json" version="9.0.1" />
+      <dependency id="System.Runtime.Serialization.Formatters" version="4.3.0" />
+    </group>
 	</dependencies>
   </metadata>
   <files>
-	<file src="Net45\Hangfire.PostgreSql.dll" target="lib\net452" />
-	<file src="Net45\Hangfire.PostgreSql.xml" target="lib\net452" />
+    <file src="Net45\Hangfire.PostgreSql.dll" target="lib\net452" />
+    <file src="Net45\Hangfire.PostgreSql.xml" target="lib\net452" />
+    <file src="netcoreapp1.0\Hangfire.PostgreSql.NetCore.dll" target="lib\netcoreapp1.0" />
+    <file src="netcoreapp1.0\Hangfire.PostgreSql.NetCore.xml" target="lib\netcoreapp1.0" />
   </files>
 </package>
