@@ -1,0 +1,43 @@
+﻿{
+    "version": "1.4.4-*",
+    "authors": [ "Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)" ],
+    "title": "Hangfire PostgreSql Storage",
+    "description": "PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).",
+    "copyright": "Copyright &#169; 2014-2016 Frank Hommers and others",
+    "projectUrl": "http://hmm.rs/Hangfire.PostgreSql",
+    "packOptions": {
+        "summary": "Latest build of Hangfire.PostgreSql with many fixes and new PostgreSql driver support.",
+        "owners": [ "frankhommers" ],
+        "requireLicenseAcceptance": false,
+        "licenseUrl": "https: //raw.github.com/frankhommers/Hangfire.PostgreSql/master/LICENSE.md",
+        "releaseNotes": "https://github.com/frankhommers/Hangfire.PostgreSql/releases \n1.4.4 \n* Compiles with .net core #42 (https://github.com/frankhommers/Hangfire.PostgreSql/commit/24cdba20dcd9e44e33a367207348e30573d353e9). Thanks to zhongzf \n* Added IGlobalConfiguration overloads to UsePostgreSqlStorage #47 (https://github.com/frankhommers/Hangfire.PostgreSql/pull/47). Thanks to ericgreenmix \n* Updated to use Hangfire 1.6.6, Npgsql 3.1.8",
+        "tags": [ "Hangfire", "PostgreSql", "Postgres" ]
+    },
+    "buildOptions": {
+        "embed": "*.sql"
+    },
+    "dependencies": {
+        "Dapper": "1.50.2",
+        "Hangfire.AspNetCore": "1.6.7",
+        "Hangfire.Core": "1.6.7",
+        "Newtonsoft.Json": "9.0.1",
+        "Npgsql": "3.1.9"
+    },
+    "scripts": {
+        "postcompile": [
+            "dotnet pack --no-build --configuration %compile:Configuration%"
+        ]
+    },
+    "frameworks": {
+        "netstandard1.4": {
+            "buildOptions": {
+                "define": [ "NETCORE1" ]
+            }
+        },
+        "net451": {
+            "frameworkAssemblies": {
+                "System.Configuration": ""
+            }
+        }
+    }
+}

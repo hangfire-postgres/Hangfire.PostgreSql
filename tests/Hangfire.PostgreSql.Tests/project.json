@@ -1,0 +1,21 @@
+{
+	"title": "Hangfire.PostgreSql",
+	"version": "1.0.0-*",
+	"testRunner": "xunit",
+	"dependencies": {
+		"xunit": "2.2.0-*",
+		"dotnet-test-xunit": "2.2.0-preview2-*",
+		"Hangfire.PostgreSql": {"target": "project"},
+        "Moq": "4.6.38-alpha"
+	},
+	"frameworks": {
+		"netcoreapp1.0": {
+            "dependencies": {
+                "Microsoft.NETCore.App": {
+                    "version": "1.0.1-*",
+                    "type": "platform"
+                }
+            }
+		}
+	}
+}

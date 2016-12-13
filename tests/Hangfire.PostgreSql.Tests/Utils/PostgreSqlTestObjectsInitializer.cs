@@ -37,15 +37,10 @@ namespace Hangfire.PostgreSql.Tests
 
 			string script = null;
 
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
-			script = GetStringResource(
-			  typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
-			  $"Hangfire.PostgreSql.NetCore.Tests.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
-#else
+
                script = GetStringResource(
-                typeof (PostgreSqlTestObjectsInitializer).Assembly,
+              typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
                 "Hangfire.PostgreSql.Tests.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
-#endif
 
 			//connection.Execute(script);
 
