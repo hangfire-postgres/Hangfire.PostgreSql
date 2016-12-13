@@ -1,21 +1,25 @@
 ﻿{
 	"version": "1.4.4-*",
-	"buildOptions": {
-		"embed": "*.sql",
-		"define": [ "NETCORE1" ]
-	},
-	"dependencies": {
-		"Dapper": "1.50.2",
-		"Hangfire.AspNetCore": "1.6.6",
-		"Hangfire.Core": "1.6.6",
-		"Microsoft.NETCore.App": {
-			"version": "1.0.1-*",
-			"type": "platform"
-		},
-		"Newtonsoft.Json": "9.0.1",
-		"Npgsql": "3.1.8",
-		"System.Runtime.Serialization.Formatters": "4.0.0-rc3-24212-01"
-	},
+  "buildOptions": {
+    "embed": "*.sql",
+    "define": [ "NETCORE1" ],
+    "xmlDoc": true,
+    "nowarn": [
+      "CS1591"
+    ]
+  },
+  "dependencies": {
+    "Dapper": "1.50.2",
+    "Hangfire.AspNetCore": "1.6.6",
+    "Hangfire.Core": "1.6.6",
+    "Microsoft.NETCore.App": {
+      "version": "1.0.1-*",
+      "type": "platform"
+    },
+    "Newtonsoft.Json": "9.0.1",
+    "Npgsql": "3.1.8",
+    "System.Runtime.Serialization.Formatters": "4.3.0"
+  },
 	"scripts": {
 		"postcompile": [
 			"dotnet pack --no-build --configuration %compile:Configuration%"
