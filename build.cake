@@ -1,4 +1,27 @@
+#addin "Cake.Json"
+
+//////////////////////////////////////////////////////////////////////
+// ARGUMENTS
+//////////////////////////////////////////////////////////////////////
+
 var target = Argument("target", "Default");
+
+//////////////////////////////////////////////////////////////////////
+// FUNCTIONS
+//////////////////////////////////////////////////////////////////////
+
+IEnumerable<string> GetFrameworks(string path) 
+{
+    var projectJObject = DeserializeJsonFromFile<JObject>(path);
+    foreach(var prop in ((JObject)projectJObject["frameworks"]).Properties()) 
+    {
+        yield return prop.Name;   
+    }    
+}
+
+//////////////////////////////////////////////////////////////////////
+// TASKS
+//////////////////////////////////////////////////////////////////////
 
 Task("Restore")
   .Does(() =>
@@ -10,7 +33,25 @@ Task("Build")
     .IsDependentOn("Restore")
   .Does(() =>
 {
-    DotNetCoreBuild("src/**/project.json\" \"tests/**/project.json");
+    var settings = new DotNetCoreBuildSettings
+    {
+        Configuration = "Release"
+    };
+
+    var projects = GetFiles("./src/**/project.json");
+	foreach(var project in projects)
+	{
+		foreach(var framework in GetFrameworks(project.ToString()))
+        {
+            if (!IsRunningOnWindows() && !framework.StartsWith("netstandard"))
+				continue;
+
+            Information("Building: {0} on Framework: {1}", project, framework);
+            Information("========");
+            settings.Framework = framework;
+            DotNetCoreBuild(project.ToString(), settings);
+        }
+	}
 });
 
 Task("Test")
@@ -31,7 +72,8 @@ Task("Pack")
     var settings = new DotNetCorePackSettings
     {
         Configuration = "Release",
-        OutputDirectory = "publish/"
+        OutputDirectory = "publish/",
+        NoBuild = true
     };
 
     var files = GetFiles("src/**/project.json");
