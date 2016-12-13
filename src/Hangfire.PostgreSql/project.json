@@ -1,5 +1,5 @@
 ﻿{
-    "version": "1.4.4-*",
+    "version": "1.4.5",
     "authors": [ "Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)" ],
     "title": "Hangfire PostgreSql Storage",
     "description": "PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).",
