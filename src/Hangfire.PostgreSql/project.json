@@ -14,19 +14,14 @@
         "tags": [ "Hangfire", "PostgreSql", "Postgres" ]
     },
     "buildOptions": {
-        "embed": "*.sql"
+        "embed": "*.sql",
+        "emitEntryPoint": false
     },
     "dependencies": {
         "Dapper": "1.50.2",
-        "Hangfire.AspNetCore": "1.6.7",
         "Hangfire.Core": "1.6.7",
         "Newtonsoft.Json": "9.0.1",
         "Npgsql": "3.1.9"
-    },
-    "scripts": {
-        "postcompile": [
-            "dotnet pack --no-build --configuration %compile:Configuration%"
-        ]
     },
     "frameworks": {
         "netstandard1.4": {
@@ -36,7 +31,7 @@
         },
         "net451": {
             "frameworkAssemblies": {
-                "System.Configuration": ""
+                "System.Configuration": "4.0.0"
             }
         }
     }

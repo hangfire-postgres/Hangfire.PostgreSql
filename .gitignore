@@ -224,3 +224,5 @@ _site
 src/Hangfire.PostgreSql/.vs/restore.dg
 src/Hangfire.PostgreSql/project.lock.json
 */**/project.lock.json
+tools
+.vs
