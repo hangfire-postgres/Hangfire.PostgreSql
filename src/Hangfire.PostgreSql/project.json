@@ -4,9 +4,9 @@
     "title": "Hangfire PostgreSql Storage",
     "description": "PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).",
     "copyright": "Copyright &#169; 2014-2016 Frank Hommers and others",
-    "projectUrl": "http://hmm.rs/Hangfire.PostgreSql",
     "packOptions": {
         "summary": "Latest build of Hangfire.PostgreSql with many fixes and new PostgreSql driver support.",
+        "projectUrl": "http://hmm.rs/Hangfire.PostgreSql",
         "owners": [ "frankhommers" ],
         "requireLicenseAcceptance": false,
         "licenseUrl": "https: //raw.github.com/frankhommers/Hangfire.PostgreSql/master/LICENSE.md",
