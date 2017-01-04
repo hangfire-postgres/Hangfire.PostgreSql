@@ -19,7 +19,7 @@
     },
     "dependencies": {
         "Dapper": "1.50.2",
-        "Hangfire.Core": "1.6.7",
+        "Hangfire.Core": "1.6.8",
         "Newtonsoft.Json": "9.0.1",
         "Npgsql": "3.1.9"
     },
