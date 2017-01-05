@@ -14,7 +14,13 @@ build_script:
 
     createdb hangfire_tests
 
-    .nuget\NuGet.exe install .nuget\packages.config -OutputDirectory packages
+    .\build.ps1 -t Pack
+cache:
+- tools -> build.cake
+- tools -> build.ps1
 
-    powershell.exe -NoProfile -ExecutionPolicy unrestricted -Command "& {Import-Module '.\packages\psake.*\tools\psake.psm1'; invoke-psake .\psake-project.ps1 -framework "4.6" test; if ($LastExitCode -and $LastExitCode -ne 0) {write-host "ERROR CODE: $LastExitCode" -fore RED; exit $lastexitcode} }"
+artifacts:
+- path: nupkgs\*.nupkg
+  name: NuPkgs
+
 test: off
