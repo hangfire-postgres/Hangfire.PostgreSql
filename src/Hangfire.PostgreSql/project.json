@@ -1,9 +1,9 @@
 ﻿{
-    "version": "1.4.5",
+    "version": "1.4.6",
     "authors": [ "Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)" ],
     "title": "Hangfire PostgreSql Storage",
     "description": "PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).",
-    "copyright": "Copyright &#169; 2014-2016 Frank Hommers and others",
+    "copyright": "Copyright &#169; 2014-2017 Frank Hommers and others",
     "packOptions": {
         "summary": "Latest build of Hangfire.PostgreSql with many fixes and new PostgreSql driver support.",
         "projectUrl": "http://hmm.rs/Hangfire.PostgreSql",
