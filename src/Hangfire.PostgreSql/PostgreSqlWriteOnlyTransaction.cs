@@ -31,87 +31,84 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-    public class PostgreSqlWriteOnlyTransaction : IWriteOnlyTransaction
-    {
-        private readonly Queue<Action<NpgsqlConnection, NpgsqlTransaction>> _commandQueue
-            = new Queue<Action<NpgsqlConnection, NpgsqlTransaction>>();
+	public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
+	{
+		private readonly Queue<Action<NpgsqlConnection, NpgsqlTransaction>> _commandQueue
+			= new Queue<Action<NpgsqlConnection, NpgsqlTransaction>>();
 
-        private readonly NpgsqlConnection _connection;
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
-        private readonly PostgreSqlStorageOptions _options;
+		private readonly NpgsqlConnection _connection;
+		private readonly PersistentJobQueueProviderCollection _queueProviders;
+		private readonly PostgreSqlStorageOptions _options;
 
-        public PostgreSqlWriteOnlyTransaction(
-            NpgsqlConnection connection,
-            PostgreSqlStorageOptions options,
-            PersistentJobQueueProviderCollection queueProviders)
-        {
-            if (connection == null) throw new ArgumentNullException("connection");
-            if (queueProviders == null) throw new ArgumentNullException("queueProviders");
-            if (options == null) throw new ArgumentNullException("options");
+		public PostgreSqlWriteOnlyTransaction(
+			NpgsqlConnection connection,
+			PostgreSqlStorageOptions options,
+			PersistentJobQueueProviderCollection queueProviders)
+		{
+			if (connection == null) throw new ArgumentNullException(nameof(connection));
+			if (queueProviders == null) throw new ArgumentNullException(nameof(queueProviders));
+			if (options == null) throw new ArgumentNullException(nameof(options));
 
-            _connection = connection;
-;
-            _options = options;
-            _queueProviders = queueProviders;
-        }
+			_connection = connection;
+			_options = options;
+			_queueProviders = queueProviders;
+		}
 
-        public void Dispose()
-        {
-        }
+		public override void Dispose()
+		{
+		}
 
-        public void Commit()
-        {
-            using (var transaction = _connection.BeginTransaction(IsolationLevel.RepeatableRead))
-            {
+		public override void Commit()
+		{
+			using (var transaction = _connection.BeginTransaction(IsolationLevel.RepeatableRead))
+			{
+				foreach (var command in _commandQueue)
+				{
+					try
+					{
+						command(_connection, transaction);
+					}
+					catch
+					{
+						throw;
+					}
+				}
+				transaction.Commit();
+				PostgreSqlJobQueue.NewItemInQueueEvent.Set();
+			}
+		}
 
-                foreach (var command in _commandQueue)
-                {
-                    try
-                    {
-                        command(_connection, transaction);
-                    }
-                    catch
-                    {
-                        throw;
-                    }
-                }
-                transaction.Commit();
-                PostgreSqlJobQueue.NewItemInQueueEvent.Set();
-            }
-        }
-
-        public void ExpireJob(string jobId, TimeSpan expireIn)
-        {
-            string sql =
-                string.Format(
-                    @"
+		public override void ExpireJob(string jobId, TimeSpan expireIn)
+		{
+			string sql =
+				string.Format(
+					@"
 UPDATE """ + _options.SchemaName + @""".""job""
 SET ""expireat"" = NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS'
 WHERE ""id"" = @id;
 ",
-                    (long)expireIn.TotalSeconds);
+					(long) expireIn.TotalSeconds);
 
 
-            QueueCommand((con, trx) => con.Execute(
-                sql,
-                new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				sql,
+				new {id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture)}, trx));
+		}
 
-        public void PersistJob(string jobId)
-        {
-            QueueCommand((con, trx) => con.Execute(
-                @"
+		public override void PersistJob(string jobId)
+		{
+			QueueCommand((con, trx) => con.Execute(
+				@"
 UPDATE """ + _options.SchemaName + @""".""job"" 
 SET ""expireat"" = NULL 
 WHERE ""id"" = @id;
 ",
-                new { id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture) }, trx));
-        }
+				new {id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture)}, trx));
+		}
 
-        public void SetJobState(string jobId, IState state)
-        {
-
-            string addAndSetStateSql = @"
+		public override void SetJobState(string jobId, IState state)
+		{
+			string addAndSetStateSql = @"
 WITH s AS (
     INSERT INTO """ + _options.SchemaName + @""".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
     VALUES (@jobId, @name, @reason, @createdAt, @data) RETURNING ""id""
@@ -122,106 +119,106 @@ FROM s
 WHERE j.""id"" = @id;
 ";
 
-            QueueCommand((con, trx) => con.Execute(
-                addAndSetStateSql,
-                new
-                {
-                    jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture),
-                    name = state.Name,
-                    reason = state.Reason,
-                    createdAt = DateTime.UtcNow,
-                    data = JobHelper.ToJson(state.SerializeData()),
-                    id = Convert.ToInt32(jobId,CultureInfo.InvariantCulture)
-                }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				addAndSetStateSql,
+				new
+				{
+					jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture),
+					name = state.Name,
+					reason = state.Reason,
+					createdAt = DateTime.UtcNow,
+					data = JobHelper.ToJson(state.SerializeData()),
+					id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture)
+				}, trx));
+		}
 
-        public void AddJobState(string jobId, IState state)
-        {
-            string addStateSql = @"
+		public override void AddJobState(string jobId, IState state)
+		{
+			string addStateSql = @"
 INSERT INTO """ + _options.SchemaName + @""".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
 VALUES (@jobId, @name, @reason, @createdAt, @data);
 ";
 
-            QueueCommand((con, trx) => con.Execute(
-                addStateSql,
-                new
-                {
-                    jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture),
-                    name = state.Name,
-                    reason = state.Reason,
-                    createdAt = DateTime.UtcNow,
-                    data = JobHelper.ToJson(state.SerializeData())
-                }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				addStateSql,
+				new
+				{
+					jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture),
+					name = state.Name,
+					reason = state.Reason,
+					createdAt = DateTime.UtcNow,
+					data = JobHelper.ToJson(state.SerializeData())
+				}, trx));
+		}
 
-        public void AddToQueue(string queue, string jobId)
-        {
-            var provider = _queueProviders.GetProvider(queue);
-            var persistentQueue = provider.GetJobQueue(_connection);
+		public override void AddToQueue(string queue, string jobId)
+		{
+			var provider = _queueProviders.GetProvider(queue);
+			var persistentQueue = provider.GetJobQueue(_connection);
 
-            QueueCommand((con, trx) => persistentQueue.Enqueue(queue, jobId));
-        }
+			QueueCommand((con, trx) => persistentQueue.Enqueue(queue, jobId));
+		}
 
- 
-       public void IncrementCounter(string key)
-        {
-            QueueCommand((con, trx) => con.Execute(
-                @"
+
+		public override void IncrementCounter(string key)
+		{
+			QueueCommand((con, trx) => con.Execute(
+				@"
 INSERT INTO """ + _options.SchemaName + @""".""counter"" (""key"", ""value"") 
 VALUES (@key, @value);
 ",
-                new { key, value = +1 }, trx));
-        }
+				new {key, value = +1}, trx));
+		}
 
-        public void IncrementCounter(string key, TimeSpan expireIn)
-        {
-            string sql =
-                string.Format(
-                    @"
+		public override void IncrementCounter(string key, TimeSpan expireIn)
+		{
+			string sql =
+				string.Format(
+					@"
 INSERT INTO """ + _options.SchemaName + @""".""counter""(""key"", ""value"", ""expireat"") 
 VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS');
 ",
-                    (long)expireIn.TotalSeconds);
+					(long) expireIn.TotalSeconds);
 
 
-            QueueCommand((con, trx) => con.Execute(
-                sql,
-                new { key, value = +1 }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				sql,
+				new {key, value = +1}, trx));
+		}
 
-        public void DecrementCounter(string key)
-        {
-            QueueCommand((con, trx) => con.Execute(
-                @"
+		public override void DecrementCounter(string key)
+		{
+			QueueCommand((con, trx) => con.Execute(
+				@"
 INSERT INTO """ + _options.SchemaName + @""".""counter""(""key"", ""value"") 
 VALUES (@key, @value)
 ",
-                new { key, value = -1 }, trx));
-        }
+				new {key, value = -1}, trx));
+		}
 
-        public void DecrementCounter(string key, TimeSpan expireIn)
-        {
-            string sql =
-                string.Format(
-                    @"
+		public override void DecrementCounter(string key, TimeSpan expireIn)
+		{
+			string sql =
+				string.Format(
+					@"
 INSERT INTO """ + _options.SchemaName + @""".""counter""(""key"", ""value"", ""expireat"") 
 VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{0} SECONDS');
 ",
-                    (long) expireIn.TotalSeconds);
+					(long) expireIn.TotalSeconds);
 
-            QueueCommand((con, trx) => con.Execute(sql
-                ,
-                new { key, value = -1 }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(sql
+				,
+				new {key, value = -1}, trx));
+		}
 
-        public void AddToSet(string key, string value)
-        {
-            AddToSet(key, value, 0.0);
-        }
+		public override void AddToSet(string key, string value)
+		{
+			AddToSet(key, value, 0.0);
+		}
 
-        public void AddToSet(string key, string value, double score)
-        {
-            string addSql = @"
+		public override void AddToSet(string key, string value, double score)
+		{
+			string addSql = @"
 WITH ""inputvalues"" AS (
 	SELECT @key ""key"", @value ""value"", @score ""score""
 ), ""updatedrows"" AS ( 
@@ -242,47 +239,47 @@ WHERE NOT EXISTS (
 );
 ";
 
-            QueueCommand((con, trx) => con.Execute(
-                addSql,
-                new { key, value, score }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				addSql,
+				new {key, value, score}, trx));
+		}
 
-        public void RemoveFromSet(string key, string value)
-        {
-            QueueCommand((con, trx) => con.Execute(
-                @"
+		public override void RemoveFromSet(string key, string value)
+		{
+			QueueCommand((con, trx) => con.Execute(
+				@"
 DELETE FROM """ + _options.SchemaName + @""".""set"" 
 WHERE ""key"" = @key 
 AND ""value"" = @value;
 ",
-                new { key, value }, trx));
-        }
+				new {key, value}, trx));
+		}
 
-        public void InsertToList(string key, string value)
-        {
-            QueueCommand((con, trx) => con.Execute(
-                @"
+		public override void InsertToList(string key, string value)
+		{
+			QueueCommand((con, trx) => con.Execute(
+				@"
 INSERT INTO """ + _options.SchemaName + @""".""list"" (""key"", ""value"") 
 VALUES (@key, @value);
 ",
-                new { key, value }, trx));
-        }
+				new {key, value}, trx));
+		}
 
-        public void RemoveFromList(string key, string value)
-        {
-            QueueCommand((con, trx) => con.Execute(
-                @"
+		public override void RemoveFromList(string key, string value)
+		{
+			QueueCommand((con, trx) => con.Execute(
+				@"
 DELETE FROM """ + _options.SchemaName + @""".""list"" 
 WHERE ""key"" = @key 
 AND ""value"" = @value;
 ",
-                new { key, value }, trx));
-        }
+				new {key, value}, trx));
+		}
 
-        public void TrimList(string key, int keepStartingFrom, int keepEndingAt)
-        {
-            string trimSql =
-                @"
+		public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
+		{
+			string trimSql =
+				@"
 DELETE FROM """ + _options.SchemaName + @""".""list"" AS source
 WHERE ""key"" = @key
 AND ""id"" NOT IN (
@@ -294,17 +291,17 @@ AND ""id"" NOT IN (
 );
 ";
 
-            QueueCommand((con, trx) => con.Execute(
-                trimSql,
-                new { key = key, start = keepStartingFrom, end = (keepEndingAt - keepStartingFrom + 1) }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				trimSql,
+				new {key = key, start = keepStartingFrom, end = (keepEndingAt - keepStartingFrom + 1)}, trx));
+		}
 
-        public void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
-        {
-            if (key == null) throw new ArgumentNullException("key");
-            if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
+		public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
+		{
+			if (key == null) throw new ArgumentNullException("key");
+			if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
 
-            string sql = @"
+			string sql = @"
 WITH ""inputvalues"" AS (
 	SELECT @key ""key"", @field ""field"", @value ""value""
 ), ""updatedrows"" AS ( 
@@ -326,29 +323,29 @@ WHERE NOT EXISTS (
 );
 ";
 
-            foreach (var keyValuePair in keyValuePairs)
-            {
-                var pair = keyValuePair;
+			foreach (var keyValuePair in keyValuePairs)
+			{
+				var pair = keyValuePair;
 
-                QueueCommand((con, trx) => con.Execute(sql, new { key = key, field = pair.Key, value = pair.Value }, trx));
-            }
-        }
+				QueueCommand((con, trx) => con.Execute(sql, new {key = key, field = pair.Key, value = pair.Value}, trx));
+			}
+		}
 
-        public void RemoveHash(string key)
-        {
-            if (key == null) throw new ArgumentNullException("key");
+		public override void RemoveHash(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
 
-            QueueCommand((con, trx) => con.Execute(
-                @"
-DELETE FROM """ + _options.SchemaName + @""".""hash"" 
-WHERE ""key"" = @key;
-",
-                new { key }, trx));
-        }
+			QueueCommand((con, trx) => con.Execute(
+				@"
+					DELETE FROM """ + _options.SchemaName + @""".""hash"" 
+					WHERE ""key"" = @key;
+					",
+				new {key}, trx));
+		}
 
-        internal void QueueCommand(Action<NpgsqlConnection, NpgsqlTransaction> action)
-        {
-            _commandQueue.Enqueue(action);
-        }
-    }
+		internal void QueueCommand(Action<NpgsqlConnection, NpgsqlTransaction> action)
+		{
+			_commandQueue.Enqueue(action);
+		}
+	}
 }

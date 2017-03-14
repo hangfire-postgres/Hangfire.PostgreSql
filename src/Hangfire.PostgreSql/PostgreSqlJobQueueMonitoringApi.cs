@@ -34,8 +34,8 @@ namespace Hangfire.PostgreSql
 
         public PostgreSqlJobQueueMonitoringApi(IDbConnection connection, PostgreSqlStorageOptions options)
         {
-            if (connection == null) throw new ArgumentNullException("connection");
-            if (options == null) throw new ArgumentNullException("options");
+            if (connection == null) throw new ArgumentNullException(nameof(connection));
+            if (options == null) throw new ArgumentNullException(nameof(options));
 
             _connection = connection;
             _options = options;

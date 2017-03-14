@@ -44,7 +44,7 @@ namespace Hangfire.PostgreSql
             PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
-            if(options==null) throw new ArgumentNullException("options");
+            if(options==null) throw new ArgumentNullException(nameof(options));
 
             _connectionString = connectionString;
             _queueProviders = queueProviders;

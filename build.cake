@@ -12,11 +12,7 @@ var target = Argument("target", "Default");
 
 IEnumerable<string> GetFrameworks(string path) 
 {
-    var projectJObject = DeserializeJsonFromFile<JObject>(path);
-    foreach(var prop in ((JObject)projectJObject["frameworks"]).Properties()) 
-    {
-        yield return prop.Name;   
-    }    
+	return new string[] { "netstandard1.4", "net451" };
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -26,7 +22,7 @@ IEnumerable<string> GetFrameworks(string path)
 Task("Restore")
   .Does(() =>
 {
-    DotNetCoreRestore("src/\" \"tests/");
+    DotNetCoreRestore();
 });
 
 Task("Build")
@@ -38,9 +34,11 @@ Task("Build")
         Configuration = "Release"
     };
 
-    var projects = GetFiles("./src/**/project.json");
+    var projects = GetFiles("./src/**/*.csproj");
 	foreach(var project in projects)
 	{
+		Information("Found project: {0}", project);
+	
 		foreach(var framework in GetFrameworks(project.ToString()))
         {
             if (!IsRunningOnWindows() && !framework.StartsWith("netstandard"))
@@ -58,7 +56,7 @@ Task("Test")
     .IsDependentOn("Build")
   .Does(() =>
 {
-    var files = GetFiles("tests/**/project.json");
+    var files = GetFiles("tests/**/*.csproj");
     foreach(var file in files)
     {
         DotNetCoreTest(file.ToString());
@@ -76,7 +74,7 @@ Task("Pack")
         NoBuild = true
     };
 
-    var files = GetFiles("src/**/project.json");
+    var files = GetFiles("src/**/*.csproj");
     foreach(var file in files)
     {
         DotNetCorePack(file.ToString(), settings);
