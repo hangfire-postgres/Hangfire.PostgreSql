@@ -23,6 +23,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.Linq;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.States;
@@ -336,11 +337,105 @@ WHERE NOT EXISTS (
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			QueueCommand((con, trx) => con.Execute(
-				@"
-					DELETE FROM """ + _options.SchemaName + @""".""hash"" 
-					WHERE ""key"" = @key;
-					",
+				$@"DELETE FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @key",
 				new {key}, trx));
+		}
+
+		public override void ExpireSet(string key, TimeSpan expireIn)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"UPDATE ""{_options.SchemaName}"".""set"" SET ""expireat"" = @expireAt WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key, expireAt = DateTime.UtcNow.Add(expireIn) },
+				transaction));
+		}
+
+		public override void ExpireList(string key, TimeSpan expireIn)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"UPDATE ""{_options.SchemaName}"".""list"" SET ""expireat"" = @expireAt WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key, expireAt = DateTime.UtcNow.Add(expireIn) },
+				transaction));
+		}
+
+		public override void ExpireHash(string key, TimeSpan expireIn)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"UPDATE ""{_options.SchemaName}"".""hash"" SET expireat = @expireAt WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key, expireAt = DateTime.UtcNow.Add(expireIn) },
+				transaction));
+		}
+
+		public override void PersistSet(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"UPDATE ""{_options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key },
+				transaction));
+		}
+
+		public override void PersistList(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"UPDATE ""{_options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key },
+				transaction));
+		}
+
+		public override void PersistHash(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"UPDATE ""{_options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key },
+				transaction));
+		}
+
+		public override void AddRangeToSet(string key, IList<string> items)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+			if (items == null) throw new ArgumentNullException(nameof(items));
+
+			string query = $@"INSERT INTO ""{_options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@key, @value, 0.0)";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				items.Select(value => new { key, value }).ToList(),
+				transaction));
+		}
+
+		public override void RemoveSet(string key)
+		{
+			if (key == null) throw new ArgumentNullException(nameof(key));
+
+			string query = $@"DELETE FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @key";
+
+			QueueCommand((connection, transaction) => connection.Execute(
+				query,
+				new { key },
+				transaction));
 		}
 
 		internal void QueueCommand(Action<NpgsqlConnection, NpgsqlTransaction> action)
