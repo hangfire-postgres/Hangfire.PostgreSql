@@ -44,11 +44,9 @@ namespace Hangfire.PostgreSql
             PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
-            if(options==null) throw new ArgumentNullException(nameof(options));
-
-            _connectionString = connectionString;
-            _queueProviders = queueProviders;
-            _options = options;
+            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
         public long ScheduledCount()
@@ -276,8 +274,6 @@ namespace Hangfire.PostgreSql
         {
             return UseConnection(connection =>
             {
-
-
                 string sql = @"
 SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt"" 
 FROM """ + _options.SchemaName + @""".""job"" 
@@ -336,25 +332,25 @@ ORDER BY ""id"" DESC;
         {
             return UseConnection(connection =>
             {
-                string sql = @"
+                string sql = $@"
 SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
-FROM """ + _options.SchemaName + @""".""job""
-GROUP BY ""statename""
-HAVING ""statename"" IS NOT NULL;
+FROM ""{_options.SchemaName}"".""job""
+WHERE ""statename"" IS NOT NULL
+GROUP BY ""statename"";
 
-SELECT COUNT(""id"") 
-FROM """ + _options.SchemaName + @""".""server"";
+SELECT COUNT(*) 
+FROM ""{_options.SchemaName}"".""server"";
 
 SELECT SUM(""value"") 
-FROM """ + _options.SchemaName + @""".""counter"" 
+FROM ""{_options.SchemaName}"".""counter"" 
 WHERE ""key"" = 'stats:succeeded';
 
 SELECT SUM(""value"") 
-FROM """ + _options.SchemaName + @""".""counter"" 
+FROM ""{_options.SchemaName}"".""counter"" 
 WHERE ""key"" = 'stats:deleted';
 
 SELECT COUNT(*) 
-FROM """ + _options.SchemaName + @""".""set"" 
+FROM ""{_options.SchemaName}"".""set"" 
 WHERE ""key"" = 'recurring-jobs';
 ";
 
@@ -363,12 +359,12 @@ WHERE ""key"" = 'recurring-jobs';
                 {
                     var countByStates = multi.Read().ToDictionary(x => x.State, x => x.Count);
 
-                    Func<string, long> getCountIfExists = name => countByStates.ContainsKey(name) ? countByStates[name] : 0;
+                    long GetCountIfExists(string name) => countByStates.ContainsKey(name) ? countByStates[name] : 0;
 
-                    stats.Enqueued = getCountIfExists(EnqueuedState.StateName);
-                    stats.Failed = getCountIfExists(FailedState.StateName);
-                    stats.Processing = getCountIfExists(ProcessingState.StateName);
-                    stats.Scheduled = getCountIfExists(ScheduledState.StateName);
+                    stats.Enqueued = GetCountIfExists(EnqueuedState.StateName);
+                    stats.Failed = GetCountIfExists(FailedState.StateName);
+                    stats.Processing = GetCountIfExists(ProcessingState.StateName);
+                    stats.Scheduled = GetCountIfExists(ScheduledState.StateName);
 
                     stats.Servers = multi.Read<long>().Single();
 
@@ -398,7 +394,7 @@ WHERE ""key"" = 'recurring-jobs';
                 endDate = endDate.AddHours(-1);
             }
 
-            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd-HH")), x => x);
+            var keyMaps = dates.ToDictionary(x => $"stats:{type}:{x:yyyy-MM-dd-HH}", x => x);
 
             return GetTimelineStats(connection, keyMaps);
         }
@@ -415,7 +411,7 @@ WHERE ""key"" = 'recurring-jobs';
                 dates.Add(endDate);
                 endDate = endDate.AddDays(-1);
             }
-            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd")), x => x);
+            var keyMaps = dates.ToDictionary(x => $"stats:{type}:{x:yyyy-MM-dd}", x => x);
  
             return GetTimelineStats(connection, keyMaps);
         }
@@ -423,11 +419,11 @@ WHERE ""key"" = 'recurring-jobs';
         private Dictionary<DateTime, long> GetTimelineStats(NpgsqlConnection connection,
             IDictionary<string, DateTime> keyMaps)
         {
-            string sqlQuery = @"
+            string sqlQuery = $@"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
-FROM """ + _options.SchemaName + @""".""counter""
-GROUP BY ""key""
-HAVING ""key"" = ANY (@keys);
+FROM ""{_options.SchemaName}"".""counter""
+WHERE ""key"" = ANY(@keys)
+GROUP BY ""key"";
 ";
 
             var valuesMap = connection.Query(
@@ -502,7 +498,7 @@ AND jq.""fetchedat"" IS NULL;
         private long GetNumberOfJobsByStateName(NpgsqlConnection connection, string stateName)
         {
             string sqlQuery = @"
-SELECT COUNT(""id"") 
+SELECT COUNT(*) 
 FROM """ + _options.SchemaName + @""".""job"" 
 WHERE ""statename"" = @state;
 ";
