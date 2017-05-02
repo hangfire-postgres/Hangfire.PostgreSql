@@ -36,24 +36,22 @@ namespace Hangfire.PostgreSql
     internal class PostgreSqlMonitoringApi : IMonitoringApi
     {
         private readonly string _connectionString;
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
         private readonly PostgreSqlStorageOptions _options;
+        private readonly PersistentJobQueueProviderCollection _queueProviders;
 
         public PostgreSqlMonitoringApi(
             string connectionString,
             PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
-            if(options==null) throw new ArgumentNullException(nameof(options));
-
-            _connectionString = connectionString;
-            _queueProviders = queueProviders;
-            _options = options;
+            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
         }
 
         public long ScheduledCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetNumberOfJobsByStateName(connection, ScheduledState.StateName));
         }
 
@@ -81,13 +79,13 @@ namespace Hangfire.PostgreSql
 
         public long FailedCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetNumberOfJobsByStateName(connection, FailedState.StateName));
         }
 
         public long ProcessingCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetNumberOfJobsByStateName(connection, ProcessingState.StateName));
         }
 
@@ -121,13 +119,13 @@ namespace Hangfire.PostgreSql
 
         public IDictionary<DateTime, long> SucceededByDatesCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetTimelineStats(connection, "succeeded"));
         }
 
         public IDictionary<DateTime, long> FailedByDatesCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetTimelineStats(connection, "failed"));
         }
 
@@ -136,7 +134,7 @@ namespace Hangfire.PostgreSql
             return UseConnection<IList<ServerDto>>(connection =>
             {
                 var servers = connection.Query<Entities.Server>(
-                    @"SELECT * FROM """ + _options.SchemaName + @""".""server""", null)
+                    @"SELECT * FROM """ + _options.SchemaName + @""".""server""")
                     .ToList();
 
                 var result = new List<ServerDto>();
@@ -149,7 +147,7 @@ namespace Hangfire.PostgreSql
                         Name = server.Id,
                         Heartbeat = server.LastHeartbeat,
                         Queues = data.Queues,
-                        StartedAt = data.StartedAt.HasValue ? data.StartedAt.Value : DateTime.MinValue,
+                        StartedAt = data.StartedAt ?? DateTime.MinValue,
                         WorkersCount = data.WorkerCount
                     });
                 }
@@ -262,13 +260,13 @@ namespace Hangfire.PostgreSql
 
         public IDictionary<DateTime, long> HourlySucceededJobs()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetHourlyTimelineStats(connection, "succeeded"));
         }
 
         public IDictionary<DateTime, long> HourlyFailedJobs()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetHourlyTimelineStats(connection, "failed"));
         }
 
@@ -322,13 +320,13 @@ ORDER BY ""id"" DESC;
 
         public long SucceededListCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetNumberOfJobsByStateName(connection, SucceededState.StateName));
         }
 
         public long DeletedListCount()
         {
-            return UseConnection(connection => 
+            return UseConnection(connection =>
                 GetNumberOfJobsByStateName(connection, DeletedState.StateName));
         }
 
@@ -336,25 +334,25 @@ ORDER BY ""id"" DESC;
         {
             return UseConnection(connection =>
             {
-                string sql = @"
+                var sql = $@"
 SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
-FROM """ + _options.SchemaName + @""".""job""
-GROUP BY ""statename""
-HAVING ""statename"" IS NOT NULL;
+FROM ""{_options.SchemaName}"".""job""
+WHERE ""statename"" IS NOT NULL
+GROUP BY ""statename"";
 
-SELECT COUNT(""id"") 
-FROM """ + _options.SchemaName + @""".""server"";
+SELECT COUNT(*) 
+FROM ""{_options.SchemaName}"".""server"";
 
 SELECT SUM(""value"") 
-FROM """ + _options.SchemaName + @""".""counter"" 
+FROM ""{_options.SchemaName}"".""counter"" 
 WHERE ""key"" = 'stats:succeeded';
 
 SELECT SUM(""value"") 
-FROM """ + _options.SchemaName + @""".""counter"" 
+FROM ""{_options.SchemaName}"".""counter"" 
 WHERE ""key"" = 'stats:deleted';
 
 SELECT COUNT(*) 
-FROM """ + _options.SchemaName + @""".""set"" 
+FROM ""{_options.SchemaName}"".""set"" 
 WHERE ""key"" = 'recurring-jobs';
 ";
 
@@ -363,12 +361,12 @@ WHERE ""key"" = 'recurring-jobs';
                 {
                     var countByStates = multi.Read().ToDictionary(x => x.State, x => x.Count);
 
-                    Func<string, long> getCountIfExists = name => countByStates.ContainsKey(name) ? countByStates[name] : 0;
+                    long GetCountIfExists(string name) => countByStates.ContainsKey(name) ? countByStates[name] : 0;
 
-                    stats.Enqueued = getCountIfExists(EnqueuedState.StateName);
-                    stats.Failed = getCountIfExists(FailedState.StateName);
-                    stats.Processing = getCountIfExists(ProcessingState.StateName);
-                    stats.Scheduled = getCountIfExists(ScheduledState.StateName);
+                    stats.Enqueued = GetCountIfExists(EnqueuedState.StateName);
+                    stats.Failed = GetCountIfExists(FailedState.StateName);
+                    stats.Processing = GetCountIfExists(ProcessingState.StateName);
+                    stats.Scheduled = GetCountIfExists(ScheduledState.StateName);
 
                     stats.Servers = multi.Read<long>().Single();
 
@@ -398,7 +396,7 @@ WHERE ""key"" = 'recurring-jobs';
                 endDate = endDate.AddHours(-1);
             }
 
-            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd-HH")), x => x);
+            var keyMaps = dates.ToDictionary(x => $"stats:{type}:{x:yyyy-MM-dd-HH}", x => x);
 
             return GetTimelineStats(connection, keyMaps);
         }
@@ -415,23 +413,23 @@ WHERE ""key"" = 'recurring-jobs';
                 dates.Add(endDate);
                 endDate = endDate.AddDays(-1);
             }
-            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd")), x => x);
- 
+            var keyMaps = dates.ToDictionary(x => $"stats:{type}:{x:yyyy-MM-dd}", x => x);
+
             return GetTimelineStats(connection, keyMaps);
         }
 
         private Dictionary<DateTime, long> GetTimelineStats(NpgsqlConnection connection,
             IDictionary<string, DateTime> keyMaps)
         {
-            string sqlQuery = @"
+            var query = $@"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
-FROM """ + _options.SchemaName + @""".""counter""
-GROUP BY ""key""
-HAVING ""key"" = ANY (@keys);
+FROM ""{_options.SchemaName}"".""counter""
+WHERE ""key"" = ANY (@keys)
+GROUP BY ""key"";
 ";
 
             var valuesMap = connection.Query(
-                sqlQuery,
+                query,
                 new { keys = keyMaps.Keys.ToList() })
                 .ToList()
                 .ToDictionary(x => (string)x.key, x => (long)x.count);
@@ -452,7 +450,7 @@ HAVING ""key"" = ANY (@keys);
         }
 
         private IPersistentJobQueueMonitoringApi GetQueueApi(
-            NpgsqlConnection connection, 
+            NpgsqlConnection connection,
             string queueName)
         {
             var provider = _queueProviders.GetProvider(queueName);
@@ -544,7 +542,7 @@ LIMIT @count OFFSET @start;
 
             var jobs = connection.Query<SqlJob>(
                         jobsSql,
-                        new { stateName = stateName, start = from,  count = count })
+                        new { stateName = stateName, start = from, count = count })
                         .ToList();
 
             return DeserializeJobs(jobs, selector);
