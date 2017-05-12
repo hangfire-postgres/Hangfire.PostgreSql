@@ -30,69 +30,72 @@ using Hangfire.Server;
 namespace Hangfire.PostgreSql
 {
 #if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
-	public
+    public
 #else
 	internal
 #endif
-	class ExpirationManager : IBackgroundProcess, IServerComponent
-	{
-		private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
-		private const int NumberOfRecordsInSinglePass = 1000;
+    class ExpirationManager : IBackgroundProcess, IServerComponent
+    {
+        private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
+        private const int NumberOfRecordsInSinglePass = 1000;
 
 #if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
         private static readonly ILog Logger = LogProvider.GetLogger(typeof(ExpirationManager));
 #else
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
 #endif
+
+        private static readonly string[] ProcessedCounters =
+        {
+            "stats:succeeded",
+            "stats:deleted",
+        };
+
         private static readonly string[] ProcessedTables =
-		{
-			"counter",
-			"job",
-			"list",
-			"set",
-			"hash",
-		};
+        {
+            "counter",
+            "job",
+            "list",
+            "set",
+            "hash",
+        };
 
-		private readonly PostgreSqlStorage _storage;
-		private readonly TimeSpan _checkInterval;
-		private readonly PostgreSqlStorageOptions _options;
+        private readonly PostgreSqlStorage _storage;
+        private readonly PostgreSqlStorageOptions _options;
+        private readonly TimeSpan _checkInterval;
 
-		public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
-			: this(storage, options, TimeSpan.FromHours(1))
-		{
-		}
+        public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+            : this(storage, options, TimeSpan.FromHours(1))
+        {
+        }
 
-		public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options, TimeSpan checkInterval)
-		{
-			if (storage == null) throw new ArgumentNullException(nameof(storage));
-			if (options == null) throw new ArgumentNullException(nameof(options));
+        public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options, TimeSpan checkInterval)
+        {
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _checkInterval = checkInterval;
+        }
 
-			_options = options;
-			_storage = storage;
-			_checkInterval = checkInterval;
-		}
+        public override string ToString() => "SQL Records Expiration Manager";
 
-		public void Execute(BackgroundProcessContext context)
-		{
-			Execute(context.CancellationToken);
-		}
+        public void Execute(BackgroundProcessContext context) => Execute(context.CancellationToken);
 
-		public void Execute(CancellationToken cancellationToken)
-		{
-			foreach (var table in ProcessedTables)
-			{
-				Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
+        public void Execute(CancellationToken cancellationToken)
+        {
+            foreach (var table in ProcessedTables)
+            {
+                Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
-				int removedCount = 0;
+                int removedCount = 0;
 
-				do
-				{
-					using (var storageConnection = (PostgreSqlConnection)_storage.GetConnection())
-					{
-						using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
-						{
-							removedCount = storageConnection.Connection.Execute(
-								string.Format(@"
+                do
+                {
+                    using (var storageConnection = (PostgreSqlConnection)_storage.GetConnection())
+                    {
+                        using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                        {
+                            removedCount = storageConnection.Connection.Execute(
+                                string.Format(@"
 DELETE FROM """ + _options.SchemaName + @""".""{0}"" 
 WHERE ""id"" IN (
     SELECT ""id"" 
@@ -101,26 +104,59 @@ WHERE ""id"" IN (
     LIMIT {1}
 )", table, NumberOfRecordsInSinglePass.ToString(CultureInfo.InvariantCulture)), transaction);
 
-							transaction.Commit();
-						}
-					}
+                            transaction.Commit();
+                        }
+                    }
 
-					if (removedCount > 0)
-					{
-						Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
+                    if (removedCount > 0)
+                    {
+                        Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
-						cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
-						cancellationToken.ThrowIfCancellationRequested();
-					}
-				} while (removedCount != 0);
-			}
+                        cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                } while (removedCount != 0);
+            }
+            AggregateCounters(cancellationToken);
+            cancellationToken.WaitHandle.WaitOne(_checkInterval);
+        }
 
-			cancellationToken.WaitHandle.WaitOne(_checkInterval);
-		}
+        private void AggregateCounters(CancellationToken cancellationToken)
+        {
+            foreach (var processedCounter in ProcessedCounters)
+            {
+                AggregateCounter(processedCounter);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+        }
 
-		public override string ToString()
-		{
-			return "SQL Records Expiration Manager";
-		}
-	}
+        private void AggregateCounter(string counterName)
+        {
+            using (var connection = (PostgreSqlConnection)_storage.GetConnection())
+            {
+                using (var transaction = connection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    var aggregateQuery = $@"
+WITH counters AS (
+DELETE FROM ""{_options.SchemaName}"".""counter""
+WHERE ""key"" = '{counterName}'
+AND ""expireat"" IS NULL
+RETURNING *
+)
+
+SELECT SUM(value) FROM counters;
+";
+
+                    var aggregatedValue = connection.Connection.ExecuteScalar<long>(aggregateQuery, transaction: transaction);
+                    transaction.Commit();
+
+                    if (aggregatedValue > 0)
+                    {
+                        var insertQuery = $@"INSERT INTO ""{_options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@key, @value);";
+                        connection.Connection.Execute(insertQuery, new { key = counterName, value = aggregatedValue });
+                    }
+                }
+            }
+        }
+    }
 }
