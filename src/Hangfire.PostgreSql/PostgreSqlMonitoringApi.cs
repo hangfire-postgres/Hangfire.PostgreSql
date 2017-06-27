@@ -536,7 +536,7 @@ SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments""
 FROM """ + _options.SchemaName + @""".""job"" j
 LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
 WHERE j.""statename"" = @stateName 
-ORDER BY j.""id""
+ORDER BY j.""id"" DESC
 LIMIT @count OFFSET @start;
 ";
 

@@ -324,14 +324,26 @@ WHERE NOT EXISTS (
 	AND ""updatedrows"".""field"" = ""insertvalues"".""field""
 );
 ";
-
-			using (var transaction = _connection.BeginTransaction(IsolationLevel.Serializable))
+			var execute = true;
+			while (execute)
 			{
-				foreach (var keyValuePair in keyValuePairs)
+				try
 				{
-					_connection.Execute(sql, new { key = key, field = keyValuePair.Key, value = keyValuePair.Value }, transaction);
+					using (var transaction = _connection.BeginTransaction(IsolationLevel.Serializable))
+					{
+						foreach (var keyValuePair in keyValuePairs)
+						{
+							_connection.Execute(sql, new {key = key, field = keyValuePair.Key, value = keyValuePair.Value}, transaction);
+						}
+						transaction.Commit();
+						execute = false;
+					}
 				}
-				transaction.Commit();
+				catch (PostgresException exception)
+				{
+					if (!exception.SqlState.Equals("40001"))
+						throw;
+				}
 			}
 		}
 

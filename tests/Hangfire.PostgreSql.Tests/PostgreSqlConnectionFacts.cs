@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
+using System.Threading.Tasks;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.Server;
@@ -783,6 +785,22 @@ values (@key, 0.0, @value)";
 
 				Assert.Equal("Value1", result["Key1"]);
 				Assert.Equal("Value2", result["Key2"]);
+			});
+		}
+
+		[Fact, CleanDatabase]
+		public void SetRangeInHash_DoesNotThrowSerializationException()
+		{
+			Parallel.For(1, 1000, (i) =>
+			{
+				UseConnection((connection2) =>
+				{
+					connection2.SetRangeInHash("some-hash", new Dictionary<string, string>
+					{
+						{"Key1", "Value1"},
+						{"Key2", "Value2"}
+					});
+				});
 			});
 		}
 
