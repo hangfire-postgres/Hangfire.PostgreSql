@@ -9,19 +9,18 @@ and here: http://hangfire.io/
 
 Instructions
 ------------
+For .NET 
+---
 Install Hangfire, see https://github.com/HangfireIO/Hangfire#installation
 
 Download all files from this repository, add the Hangfire.PostgreSql.csproj to your solution.
 Reference it in your project, and you are ready to go by using:
 
-For .NET 
----
 ```csharp
 app.UseHangfireServer(new BackgroundJobServerOptions(), 
   new PostgreSqlStorage("<connection string or its name>"));
 app.UseHangfireDashboard();
 ```
-
 
 For ASP.NET Core
 ---
