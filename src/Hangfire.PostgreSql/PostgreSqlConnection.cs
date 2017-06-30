@@ -22,6 +22,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -325,6 +326,7 @@ WHERE NOT EXISTS (
 );
 ";
 			var execute = true;
+			var executionTimer = Stopwatch.StartNew();
 			while (execute)
 			{
 				try
@@ -344,6 +346,9 @@ WHERE NOT EXISTS (
 					if (!exception.SqlState.Equals("40001"))
 						throw;
 				}
+
+				if(executionTimer.Elapsed > _options.TransactionSynchronisationTimeout)
+					throw new TimeoutException("SetRangeInHash experienced timeout while trying to execute transaction");
 			}
 		}
 

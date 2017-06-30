@@ -14,9 +14,10 @@
     <PackageReleaseNotes>https://github.com/frankhommers/Hangfire.PostgreSql/releases</PackageReleaseNotes>
     <PackageProjectUrl>http://hmm.rs/Hangfire.PostgreSql</PackageProjectUrl>
     <PackageLicenseUrl>https://raw.github.com/frankhommers/Hangfire.PostgreSql/master/LICENSE.md</PackageLicenseUrl>
-    <Version>1.4.8</Version>
-    <FileVersion>1.4.8.0</FileVersion>
-    <AssemblyVersion>1.4.8.0</AssemblyVersion>
+    <Version>1.4.8.1</Version>
+    <FileVersion>1.4.8.1</FileVersion>
+    <AssemblyVersion>1.4.8.1</AssemblyVersion>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="1.50.2" />
-    <PackageReference Include="Hangfire.Core" Version="1.6.12" />
+    <PackageReference Include="Hangfire.Core" Version="1.6.14" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
     <PackageReference Include="Npgsql" Version="3.2.2" />
   </ItemGroup>
