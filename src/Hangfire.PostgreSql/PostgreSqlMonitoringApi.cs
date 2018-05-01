@@ -303,7 +303,9 @@ ORDER BY ""id"" DESC;
                                 StateName = x.Name,
                                 CreatedAt = x.CreatedAt,
                                 Reason = x.Reason,
-                                Data = JobHelper.FromJson<Dictionary<string, string>>(x.Data)
+                                Data = new SafeDictionary<string, string>(
+                                    JobHelper.FromJson<Dictionary<string, string>>(x.Data),
+                                    StringComparer.OrdinalIgnoreCase)
                             })
                             .ToList();
 
@@ -550,14 +552,23 @@ LIMIT @count OFFSET @start;
 
         private static JobList<TDto> DeserializeJobs<TDto>(
             ICollection<SqlJob> jobs,
-            Func<SqlJob, Job, Dictionary<string, string>, TDto> selector)
+            Func<SqlJob, Job, SafeDictionary<string, string>, TDto> selector)
         {
             var result = new List<KeyValuePair<string, TDto>>(jobs.Count);
 
             foreach (var job in jobs)
             {
-                var stateData = JobHelper.FromJson<Dictionary<string, string>>(job.StateData);
-                var dto = selector(job, DeserializeJob(job.InvocationData, job.Arguments), stateData);
+                var dto = default(TDto);
+
+                if (job.InvocationData != null)
+                {
+                    var deserializedData = JobHelper.FromJson<Dictionary<string, string>>(job.StateData);
+                    var stateData = deserializedData != null
+                        ? new SafeDictionary<string, string>(deserializedData, StringComparer.OrdinalIgnoreCase)
+                        : null;
+
+                    dto = selector(job, DeserializeJob(job.InvocationData, job.Arguments), stateData);
+                }
 
                 result.Add(new KeyValuePair<string, TDto>(
                     job.Id.ToString(), dto));
@@ -600,6 +611,24 @@ AND ""jq"".""fetchedat"" IS NOT NULL;
             }
 
             return new JobList<FetchedJobDto>(result);
+        }
+
+        /// <summary>
+        /// Overloaded dictionary that doesn't throw if given an invalid key
+        /// Fixes issues such as https://github.com/frankhommers/Hangfire.PostgreSql/issues/79
+        /// </summary>
+        private class SafeDictionary<TKey, TValue> : Dictionary<TKey, TValue>
+        {
+            public SafeDictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer)
+                : base(dictionary, comparer)
+            {
+            }
+
+            public new TValue this[TKey i]
+            {
+                get { return ContainsKey(i) ? base[i] : default(TValue); }
+                set { base[i] = value; }
+            }
         }
     }
 }
