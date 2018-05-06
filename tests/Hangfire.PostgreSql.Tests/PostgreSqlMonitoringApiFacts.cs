@@ -55,7 +55,6 @@ namespace Hangfire.PostgreSql.Tests
 
                 var state = new Mock<IState>();
                 state.Setup(x => x.Name).Returns(SucceededState.StateName);
-                state.Setup(x => x.Reason).Returns("Reason");
                 state.Setup(x => x.SerializeData())
                     .Returns(new Dictionary<string, string>
                     {
