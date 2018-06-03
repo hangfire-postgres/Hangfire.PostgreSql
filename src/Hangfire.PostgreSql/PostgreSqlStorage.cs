@@ -103,9 +103,6 @@ namespace Hangfire.PostgreSql
 			if (existingConnection == null) throw new ArgumentNullException(nameof(existingConnection));
 			if (options == null) throw new ArgumentNullException(nameof(options));
 			var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
-			if (connectionStringBuilder.Enlist)
-				throw new ArgumentException(
-					"Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
 
 			_existingConnection = existingConnection;
 			_options = options;
@@ -117,9 +114,6 @@ namespace Hangfire.PostgreSql
 		{
 			if (existingConnection == null) throw new ArgumentNullException(nameof(existingConnection));
 			var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
-			if (connectionStringBuilder.Enlist)
-				throw new ArgumentException(
-					"Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
 
 			_existingConnection = existingConnection;
 			_options = new PostgreSqlStorageOptions();
@@ -180,12 +174,7 @@ namespace Hangfire.PostgreSql
 
 		internal NpgsqlConnection CreateAndOpenConnection()
 		{
-			var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString)
-			{
-				Enlist = false //Npgsql is not fully compatible with TransactionScope yet.
-			};
-
-			var connection = new NpgsqlConnection(connectionStringBuilder.ToString());
+			var connection = new NpgsqlConnection(_connectionString);
 			connection.Open();
 
 			return connection;
