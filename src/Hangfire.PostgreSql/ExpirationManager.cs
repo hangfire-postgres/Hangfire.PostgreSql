@@ -29,7 +29,7 @@ using Hangfire.Server;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#if (NETSTANDARD2_0)
     public
 #else
 	internal
@@ -39,7 +39,7 @@ namespace Hangfire.PostgreSql
         private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
         private const int NumberOfRecordsInSinglePass = 1000;
 
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#if (NETSTANDARD2_0)
         private static readonly ILog Logger = LogProvider.GetLogger(typeof(ExpirationManager));
 #else
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();

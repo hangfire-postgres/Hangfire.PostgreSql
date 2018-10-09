@@ -23,8 +23,8 @@ using System;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
-	public
+#if (NETSTANDARD2_0)
+    public
 #else
     [Serializable]
 	internal
