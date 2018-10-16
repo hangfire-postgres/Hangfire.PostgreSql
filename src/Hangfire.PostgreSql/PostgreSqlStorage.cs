@@ -21,7 +21,7 @@
 
 using System;
 using System.Collections.Generic;
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#if (NETSTANDARD2_0)
 #else
 using System.Configuration;
 #endif
@@ -67,15 +67,15 @@ namespace Hangfire.PostgreSql
 			{
 				_connectionString = nameOrConnectionString;
 			}
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#if (NETSTANDARD2_0)
 #else
 			else if (IsConnectionStringInConfiguration(nameOrConnectionString))
 			{
 				_connectionString = ConfigurationManager.ConnectionStrings[nameOrConnectionString].ConnectionString;
 			}
 #endif
-			else
-			{
+            else
+            {
 				throw new ArgumentException(
 					$"Could not find connection string with name '{nameOrConnectionString}' in application config file");
 			}
@@ -204,7 +204,7 @@ namespace Hangfire.PostgreSql
 
 		private bool IsConnectionStringInConfiguration(string connectionStringName)
 		{
-#if (NETCORE1 || NETCORE50 || NETSTANDARD1_5 || NETSTANDARD1_6)
+#if (NETSTANDARD2_0)
             return false;
 #else
             var connectionStringSetting = ConfigurationManager.ConnectionStrings[connectionStringName];
