@@ -426,6 +426,23 @@ select i.""id"", @queue from i;
 			Enqueue_AddsAJobToTheQueue(false);
 		}
 
+		[Fact, CleanDatabase]
+		public void Queues_Should_Support_Long_Queue_Names()
+		{
+			UseConnection(connection =>
+			{
+				var queue = CreateJobQueue(connection, false);
+
+				var name = "very_long_name_that_is_over_20_characters_long_or_something";
+
+				Assert.True(name.Length > 21);
+
+				queue.Enqueue(name, "1");
+
+				var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
+				Assert.Equal(name, record.queue.ToString());
+			});
+		}
 
 		private void Enqueue_AddsAJobToTheQueue(bool useNativeDatabaseTransactions)
 		{
