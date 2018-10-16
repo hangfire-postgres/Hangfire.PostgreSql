@@ -124,7 +124,7 @@ $$;
 
 CREATE TABLE IF NOT EXISTS "jobqueue" (  "id" SERIAL NOT NULL ,
   "jobid" INT NOT NULL ,
-  "queue" VARCHAR(20) NOT NULL ,
+  "queue" VARCHAR(100) NOT NULL ,
   "fetchedat" TIMESTAMP NULL ,
   PRIMARY KEY ("id")
 ); 
