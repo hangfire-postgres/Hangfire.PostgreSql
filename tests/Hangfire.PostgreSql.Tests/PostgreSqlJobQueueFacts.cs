@@ -448,7 +448,9 @@ select i.""id"", @queue from i;
 			return source.Token;
 		}
 
+#pragma warning disable xUnit1013 // Public method should be marked as test
 		public static void Sample(string arg1, string arg2)
+#pragma warning restore xUnit1013 // Public method should be marked as test
 		{
 		}
 

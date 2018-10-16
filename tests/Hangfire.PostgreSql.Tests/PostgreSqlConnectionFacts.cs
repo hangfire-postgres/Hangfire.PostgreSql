@@ -191,8 +191,8 @@ namespace Hangfire.PostgreSql.Tests
 				var sqlJob = sql.Query(@"select * from """ + GetSchemaName() + @""".""job""").Single();
 				Assert.Equal(jobId, sqlJob.id.ToString());
 				Assert.Equal(createdAt, sqlJob.createdat);
-				Assert.Equal(null, (int?) sqlJob.stateid);
-				Assert.Equal(null, (string) sqlJob.statename);
+				Assert.Null((int?) sqlJob.stateid);
+				Assert.Null((string) sqlJob.statename);
 
 				var invocationData = JobHelper.FromJson<InvocationData>((string) sqlJob.invocationdata);
 				invocationData.Arguments = sqlJob.arguments;
@@ -712,7 +712,7 @@ values (@id, '', @heartbeat)";
 				var result = connection.GetAllItemsFromSet("some-set");
 
 				Assert.NotNull(result);
-				Assert.Equal(0, result.Count);
+				Assert.Empty(result);
 			});
 		}
 
@@ -1349,7 +1349,9 @@ values (@key, @field, @value)";
 			return ConnectionUtils.GetSchemaName();
 		}
 
+#pragma warning disable xUnit1013 // Public method should be marked as test
 		public static void SampleMethod(string arg)
+#pragma warning restore xUnit1013 // Public method should be marked as test
 		{
 		}
 	}

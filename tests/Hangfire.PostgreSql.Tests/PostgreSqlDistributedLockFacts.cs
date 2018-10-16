@@ -63,7 +63,7 @@ namespace Hangfire.PostgreSql.Tests
                     @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource",
                     new { resource = "hello" }).Single();
 
-                Assert.Equal(lockCount, 1);
+                Assert.Equal(1, lockCount);
                 //Assert.Equal("Exclusive", lockMode);
             });
         }
@@ -111,7 +111,7 @@ namespace Hangfire.PostgreSql.Tests
                     @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource",
                     new { resource = "hello" }).Single();
 
-                Assert.Equal(lockCount, 1);
+                Assert.Equal(1, lockCount);
                 //Assert.Equal("Exclusive", lockMode);
             });
         }
@@ -202,7 +202,7 @@ namespace Hangfire.PostgreSql.Tests
                     @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource",
                     new { resource = "hello" }).Single();
 
-                Assert.Equal(lockCount, 0);
+                Assert.Equal(0, lockCount);
             });
         }
 
@@ -224,7 +224,7 @@ namespace Hangfire.PostgreSql.Tests
                     @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource",
                     new { resource = "hello" }).Single();
 
-                Assert.Equal(lockCount, 0);
+                Assert.Equal(0, lockCount);
             });
         }
 

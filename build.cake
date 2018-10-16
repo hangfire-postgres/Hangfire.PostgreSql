@@ -1,4 +1,4 @@
-#addin "Cake.Json"
+#addin nuget:?package=Newtonsoft.Json&version=9.0.1
 
 //////////////////////////////////////////////////////////////////////
 // ARGUMENTS
@@ -12,7 +12,7 @@ var target = Argument("target", "Default");
 
 IEnumerable<string> GetFrameworks(string path) 
 {
-	return new string[] { "netstandard1.4", "net451" };
+	return new string[] { "netstandard2.0", "net451" };
 }
 
 //////////////////////////////////////////////////////////////////////

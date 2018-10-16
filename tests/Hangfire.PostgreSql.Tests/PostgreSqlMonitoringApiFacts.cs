@@ -91,8 +91,10 @@ namespace Hangfire.PostgreSql.Tests
             }
         }
 
-        public static void SampleMethod(string arg)
-        {
+#pragma warning disable xUnit1013 // Public method should be marked as test
+		public static void SampleMethod(string arg)
+#pragma warning restore xUnit1013 // Public method should be marked as test
+		{
         }
     }
 }
