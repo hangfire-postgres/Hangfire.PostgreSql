@@ -19,14 +19,14 @@ SET search_path = 'hangfire';
 
 CREATE TABLE IF NOT EXISTS "schema" (  "version" INT NOT NULL ,
   PRIMARY KEY ("version")
-); 
+);
 
 
 DO
 $$
 BEGIN
     IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 3) THEN
-        RAISE EXCEPTION 'version-already-applied';
+        RAISE NOTICE 'version-already-applied';
     END IF;
 END
 $$;
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS "counter" (  "id" SERIAL NOT NULL ,
   "value" SMALLINT NOT NULL ,
   "expireat" TIMESTAMP NULL ,
   PRIMARY KEY ("id")
-); 
+);
 
 DO $$
 BEGIN
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS "hash" (  "id" SERIAL NOT NULL ,
   "expireat" TIMESTAMP NULL ,
   PRIMARY KEY ("id"),
   UNIQUE ("key","field")
-); 
+);
 
 
 --
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS "job" (  "id" SERIAL NOT NULL ,
   "createdat" TIMESTAMP NOT NULL ,
   "expireat" TIMESTAMP NULL ,
   PRIMARY KEY ("id")
-); 
+);
 
 DO $$
 BEGIN
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS "state" (  "id" SERIAL NOT NULL ,
   "createdat" TIMESTAMP NOT NULL ,
   "data" TEXT NULL ,
   PRIMARY KEY ("id"),FOREIGN KEY ("jobid") REFERENCES "job" ( "id" ) ON UPDATE CASCADE ON DELETE CASCADE
-); 
+);
 
 DO $$
 BEGIN
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS "jobqueue" (  "id" SERIAL NOT NULL ,
   "queue" VARCHAR(20) NOT NULL ,
   "fetchedat" TIMESTAMP NULL ,
   PRIMARY KEY ("id")
-); 
+);
 
 DO $$
 BEGIN
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS "list" (  "id" SERIAL NOT NULL ,
   "value" TEXT NULL ,
   "expireat" TIMESTAMP NULL ,
   PRIMARY KEY ("id")
-); 
+);
 
 
 --
@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS "server" (  "id" VARCHAR(50) NOT NULL ,
   "data" TEXT NULL ,
   "lastheartbeat" TIMESTAMP NOT NULL ,
   PRIMARY KEY ("id")
-); 
+);
 
 
 --
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS "set" (  "id" SERIAL NOT NULL ,
   "expireat" TIMESTAMP NULL ,
   PRIMARY KEY ("id"),
   UNIQUE ("key","value")
-); 
+);
 
 
 --
@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS "jobparameter" (  "id" SERIAL NOT NULL ,
   "name" VARCHAR(40) NOT NULL ,
   "value" TEXT NULL ,
   PRIMARY KEY ("id"),FOREIGN KEY ("jobid") REFERENCES "job" ( "id" ) ON UPDATE CASCADE ON DELETE CASCADE
-); 
+);
 
 DO $$
 BEGIN
@@ -200,4 +200,4 @@ $$;
 
 CREATE TABLE IF NOT EXISTS "lock" ( "resource" VARCHAR(100) NOT NULL ,
   UNIQUE ("resource")
-); 
+);
