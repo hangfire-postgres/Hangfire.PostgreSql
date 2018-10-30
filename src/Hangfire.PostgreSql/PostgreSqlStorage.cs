@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -103,9 +103,6 @@ namespace Hangfire.PostgreSql
 			if (existingConnection == null) throw new ArgumentNullException(nameof(existingConnection));
 			if (options == null) throw new ArgumentNullException(nameof(options));
 			var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
-			if (connectionStringBuilder.Enlist)
-				throw new ArgumentException(
-					"Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
 
 			_existingConnection = existingConnection;
 			_options = options;
@@ -117,9 +114,6 @@ namespace Hangfire.PostgreSql
 		{
 			if (existingConnection == null) throw new ArgumentNullException(nameof(existingConnection));
 			var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
-			if (connectionStringBuilder.Enlist)
-				throw new ArgumentException(
-					"Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
 
 			_existingConnection = existingConnection;
 			_options = new PostgreSqlStorageOptions();
