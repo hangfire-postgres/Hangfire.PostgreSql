@@ -1,5 +1,5 @@
 // This file is part of Hangfire.PostgreSql.
-// Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
+// Copyright ï¿½ 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as 
@@ -166,7 +166,9 @@ WHERE NOT EXISTS (
                 {
                 }
 
-                int rowsAffected = connection.Execute($@"UPDATE ""{options.SchemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0");
+                int rowsAffected = connection.Execute(
+                    $@"UPDATE ""{options.SchemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @resource",
+                    new { resource });
 
                 if (rowsAffected > 0) return;
 

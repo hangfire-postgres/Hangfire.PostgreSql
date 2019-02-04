@@ -104,8 +104,13 @@ namespace Hangfire.PostgreSql.Tests
 
             UseConnection(connection =>
             {
-                // ReSharper disable once UnusedVariable
+                // ReSharper disable UnusedVariable
+
+                // Acquire locks on two different resources to make sure they don't conflict.
                 var distributedLock = new PostgreSqlDistributedLock("hello", _timeout, connection, options);
+                var distributedLock2 = new PostgreSqlDistributedLock("hello2", _timeout, connection, options);
+
+                // ReSharper restore UnusedVariable
 
                 var lockCount = connection.Query<long>(
                     @"select count(*) from """ + GetSchemaName() + @""".""lock"" where ""resource"" = @resource",
