@@ -33,7 +33,7 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-    internal class PostgreSqlMonitoringApi : IMonitoringApi
+    public class PostgreSqlMonitoringApi : IMonitoringApi
     {
         private readonly string _connectionString;
         private readonly PostgreSqlStorageOptions _options;
@@ -386,6 +386,8 @@ WHERE ""key"" = 'recurring-jobs';
             });
         }
 
+        protected virtual NpgsqlConnection GetConnection() => new NpgsqlConnection(_connectionString);
+
         private Dictionary<DateTime, long> GetHourlyTimelineStats(
             NpgsqlConnection connection,
             string type)
@@ -463,7 +465,7 @@ GROUP BY ""key"";
 
         private T UseConnection<T>(Func<NpgsqlConnection, T> action)
         {
-            using (var connection = new NpgsqlConnection(_connectionString))
+            using (var connection = GetConnection())
             {
                 connection.Open();
                 var result = action(connection);
