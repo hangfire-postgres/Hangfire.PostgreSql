@@ -50,12 +50,12 @@ FROM """ + _options.SchemaName + @""".""jobqueue"";
             return _connection.Query(sqlQuery).Select(x => (string)x.queue).ToList();
         }
 
-        public IEnumerable<int> GetEnqueuedJobIds(string queue, int @from, int perPage)
+        public IEnumerable<long> GetEnqueuedJobIds(string queue, int @from, int perPage)
         {
             return GetQueuedOrFetchedJobIds(queue, false, @from, perPage);
         }
 
-        private IEnumerable<int> GetQueuedOrFetchedJobIds(string queue, bool fetched, int @from, int perPage)
+        private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int @from, int perPage)
         {
             string sqlQuery = string.Format(@"
 SELECT j.""id"" 
@@ -67,13 +67,13 @@ AND j.""id"" IS NOT NULL
 LIMIT @count OFFSET @start;
 ", fetched ? "IS NOT NULL" : "IS NULL");
 
-            return _connection.Query<int>(
+            return _connection.Query<long>(
                 sqlQuery,
                 new {queue = queue, start = @from, count = perPage})
                 .ToList();
         }
 
-        public IEnumerable<int> GetFetchedJobIds(string queue, int @from, int perPage)
+        public IEnumerable<long> GetFetchedJobIds(string queue, int @from, int perPage)
         {
             return GetQueuedOrFetchedJobIds(queue, true, @from, perPage);
         }

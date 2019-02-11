@@ -128,7 +128,7 @@ RETURNING ""id"";
 
 			var invocationData = InvocationData.Serialize(job);
 
-			var jobId = _connection.Query<int>(
+			var jobId = _connection.Query<long>(
 				createJobSql,
 				new
 				{

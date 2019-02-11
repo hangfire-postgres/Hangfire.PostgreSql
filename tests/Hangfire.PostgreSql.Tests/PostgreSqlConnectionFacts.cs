@@ -191,7 +191,7 @@ namespace Hangfire.PostgreSql.Tests
 				var sqlJob = sql.Query(@"select * from """ + GetSchemaName() + @""".""job""").Single();
 				Assert.Equal(jobId, sqlJob.id.ToString());
 				Assert.Equal(createdAt, sqlJob.createdat);
-				Assert.Null((int?) sqlJob.stateid);
+				Assert.Null((long?) sqlJob.stateid);
 				Assert.Null((string) sqlJob.statename);
 
 				var invocationData = JobHelper.FromJson<InvocationData>((string) sqlJob.invocationdata);
@@ -243,7 +243,7 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
 			{
 				var job = Job.FromExpression(() => SampleMethod("wrong"));
 
-                var jobId = (int) sql.Query(
+                var jobId = (long) sql.Query(
 					arrangeSql,
 					new
 					{
@@ -312,9 +312,9 @@ returning ""id"";";
 					{"Key", "Value"}
 				};
 
-				var jobId = (int) sql.Query(createJobSql).Single().id;
+				var jobId = (long) sql.Query(createJobSql).Single().id;
 
-				var stateId = (int) sql.Query(
+				var stateId = (long) sql.Query(
 					createStateSql,
 					new {jobId = jobId, name = "Name", reason = "Reason", @data = JobHelper.ToJson(data)}).Single().id;
 
@@ -347,7 +347,7 @@ values (@invocationData, @arguments, @stateName, now() at time zone 'utc') retur
 						arguments = "['Arguments']"
 					}).Single();
 
-				var result = connection.GetJobData(((int) jobId.id).ToString());
+				var result = connection.GetJobData(((long) jobId.id).ToString());
 
 				Assert.NotNull(result.LoadException);
 			});
@@ -493,7 +493,7 @@ RETURNING ""jobid"";
 ";
 			UseConnections((sql, connection) =>
 			{
-				var id = sql.Query<int>(
+				var id = sql.Query<long>(
 					arrangeSql,
 					new {name = "name", value = "value"}).Single();
 
