@@ -6,7 +6,7 @@ SET search_path = 'hangfire';
 DO
 $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 9) THEN
+    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 10) THEN
         RAISE EXCEPTION 'version-already-applied';
     END IF;
 END
