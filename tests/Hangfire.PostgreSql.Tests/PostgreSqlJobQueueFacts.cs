@@ -162,7 +162,7 @@ values (@jobId, @queue) returning ""id""";
 			// Arrange
 			UseConnection(connection =>
 			{
-				var id = (int) connection.Query(
+				var id = (long) connection.Query(
 					arrangeSql,
 					new {jobId = 1, queue = "default"}).Single().id;
 				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);

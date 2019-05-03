@@ -42,7 +42,7 @@ namespace Hangfire.PostgreSql
         public PostgreSqlFetchedJob(
             IDbConnection connection, 
             PostgreSqlStorageOptions options,
-            int id, 
+            long id, 
             string jobId, 
             string queue)
         {
@@ -59,7 +59,7 @@ namespace Hangfire.PostgreSql
             Queue = queue;
         }
 
-        public int Id { get; private set; }
+        public long Id { get; private set; }
         public string JobId { get; private set; }
         public string Queue { get; private set; }
 

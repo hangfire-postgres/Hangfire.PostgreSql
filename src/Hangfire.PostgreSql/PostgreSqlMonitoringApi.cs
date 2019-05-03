@@ -473,7 +473,7 @@ GROUP BY ""key"";
             }
         }
 
-        private JobList<EnqueuedJobDto> EnqueuedJobs(NpgsqlConnection connection, IEnumerable<int> jobIds)
+        private JobList<EnqueuedJobDto> EnqueuedJobs(NpgsqlConnection connection, IEnumerable<long> jobIds)
         {
             string enqueuedJobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", j.""expireat"" ""ExpireAt"", s.""name"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
@@ -581,7 +581,7 @@ LIMIT @count OFFSET @start;
 
         private JobList<FetchedJobDto> FetchedJobs(
             NpgsqlConnection connection,
-            IEnumerable<int> jobIds)
+            IEnumerable<long> jobIds)
         {
             string fetchedJobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 

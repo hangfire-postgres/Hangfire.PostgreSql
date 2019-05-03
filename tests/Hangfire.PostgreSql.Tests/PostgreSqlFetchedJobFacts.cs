@@ -146,14 +146,14 @@ namespace Hangfire.PostgreSql.Tests
 			});
 		}
 
-		private static int CreateJobQueueRecord(IDbConnection connection, string jobId, string queue)
+		private static long CreateJobQueueRecord(IDbConnection connection, string jobId, string queue)
 		{
 			string arrangeSql = @"
 insert into """ + GetSchemaName() + @""".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
 values (@id, @queue, now() at time zone 'utc') returning ""id""";
 
 			return
-				(int)
+				(long)
 					connection.Query(arrangeSql, new {id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), queue = queue})
 						.Single()
 						.id;

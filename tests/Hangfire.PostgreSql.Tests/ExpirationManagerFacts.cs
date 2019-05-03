@@ -201,7 +201,7 @@ values ('key', 'field', '', @expireAt)";
             }
         }
 
-        private static int CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt)
+        private static long CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt)
         {
             string insertSqlNull = @"
 insert into """ + GetSchemaName() + @""".""counter""(""key"", ""value"", ""expireat"")
@@ -217,11 +217,11 @@ values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning "
                     ((long)(DateTime.UtcNow - expireAt.Value).TotalSeconds).ToString(CultureInfo.InvariantCulture));
 
             var id = connection.Query(insertSql).Single();
-            var recordId = (int)id.id;
+            var recordId = (long)id.id;
             return recordId;
         }
 
-        private static bool IsEntryExpired(NpgsqlConnection connection, int entryId)
+        private static bool IsEntryExpired(NpgsqlConnection connection, long entryId)
         {
             var count = connection.Query<long>(
                 @"select count(*) from """ + GetSchemaName() + @""".""counter"" where ""id"" = @id", new { id = entryId }).Single();
