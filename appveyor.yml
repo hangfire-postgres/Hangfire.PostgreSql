@@ -1,12 +1,12 @@
-version: 1.4.0.{build}
+version: 1.6.0.{build}
 platform: Any CPU
 init:
 - ps: >-
-    Set-Content "c:\program files\postgresql\9.5\data\pg_hba.conf" "host    all             all             ::1/128            trust"
+    Set-Content "c:\program files\postgresql\9.6\data\pg_hba.conf" "host    all             all             ::1/128            trust"
 
-    Add-Content "c:\program files\postgresql\9.5\data\pg_hba.conf" "host    all             all             127.0.0.1/32            trust"
+    Add-Content "c:\program files\postgresql\9.6\data\pg_hba.conf" "host    all             all             127.0.0.1/32            trust"
 
-    $env:Path += ";c:\program files\postgresql\9.5\bin"
+    $env:Path += ";c:\program files\postgresql\9.6\bin"
 services: postgresql
 build_script:
 - ps: >-

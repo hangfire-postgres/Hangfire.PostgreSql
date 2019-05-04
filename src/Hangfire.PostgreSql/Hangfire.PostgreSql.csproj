@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).</Description>
-    <Copyright>Copyright © 2014-2018 Frank Hommers and others</Copyright>
+    <Copyright>Copyright © 2014-2019 Frank Hommers and others</Copyright>
     <AssemblyTitle>Hangfire PostgreSql Storage</AssemblyTitle>
     <VersionPrefix>1.5.0</VersionPrefix>
     <Authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)</Authors>
@@ -13,11 +13,14 @@
     <PackageTags>Hangfire;PostgreSql;Postgres</PackageTags>
     <PackageReleaseNotes>https://github.com/frankhommers/Hangfire.PostgreSql/releases</PackageReleaseNotes>
     <PackageProjectUrl>http://hmm.rs/Hangfire.PostgreSql</PackageProjectUrl>
-    <PackageLicenseUrl>https://raw.github.com/frankhommers/Hangfire.PostgreSql/master/LICENSE.md</PackageLicenseUrl>
-    <Version>1.5.0</Version>
-    <FileVersion>1.5.0</FileVersion>
-    <AssemblyVersion>1.5.0</AssemblyVersion>
+    <PackageLicenseUrl></PackageLicenseUrl>
+    <Version>1.6.0</Version>
+    <FileVersion>1.6.0</FileVersion>
+    <AssemblyVersion>1.6.0</AssemblyVersion>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <RepositoryUrl>https://github.com/frankhommers/Hangfire.PostgreSql</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,13 +32,20 @@
     <PackageReference Include="Hangfire.Core" Version="1.6.20" />
     <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.1" />
-    <PackageReference Include="Npgsql" Version="4.0.3" />
+    <PackageReference Include="Npgsql" Version="4.0.6" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == 'net451' ">
     <Reference Include="System.Configuration" />
     <Reference Include="System" />
     <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE.md">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
