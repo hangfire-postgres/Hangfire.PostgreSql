@@ -791,7 +791,7 @@ values (@key, 0.0, @value)";
 		[Fact, CleanDatabase]
 		public void SetRangeInHash_DoesNotThrowSerializationException()
 		{
-			Parallel.For(1, 1000, (i) =>
+			Parallel.For(1, 100, (i) =>
 			{
 				UseConnection((connection2) =>
 				{
