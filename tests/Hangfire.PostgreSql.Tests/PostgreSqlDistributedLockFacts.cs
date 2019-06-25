@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Data;
+using System.Globalization;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading;
 using Dapper;
 using Moq;
@@ -83,7 +85,8 @@ namespace Hangfire.PostgreSql.Tests
                 // Arrange
                 var timeout = TimeSpan.FromSeconds(15);
                 var resourceName = "hello";
-                connection.Execute($@"INSERT INTO ""{GetSchemaName()}"".""lock"" VALUES ('{resourceName}', 0, '{DateTime.UtcNow}')");
+                var dateTimeNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
+                connection.Execute($@"INSERT INTO ""{GetSchemaName()}"".""lock"" VALUES ('{resourceName}', 0, '{dateTimeNow}')");
 
                 // Act
                 var distributedLock = new PostgreSqlDistributedLock(resourceName, timeout, connection, options);
