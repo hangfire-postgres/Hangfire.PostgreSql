@@ -61,7 +61,7 @@ namespace Hangfire.PostgreSql
                     {
                         script = GetStringResource(
                           typeof(PostgreSqlObjectsInstaller).GetTypeInfo().Assembly,
-                          $"Hangfire.PostgreSql.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
+                          $"Hangfire.PostgreSql.Scripts.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
                     }
                     catch (MissingManifestResourceException)
                     {
