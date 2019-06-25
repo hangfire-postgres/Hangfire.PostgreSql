@@ -19,7 +19,7 @@
 //   
 //    Special thanks goes to him.
 
-using Hangfire.PostgreSql.Annotations;
+using Hangfire.PostgreSql.Properties;
 
 namespace Hangfire.PostgreSql.Entities
 {
