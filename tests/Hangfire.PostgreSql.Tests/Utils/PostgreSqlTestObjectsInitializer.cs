@@ -40,7 +40,7 @@ namespace Hangfire.PostgreSql.Tests
 
                script = GetStringResource(
               typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
-                "Hangfire.PostgreSql.Tests.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
+                "Hangfire.PostgreSql.Tests.Scripts.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
 
 			//connection.Execute(script);
 

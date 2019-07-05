@@ -26,7 +26,6 @@ namespace Hangfire.PostgreSql.Tests
 			return Environment.GetEnvironmentVariable(SchemaVariable) ?? DefaultSchemaName;
 		}
 
-
 		public static string GetMasterConnectionString()
 		{
 			return String.Format(GetConnectionStringTemplate(), MasterDatabaseName);
@@ -49,10 +48,28 @@ namespace Hangfire.PostgreSql.Tests
 			{
 				Enlist = false
 			};
-			var connection = new NpgsqlConnection(csb.ToString());
+			var connection = new NpgsqlConnection
+			{
+                ConnectionString = csb.ToString()
+            };
 			connection.Open();
 
 			return connection;
 		}
-	}
+
+	    public static NpgsqlConnection CreateMasterConnection()
+	    {
+	        NpgsqlConnectionStringBuilder csb = new NpgsqlConnectionStringBuilder(GetMasterConnectionString())
+	        {
+	            Enlist = false
+	        };
+	        var connection = new NpgsqlConnection
+	        {
+	            ConnectionString = csb.ToString()
+	        };
+	        connection.Open();
+
+	        return connection;
+	    }
+    }
 }

@@ -25,7 +25,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Dapper;
-using Hangfire.PostgreSql.Annotations;
+using Hangfire.PostgreSql.Properties;
 using Hangfire.Storage;
 using Npgsql;
 
@@ -95,7 +95,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 
 				string fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[currentQueryIndex]);
 
-				Utils.TryExecute(() =>
+				Utils.Utils.TryExecute(() =>
 				{
 					using (var trx = _connection.BeginTransaction(IsolationLevel.RepeatableRead))
 					{

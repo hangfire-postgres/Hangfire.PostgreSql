@@ -19,6 +19,9 @@
 //   
 //    Special thanks goes to him.
 
+using System;
+using Npgsql;
+
 namespace Hangfire.PostgreSql
 {
 	public static class PostgreSqlBootstrapperConfigurationExtensions
@@ -94,5 +97,47 @@ namespace Hangfire.PostgreSql
 
             return storage;
         }
+
+	    /// <summary>
+	    /// Tells the bootstrapper to use PostgreSQL as a job storage
+	    /// with the given options, that can be accessed using the specified
+	    /// connection string or its name.
+	    /// </summary>
+	    /// <param name="configuration">Configuration</param>
+	    /// <param name="nameOrConnectionString">Connection string or its name</param>
+	    /// <param name="connectionSetup">Optional setup action to apply to created connections</param>
+	    /// <param name="options">Advanced options</param>
+	    public static PostgreSqlStorage UsePostgreSqlStorage(
+	        this GlobalConfiguration configuration,
+	        string nameOrConnectionString,
+	        Action<NpgsqlConnection> connectionSetup,
+	        PostgreSqlStorageOptions options)
+	    {
+	        var storage = new PostgreSqlStorage(nameOrConnectionString, connectionSetup, options);
+	        configuration.UseStorage(storage);
+
+	        return storage;
+        }
+
+        /// <summary>
+        /// Tells the bootstrapper to use PostgreSQL as a job storage
+        /// with the given options, that can be accessed using the specified
+        /// connection string or its name.
+        /// </summary>
+        /// <param name="configuration">Configuration</param>
+        /// <param name="nameOrConnectionString">Connection string or its name</param>
+        /// <param name="connectionSetup">Optional setup action to apply to created connections</param>
+        /// <param name="options">Advanced options</param>
+        public static PostgreSqlStorage UsePostgreSqlStorage(
+	        this IGlobalConfiguration configuration,
+	        string nameOrConnectionString,
+            Action<NpgsqlConnection> connectionSetup,
+	        PostgreSqlStorageOptions options)
+	    {
+	        var storage = new PostgreSqlStorage(nameOrConnectionString, connectionSetup, options);
+            configuration.UseStorage(storage);
+
+	        return storage;
+	    }
     }
 }

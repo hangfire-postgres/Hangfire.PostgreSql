@@ -20,9 +20,8 @@
 //    Special thanks goes to him.
 
 using System;
-using Npgsql;
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql.Utils
 {
     public static partial class Utils
     {

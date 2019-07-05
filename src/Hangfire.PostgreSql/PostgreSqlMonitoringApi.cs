@@ -21,6 +21,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Globalization;
 using System.Linq;
 using Dapper;
@@ -35,16 +36,16 @@ namespace Hangfire.PostgreSql
 {
     public class PostgreSqlMonitoringApi : IMonitoringApi
     {
-        private readonly string _connectionString;
+        private readonly NpgsqlConnection _connection;
         private readonly PostgreSqlStorageOptions _options;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
         public PostgreSqlMonitoringApi(
-            string connectionString,
+            NpgsqlConnection connection,
             PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
-            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
         }
@@ -386,7 +387,7 @@ WHERE ""key"" = 'recurring-jobs';
             });
         }
 
-        protected virtual NpgsqlConnection GetConnection() => new NpgsqlConnection(_connectionString);
+        protected virtual NpgsqlConnection GetConnection() => _connection;
 
         private Dictionary<DateTime, long> GetHourlyTimelineStats(
             NpgsqlConnection connection,
@@ -467,9 +468,7 @@ GROUP BY ""key"";
         {
             using (var connection = GetConnection())
             {
-                connection.Open();
-                var result = action(connection);
-                return result;
+                return action(connection);
             }
         }
 
