@@ -103,6 +103,7 @@ namespace Hangfire.PostgreSql
                     {
                         Log.ErrorException("Error while executing install/upgrade", ex);
                     }
+                    throw;
                 }
 
                 previousVersion = version;
