@@ -7,14 +7,17 @@ namespace Hangfire.PostgreSql.Tests
 {
 	public class PostgreSqlInstallerFacts
 	{
-		[Fact]
+        [Fact, CleanDatabase]
 		public void InstallingSchemaShouldNotThrowAnException()
 		{
 			var ex = Record.Exception(() =>
 			{
 				UseConnection(connection =>
 				{
-					string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
+                    //Remove default schema to avoid false green test
+                    connection.Execute($@"DROP SCHEMA ""hangfire"" CASCADE;");
+
+                    string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
 
 					PostgreSqlObjectsInstaller.Install(connection, schemaName);
 
