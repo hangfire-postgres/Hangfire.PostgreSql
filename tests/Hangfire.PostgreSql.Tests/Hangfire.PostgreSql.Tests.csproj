@@ -18,13 +18,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="Certificates\cert.pfx" />
+    <Compile Remove="Certificates\**" />
+    <EmbeddedResource Remove="Certificates\**" />
+    <None Remove="Certificates\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Certificates\cert.pfx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Remove="Scripts\Clean.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\Clean.sql" />
   </ItemGroup>
 
   <ItemGroup>
