@@ -466,10 +466,7 @@ GROUP BY ""key"";
 
         private T UseConnection<T>(Func<NpgsqlConnection, T> action)
         {
-            using (var connection = GetConnection())
-            {
-                return action(connection);
-            }
+            return action(GetConnection());
         }
 
         private JobList<EnqueuedJobDto> EnqueuedJobs(NpgsqlConnection connection, IEnumerable<long> jobIds)

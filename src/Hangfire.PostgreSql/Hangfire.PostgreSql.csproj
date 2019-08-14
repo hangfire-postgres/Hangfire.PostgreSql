@@ -14,9 +14,9 @@
     <PackageReleaseNotes>https://github.com/frankhommers/Hangfire.PostgreSql/releases</PackageReleaseNotes>
     <PackageProjectUrl>http://hmm.rs/Hangfire.PostgreSql</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
-    <Version>1.6.1</Version>
-    <FileVersion>1.6.1</FileVersion>
-    <AssemblyVersion>1.6.1</AssemblyVersion>
+    <Version>1.6.2</Version>
+    <FileVersion>1.6.2</FileVersion>
+    <AssemblyVersion>1.6.2</AssemblyVersion>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <RepositoryUrl>https://github.com/frankhommers/Hangfire.PostgreSql</RepositoryUrl>
