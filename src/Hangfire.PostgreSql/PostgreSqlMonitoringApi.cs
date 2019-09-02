@@ -468,6 +468,7 @@ GROUP BY ""key"";
         {
             using (var connection = GetConnection())
             {
+                connection.Open();
                 return action(connection);
             }
         }
