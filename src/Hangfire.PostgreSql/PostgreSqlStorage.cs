@@ -139,10 +139,7 @@ namespace Hangfire.PostgreSql
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            var connection = _existingConnection ?? CreateAndOpenConnection();
-            _connectionSetup?.Invoke(connection);
-
-            return new PostgreSqlMonitoringApi(connection, _options, QueueProviders);
+            return new PostgreSqlMonitoringApi(_connectionString, _connectionSetup, _options, QueueProviders);
         }
 
         public override IStorageConnection GetConnection()
