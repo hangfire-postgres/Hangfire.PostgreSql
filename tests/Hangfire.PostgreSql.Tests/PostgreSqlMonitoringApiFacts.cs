@@ -31,7 +31,7 @@ namespace Hangfire.PostgreSql.Tests
                 SchemaName = ConnectionUtils.GetSchemaName()
             };
 
-            _storage = new PostgreSqlStorage(ConnectionUtils.CreateConnection(), _options);
+            _storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString(), _options);
         }
 
         [Fact, CleanDatabase]

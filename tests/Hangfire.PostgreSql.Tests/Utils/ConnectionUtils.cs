@@ -14,9 +14,9 @@ namespace Hangfire.PostgreSql.Tests
 		private const string DefaultDatabaseName = @"hangfire_tests";
 		private const string DefaultSchemaName = @"hangfire";
 
-		private const string DefaultConnectionStringTemplate = @"Server=127.0.0.1;Port=5432;Database=postgres;User Id=postgres;Password=password;";
+	    private const string DefaultConnectionStringTemplate = @"Server=127.0.0.1;Port=5432;Database=postgres;User Id=postgres;Password=password;";
 
-		public static string GetDatabaseName()
+        public static string GetDatabaseName()
 		{
 			return Environment.GetEnvironmentVariable(DatabaseVariable) ?? DefaultDatabaseName;
 		}

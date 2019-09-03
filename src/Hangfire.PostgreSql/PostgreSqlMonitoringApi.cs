@@ -36,16 +36,19 @@ namespace Hangfire.PostgreSql
 {
     public class PostgreSqlMonitoringApi : IMonitoringApi
     {
-        private readonly NpgsqlConnection _connection;
+        private readonly string _connectionString;
+        private readonly Action<NpgsqlConnection> _connectionSetup;
         private readonly PostgreSqlStorageOptions _options;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
         public PostgreSqlMonitoringApi(
-            NpgsqlConnection connection,
+            string connectionString,
+            Action<NpgsqlConnection> connectionSetup,
             PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
-            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _connectionSetup = connectionSetup;
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
         }
@@ -387,7 +390,12 @@ WHERE ""key"" = 'recurring-jobs';
             });
         }
 
-        protected virtual NpgsqlConnection GetConnection() => _connection;
+        protected virtual NpgsqlConnection GetConnection()
+        {
+            var connection = new NpgsqlConnection(_connectionString);
+            _connectionSetup?.Invoke(connection);
+            return connection;
+        }
 
         private Dictionary<DateTime, long> GetHourlyTimelineStats(
             NpgsqlConnection connection,
@@ -466,7 +474,11 @@ GROUP BY ""key"";
 
         private T UseConnection<T>(Func<NpgsqlConnection, T> action)
         {
-            return action(GetConnection());
+            using (var connection = GetConnection())
+            {
+                connection.Open();
+                return action(connection);
+            }
         }
 
         private JobList<EnqueuedJobDto> EnqueuedJobs(NpgsqlConnection connection, IEnumerable<long> jobIds)
