@@ -41,7 +41,7 @@ namespace Hangfire.PostgreSql
         private readonly string _connectionString;
 
         public PostgreSqlStorage(string nameOrConnectionString)
-            : this(nameOrConnectionString, null, new PostgreSqlStorageOptions())
+            : this(nameOrConnectionString, new PostgreSqlStorageOptions())
         {
         }
 
@@ -145,7 +145,6 @@ namespace Hangfire.PostgreSql
         public override IStorageConnection GetConnection()
         {
             var connection = _existingConnection ?? CreateAndOpenConnection();
-            _connectionSetup?.Invoke(connection);
 
             return new PostgreSqlConnection(connection, QueueProviders, _options, _existingConnection == null);
         }
@@ -196,6 +195,8 @@ namespace Hangfire.PostgreSql
             };
 
             var connection = new NpgsqlConnection(connectionStringBuilder.ToString());
+
+            _connectionSetup?.Invoke(connection);
             connection.Open();
 
             return connection;
