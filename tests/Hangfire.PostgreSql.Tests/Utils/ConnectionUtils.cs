@@ -14,7 +14,7 @@ namespace Hangfire.PostgreSql.Tests
 		private const string DefaultDatabaseName = @"hangfire_tests";
 		private const string DefaultSchemaName = @"hangfire";
 
-	    private const string DefaultConnectionStringTemplate = @"Server=127.0.0.1;Port=5432;Database=postgres;User Id=postgres;Password=password;";
+        private const string DefaultConnectionStringTemplate = @"Server=127.0.0.1;Port=5432;Database=postgres;User Id=postgres;Password=password;";
 
         public static string GetDatabaseName()
 		{
@@ -44,10 +44,7 @@ namespace Hangfire.PostgreSql.Tests
 
 		public static NpgsqlConnection CreateConnection()
 		{
-			NpgsqlConnectionStringBuilder csb = new NpgsqlConnectionStringBuilder(GetConnectionString())
-			{
-				Enlist = false
-			};
+            var csb = new NpgsqlConnectionStringBuilder(GetConnectionString());
 			var connection = new NpgsqlConnection
 			{
                 ConnectionString = csb.ToString()
@@ -59,10 +56,7 @@ namespace Hangfire.PostgreSql.Tests
 
 	    public static NpgsqlConnection CreateMasterConnection()
 	    {
-	        NpgsqlConnectionStringBuilder csb = new NpgsqlConnectionStringBuilder(GetMasterConnectionString())
-	        {
-	            Enlist = false
-	        };
+            var csb = new NpgsqlConnectionStringBuilder(GetMasterConnectionString());
 	        var connection = new NpgsqlConnection
 	        {
 	            ConnectionString = csb.ToString()
