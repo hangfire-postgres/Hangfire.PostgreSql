@@ -19,7 +19,8 @@ namespace Hangfire.PostgreSql.Tests
             _token = cts.Token;
             _options = new PostgreSqlStorageOptions()
             {
-                SchemaName = GetSchemaName()
+                SchemaName = GetSchemaName(),
+                EnableTransactionScopeEnlistment = true
             };
         }
 

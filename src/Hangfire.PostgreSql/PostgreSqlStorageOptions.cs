@@ -84,6 +84,7 @@ namespace Hangfire.PostgreSql
         public bool UseNativeDatabaseTransactions { get; set; }
         public bool PrepareSchemaIfNecessary { get; set; }
         public string SchemaName { get; set; }
+        public bool EnableTransactionScopeEnlistment { get; set; }
 
         private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
         {

@@ -111,9 +111,13 @@ namespace Hangfire.PostgreSql
             if (existingConnection == null) throw new ArgumentNullException(nameof(existingConnection));
             if (options == null) throw new ArgumentNullException(nameof(options));
             var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
-            if (connectionStringBuilder.Enlist)
-                throw new ArgumentException(
-                    "Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
+
+            if (!options.EnableTransactionScopeEnlistment)
+            {
+                if (connectionStringBuilder.Enlist)
+                    throw new ArgumentException(
+                        $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(options.EnableTransactionScopeEnlistment)} to `true`.");
+            }
 
             _existingConnection = existingConnection;
             _options = options;
@@ -127,7 +131,7 @@ namespace Hangfire.PostgreSql
             var connectionStringBuilder = new NpgsqlConnectionStringBuilder(existingConnection.ConnectionString);
             if (connectionStringBuilder.Enlist)
                 throw new ArgumentException(
-                    "Npgsql is not fully compatible with TransactionScope yet, only connections without Enlist = true are accepted.");
+                    $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(PostgreSqlStorageOptions.EnableTransactionScopeEnlistment)} to `true`.");
 
             _existingConnection = existingConnection;
             _options = new PostgreSqlStorageOptions();
@@ -189,10 +193,11 @@ namespace Hangfire.PostgreSql
 
         internal NpgsqlConnection CreateAndOpenConnection()
         {
-            var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString)
+            var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString);
+            if (!_options.EnableTransactionScopeEnlistment)
             {
-                Enlist = false //Npgsql is not fully compatible with TransactionScope yet.
-            };
+                connectionStringBuilder.Enlist = false;
+            }
 
             var connection = new NpgsqlConnection(connectionStringBuilder.ToString());
 

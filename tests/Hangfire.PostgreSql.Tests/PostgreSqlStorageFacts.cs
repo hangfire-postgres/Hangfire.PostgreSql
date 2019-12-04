@@ -10,7 +10,7 @@ namespace Hangfire.PostgreSql.Tests
 
 		public PostgreSqlStorageFacts()
 		{
-			_options = new PostgreSqlStorageOptions {PrepareSchemaIfNecessary = false};
+			_options = new PostgreSqlStorageOptions {PrepareSchemaIfNecessary = false, EnableTransactionScopeEnlistment = true};
 		}
 
 

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.Server;
@@ -1324,7 +1325,63 @@ values (@key, @field, @value)";
 			});
 		}
 
-		private void UseConnections(Action<NpgsqlConnection, PostgreSqlConnection> action)
+        [Theory, CleanDatabase]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void CreateExpiredJob_EnlistsInTransaction(bool completeTransactionScope)
+        {
+            TransactionScope CreateTransactionScope(System.Transactions.IsolationLevel isolationLevel = System.Transactions.IsolationLevel.RepeatableRead)
+            {
+                var transactionOptions = new TransactionOptions()
+                {
+                    IsolationLevel = isolationLevel,
+                    Timeout = TransactionManager.MaximumTimeout
+                };
+
+                return new TransactionScope(TransactionScopeOption.Required, transactionOptions);
+            }
+
+            string jobId = null;
+            var createdAt = new DateTime(2012, 12, 12);
+            using (var scope = CreateTransactionScope())
+            {
+                UseConnections((sql, connection) =>
+                {
+                    jobId = connection.CreateExpiredJob(
+                        Job.FromExpression(() => SampleMethod("Hello")),
+                        new Dictionary<string, string> { { "Key1", "Value1" }, { "Key2", "Value2" } },
+                        createdAt,
+                        TimeSpan.FromDays(1));
+
+                    Assert.NotNull(jobId);
+                    Assert.NotEmpty(jobId);
+                });
+
+                if (completeTransactionScope)
+                {
+                    scope.Complete();
+                }
+            }
+
+            UseConnections((sql, connection) =>
+            {
+                if (completeTransactionScope)
+                {
+                    var sqlJob = sql.Query(@"select * from """ + GetSchemaName() + @""".""job""").Single();
+                    Assert.Equal(jobId, sqlJob.id.ToString());
+                    Assert.Equal(createdAt, sqlJob.createdat);
+                    Assert.Null((long?)sqlJob.stateid);
+                    Assert.Null((string)sqlJob.statename);
+                }
+                else
+                {
+                    var job = sql.Query(@"select * from """ + GetSchemaName() + @""".""job""").SingleOrDefault();
+                    Assert.Null(job);
+                }
+            });
+        }
+
+        private void UseConnections(Action<NpgsqlConnection, PostgreSqlConnection> action)
 		{
 			using (var sqlConnection = ConnectionUtils.CreateConnection())
 			using (var connection = new PostgreSqlConnection(sqlConnection, _providers, _options))
