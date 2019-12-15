@@ -4,7 +4,6 @@
     <Description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET applications).</Description>
     <Copyright>Copyright © 2014-2019 Frank Hommers and others</Copyright>
     <AssemblyTitle>Hangfire PostgreSql Storage</AssemblyTitle>
-    <VersionPrefix>1.5.0</VersionPrefix>
     <Authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Ben Herila (bherila), Vytautas Kasparavičius (vytautask)</Authors>
     <TargetFrameworks>netstandard2.0;net451</TargetFrameworks>
     <AssemblyName>Hangfire.PostgreSql</AssemblyName>
@@ -54,11 +53,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="1.50.5" />
-    <PackageReference Include="Hangfire.Core" Version="1.6.20" />
+    <PackageReference Include="Dapper" Version="1.50.*" />
+    <PackageReference Include="Hangfire.Core" Version="1.6.*" />
     <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="10.0.1" />
-    <PackageReference Include="Npgsql" Version="4.0.6" />
+    <PackageReference Include="Newtonsoft.Json" Version="10.0.*" />
+    <PackageReference Include="Npgsql" Version="4.0.*" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == 'net451' ">
