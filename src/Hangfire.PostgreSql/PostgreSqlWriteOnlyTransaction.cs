@@ -80,13 +80,19 @@ namespace Hangfire.PostgreSql
                 {
                     command(_connection);
                 }
-
+                // TransactionCompleted event is required here, because if this TransactionScope is enlisted within an ambient TransactionScope, the ambient TransactionScope controls when the TransactionScope completes.
+                Transaction.Current.TransactionCompleted += Current_TransactionCompleted;
                 transaction.Complete();
-
-                PostgreSqlJobQueue.NewItemInQueueEvent.Set();
             }
         }
 
+        private static void Current_TransactionCompleted(object sender, TransactionEventArgs e)
+        {
+            if (e.Transaction.TransactionInformation.Status == TransactionStatus.Committed)
+            {
+                PostgreSqlJobQueue.NewItemInQueueEvent.Set();
+            }
+        }
 
         public override void ExpireJob(string jobId, TimeSpan expireIn)
         {
