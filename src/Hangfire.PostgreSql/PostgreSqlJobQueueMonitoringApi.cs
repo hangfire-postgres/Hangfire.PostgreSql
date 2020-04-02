@@ -29,16 +29,13 @@ namespace Hangfire.PostgreSql
 {
     internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
     {
-        private readonly IDbConnection _connection;
+        private readonly PostgreSqlStorage _storage;
         private readonly PostgreSqlStorageOptions _options;
 
-        public PostgreSqlJobQueueMonitoringApi(IDbConnection connection, PostgreSqlStorageOptions options)
+        public PostgreSqlJobQueueMonitoringApi(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
         {
-            if (connection == null) throw new ArgumentNullException(nameof(connection));
-            if (options == null) throw new ArgumentNullException(nameof(options));
-
-            _connection = connection;
-            _options = options;
+	        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
         public IEnumerable<string> GetQueues()
@@ -47,7 +44,8 @@ namespace Hangfire.PostgreSql
 SELECT DISTINCT ""queue"" 
 FROM """ + _options.SchemaName + @""".""jobqueue"";
 ";
-            return _connection.Query(sqlQuery).Select(x => (string)x.queue).ToList();
+
+            return _storage.UseConnection(connection => connection.Query(sqlQuery).Select(x => (string)x.queue).ToList());
         }
 
         public IEnumerable<long> GetEnqueuedJobIds(string queue, int @from, int perPage)
@@ -67,10 +65,10 @@ AND j.""id"" IS NOT NULL
 LIMIT @count OFFSET @start;
 ", fetched ? "IS NOT NULL" : "IS NULL");
 
-            return _connection.Query<long>(
+            return _storage.UseConnection(connection => connection.Query<long>(
                 sqlQuery,
                 new {queue = queue, start = @from, count = perPage})
-                .ToList();
+                .ToList());
         }
 
         public IEnumerable<long> GetFetchedJobIds(string queue, int @from, int perPage)
@@ -95,7 +93,7 @@ SELECT (
     ) ""FetchedCount"";
 ";
 
-            var result = _connection.Query(sqlQuery, new { queue = queue }).Single();
+            var result = _storage.UseConnection(connection => connection.Query(sqlQuery, new { queue = queue }).Single());
 
             return new EnqueuedAndFetchedCountDto
             {

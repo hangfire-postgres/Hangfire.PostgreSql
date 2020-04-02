@@ -56,13 +56,9 @@ namespace Hangfire.PostgreSql
 			PostgreSqlStorageOptions options,
 			bool ownsConnection)
 		{
-			if (connection == null) throw new ArgumentNullException(nameof(connection));
-			if (queueProviders == null) throw new ArgumentNullException(nameof(queueProviders));
-			if (options == null) throw new ArgumentNullException(nameof(options));
-
-			_connection = connection;
-			_queueProviders = queueProviders;
-			_options = options;
+			_connection = connection ?? throw new ArgumentNullException(nameof(connection));
+			_queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
+			_options = options ?? throw new ArgumentNullException(nameof(options));
 			OwnsConnection = ownsConnection;
 		}
 
@@ -107,7 +103,7 @@ namespace Hangfire.PostgreSql
 					$"Multiple provider instances registered for queues: {String.Join(", ", queues)}. You should choose only one type of persistent queues per server instance.");
 			}
 
-			var persistentQueue = providers[0].GetJobQueue(_connection);
+			var persistentQueue = providers[0].GetJobQueue();
 			return persistentQueue.Dequeue(queues, cancellationToken);
 		}
 
@@ -126,13 +122,13 @@ VALUES (@invocationData, @arguments, @createdAt, @expireAt)
 RETURNING ""id"";
 ";
 
-			var invocationData = InvocationData.Serialize(job);
+			var invocationData = InvocationData.SerializeJob(job);
 
 			var jobId = _connection.Query<long>(
 				createJobSql,
 				new
 				{
-					invocationData = JobHelper.ToJson(invocationData),
+					invocationData = SerializationHelper.Serialize(invocationData),
 					arguments = invocationData.Arguments,
 					createdAt = createdAt,
 					expireAt = createdAt.Add(expireIn)
@@ -165,7 +161,7 @@ VALUES (@jobId, @name, @value);
 
 		public override JobData GetJobData(string id)
 		{
-			if (id == null) throw new ArgumentNullException("id");
+			if (id == null) throw new ArgumentNullException(nameof(id));
 
 			string sql =
 				@"
@@ -180,7 +176,7 @@ WHERE ""id"" = @id;
 			if (jobData == null) return null;
 
 			// TODO: conversion exception could be thrown.
-			var invocationData = JobHelper.FromJson<InvocationData>(jobData.InvocationData);
+			var invocationData = SerializationHelper.Deserialize<InvocationData>(jobData.InvocationData);
 			invocationData.Arguments = jobData.Arguments;
 
 			Job job = null;
@@ -188,7 +184,7 @@ WHERE ""id"" = @id;
 
 			try
 			{
-				job = invocationData.Deserialize();
+				job = invocationData.DeserializeJob();
 			}
 			catch (JobLoadException ex)
 			{
@@ -225,7 +221,7 @@ WHERE j.""id"" = @jobId;
 			{
 				Name = sqlState.Name,
 				Reason = sqlState.Reason,
-				Data = JobHelper.FromJson<Dictionary<string, string>>(sqlState.Data)
+				Data = SerializationHelper.Deserialize<Dictionary<string, string>>(sqlState.Data)
 			};
 		}
 
@@ -399,7 +395,7 @@ WHERE NOT EXISTS (
 ";
 
 			_connection.Execute(sql,
-				new { id = serverId, data = JobHelper.ToJson(data) });
+				new { id = serverId, data = SerializationHelper.Serialize(data) });
 		}
 
 		public override void RemoveServer(string serverId)

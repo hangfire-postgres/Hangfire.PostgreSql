@@ -21,24 +21,16 @@
 
 using System;
 using System.Data;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
 using Hangfire.Logging;
 using Npgsql;
 using System.Resources;
-using Dapper;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETSTANDARD2_0)
-    public
-#else
-    [ExcludeFromCodeCoverage]
-	internal
-#endif
-    static class PostgreSqlObjectsInstaller
+    public static class PostgreSqlObjectsInstaller
     {
         private static readonly ILog Log = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
@@ -74,17 +66,20 @@ namespace Hangfire.PostgreSql
                     }
 
                     using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
+#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
                     using (var command = new NpgsqlCommand(script, connection, transaction))
+#pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
                     {
                         command.CommandTimeout = 120;
                         try
                         {
-                            command.ExecuteNonQuery();
+#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
+                            command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion";
+#pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
+                            command.Parameters.AddWithValue("version", version);
+                            command.Parameters.AddWithValue("previousVersion", previousVersion);
 
-                            // Due to https://github.com/npgsql/npgsql/issues/641 , it's not possible to send
-                            // CREATE objects and use the same object in the same command
-                            // So bump the version in another command
-                            connection.Execute($@"UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion", new { version, previousVersion }, transaction);
+                            command.ExecuteNonQuery();
 
                             transaction.Commit();
                         }
@@ -117,9 +112,7 @@ namespace Hangfire.PostgreSql
             using (var stream = assembly.GetManifestResourceStream(resourceName))
             {
                 if (stream == null)
-                {
                     throw new MissingManifestResourceException($"Requested resource `{resourceName}` was not found in the assembly `{assembly}`.");
-                }
 
                 using (var reader = new StreamReader(stream))
                 {
