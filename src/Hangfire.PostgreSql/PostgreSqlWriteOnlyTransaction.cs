@@ -69,7 +69,7 @@ namespace Hangfire.PostgreSql
             var transactionOptions = new TransactionOptions()
             {
                 IsolationLevel = isolationLevel,
-                Timeout = _options.TransactionSynchronisationTimeout
+                Timeout = TransactionManager.MaximumTimeout
             };
 
             using (var transaction = new TransactionScope(scopeOption, transactionOptions))
