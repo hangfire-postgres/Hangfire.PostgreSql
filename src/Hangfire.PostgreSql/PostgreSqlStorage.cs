@@ -21,10 +21,7 @@
 
 using System;
 using System.Collections.Generic;
-#if (NETSTANDARD2_0)
-#else
-using System.Configuration;
-#endif
+using System.Data;
 using System.Text;
 using Hangfire.Logging;
 using Hangfire.Server;
@@ -63,40 +60,34 @@ namespace Hangfire.PostgreSql
         /// <exception cref="ArgumentException"><paramref name="nameOrConnectionString"/> argument is neither 
         /// a valid SQL Server connection string nor the name of a connection string in the application
         /// config file.</exception>
-        public PostgreSqlStorage(string nameOrConnectionString, Action<NpgsqlConnection> connectionSetup, PostgreSqlStorageOptions options)
+        public PostgreSqlStorage(string nameOrConnectionString, Action<NpgsqlConnection> connectionSetup,
+	        PostgreSqlStorageOptions options)
         {
-            if (nameOrConnectionString == null) throw new ArgumentNullException(nameof(nameOrConnectionString));
+	        if (nameOrConnectionString == null) throw new ArgumentNullException(nameof(nameOrConnectionString));
 
-            _options = options ?? throw new ArgumentNullException(nameof(options));
+	        _options = options ?? throw new ArgumentNullException(nameof(options));
 
-            if (IsConnectionString(nameOrConnectionString))
-            {
-                _connectionString = nameOrConnectionString;
-            }
-#if (NETSTANDARD2_0)
-#else
-			else if (IsConnectionStringInConfiguration(nameOrConnectionString))
-			{
-				_connectionString = ConfigurationManager.ConnectionStrings[nameOrConnectionString].ConnectionString;
-			}
-#endif
-            else
-            {
-                throw new ArgumentException(
-                    $"Could not find connection string with name '{nameOrConnectionString}' in application config file");
-            }
+	        if (IsConnectionString(nameOrConnectionString))
+	        {
+		        _connectionString = nameOrConnectionString;
+	        }
+	        else
+	        {
+		        throw new ArgumentException(
+			        $"Could not find connection string with name '{nameOrConnectionString}' in application config file");
+	        }
 
-            _connectionSetup = connectionSetup;
+	        _connectionSetup = connectionSetup;
 
-            if (options.PrepareSchemaIfNecessary)
-            {
-                using (var connection = CreateAndOpenConnection())
-                {
-                    PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
-                }
-            }
+	        if (options.PrepareSchemaIfNecessary)
+	        {
+		        using (var connection = CreateAndOpenConnection())
+		        {
+			        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
+		        }
+	        }
 
-            InitializeQueueProviders();
+	        InitializeQueueProviders();
         }
 
         /// <summary>
@@ -143,7 +134,7 @@ namespace Hangfire.PostgreSql
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            return new PostgreSqlMonitoringApi(_connectionString, _connectionSetup, _options, QueueProviders);
+            return new PostgreSqlMonitoringApi(this, _options, QueueProviders);
         }
 
         public override IStorageConnection GetConnection()
@@ -156,6 +147,7 @@ namespace Hangfire.PostgreSql
         public override IEnumerable<IServerComponent> GetComponents()
         {
             yield return new ExpirationManager(this, _options);
+            //TODO: add counters aggregator? (like https://github.com/HangfireIO/Hangfire/blob/master/src/Hangfire.SqlServer/SqlServerStorage.cs#L154)
         }
 
         public override void WriteOptionsToLog(ILog logger)
@@ -207,26 +199,41 @@ namespace Hangfire.PostgreSql
             return connection;
         }
 
+        internal T UseConnection<T>(Func<IDbConnection, T> func)
+        {
+	        IDbConnection connection = null;
+
+	        try
+	        {
+		        connection = CreateAndOpenConnection();
+		        return func(connection);
+	        }
+	        finally
+	        {
+		        ReleaseConnection(connection);
+	        }
+        }
+
+        internal void ReleaseConnection(IDbConnection connection)
+        {
+	        if (connection != null && !IsExistingConnection(connection))
+                connection.Dispose();
+        }
+
+        private bool IsExistingConnection(IDbConnection connection)
+        {
+	        return connection != null && ReferenceEquals(connection, _existingConnection);
+        }
+
         private void InitializeQueueProviders()
         {
-            var defaultQueueProvider = new PostgreSqlJobQueueProvider(_options);
+            var defaultQueueProvider = new PostgreSqlJobQueueProvider(this, _options);
             QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
         }
 
         private bool IsConnectionString(string nameOrConnectionString)
         {
             return nameOrConnectionString.Contains(";");
-        }
-
-        private bool IsConnectionStringInConfiguration(string connectionStringName)
-        {
-#if (NETSTANDARD2_0)
-            return false;
-#else
-            var connectionStringSetting = ConfigurationManager.ConnectionStrings[connectionStringName];
-
-            return connectionStringSetting != null;
-#endif
         }
     }
 }

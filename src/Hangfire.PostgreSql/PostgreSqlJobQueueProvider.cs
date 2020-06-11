@@ -24,31 +24,27 @@ using System.Data;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETSTANDARD2_0)
-	public
-#else
-    internal
-#endif
-    class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
+	public class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
     {
-        private readonly PostgreSqlStorageOptions _options;
+	    
 
-        public PostgreSqlJobQueueProvider(PostgreSqlStorageOptions options)
+	    public PostgreSqlJobQueueProvider(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+	    {
+		    Storage = storage ?? throw new ArgumentNullException(nameof(storage));
+		    Options = options ?? throw new ArgumentNullException(nameof(options));
+	    }
+
+        public PostgreSqlStorageOptions Options { get; }
+        public PostgreSqlStorage Storage { get; }
+
+        public IPersistentJobQueue GetJobQueue()
         {
-            if (options == null) throw new ArgumentNullException("options");
-            _options = options;
+            return new PostgreSqlJobQueue(Storage, Options);
         }
 
-        public PostgreSqlStorageOptions Options { get { return _options; } }
-
-        public IPersistentJobQueue GetJobQueue(IDbConnection connection)
+        public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi()
         {
-            return new PostgreSqlJobQueue(connection, _options);
-        }
-
-        public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi(IDbConnection connection)
-        {
-            return new PostgreSqlJobQueueMonitoringApi(connection, _options);
+            return new PostgreSqlJobQueueMonitoringApi(Storage, Options);
         }
     }
 }

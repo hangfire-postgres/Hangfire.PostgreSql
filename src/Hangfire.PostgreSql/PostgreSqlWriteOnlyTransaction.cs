@@ -140,7 +140,7 @@ WHERE j.""id"" = @id;
                     name = state.Name,
                     reason = state.Reason,
                     createdAt = DateTime.UtcNow,
-                    data = JobHelper.ToJson(state.SerializeData()),
+                    data = SerializationHelper.Serialize(state.SerializeData()),
                     id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture)
                 }));
         }
@@ -160,14 +160,14 @@ VALUES (@jobId, @name, @reason, @createdAt, @data);
                     name = state.Name,
                     reason = state.Reason,
                     createdAt = DateTime.UtcNow,
-                    data = JobHelper.ToJson(state.SerializeData())
+                    data = SerializationHelper.Serialize(state.SerializeData())
                 }));
         }
 
         public override void AddToQueue(string queue, string jobId)
         {
             var provider = _queueProviders.GetProvider(queue);
-            var persistentQueue = provider.GetJobQueue(_connection);
+            var persistentQueue = provider.GetJobQueue();
 
             QueueCommand((con) => persistentQueue.Enqueue(queue, jobId));
         }

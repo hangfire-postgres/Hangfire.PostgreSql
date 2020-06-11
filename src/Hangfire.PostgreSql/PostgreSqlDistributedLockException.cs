@@ -23,13 +23,8 @@ using System;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETSTANDARD2_0)
-    public
-#else
     [Serializable]
-	internal
-#endif
-    class PostgreSqlDistributedLockException : Exception
+    public class PostgreSqlDistributedLockException : Exception
     {
         public PostgreSqlDistributedLockException(string message)
             : base(message)

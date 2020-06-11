@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using Dapper;
 using Hangfire.Common;
@@ -21,7 +20,7 @@ namespace Hangfire.PostgreSql.Tests
         public PostgreSqlMonitoringApiFacts()
         {
             var defaultProvider = new Mock<IPersistentJobQueueProvider>();
-            defaultProvider.Setup(x => x.GetJobQueue(It.IsNotNull<IDbConnection>()))
+            defaultProvider.Setup(x => x.GetJobQueue())
                 .Returns(new Mock<IPersistentJobQueue>().Object);
 
             _queueProviders = new PersistentJobQueueProviderCollection(defaultProvider.Object);
@@ -42,14 +41,14 @@ namespace Hangfire.PostgreSql.Tests
                 values (@invocationData, @arguments, now() at time zone 'utc') returning ""id""";
 
             var job = Job.FromExpression(() => SampleMethod("Hello"));
-            var invocationData = InvocationData.Serialize(job);
+            var invocationData = InvocationData.SerializeJob(job);
 
             UseConnection(sql =>
             {
                 var jobId = sql.Query(arrangeSql, 
                     new 
                     {
-                        invocationData = JobHelper.ToJson(invocationData),
+                        invocationData = SerializationHelper.Serialize(invocationData),
                         arguments = invocationData.Arguments,
                     }).Single().id.ToString();
 

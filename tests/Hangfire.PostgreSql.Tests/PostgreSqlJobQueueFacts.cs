@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Dapper;
-using Moq;
 using Npgsql;
 using Xunit;
 
@@ -20,14 +19,14 @@ namespace Hangfire.PostgreSql.Tests
 			var exception = Assert.Throws<ArgumentNullException>(
 				() => new PostgreSqlJobQueue(null, new PostgreSqlStorageOptions()));
 
-			Assert.Equal("connection", exception.ParamName);
+			Assert.Equal("storage", exception.ParamName);
 		}
 
 		[Fact]
 		public void Ctor_ThrowsAnException_WhenOptionsValueIsNull()
 		{
 			var exception = Assert.Throws<ArgumentNullException>(
-				() => new PostgreSqlJobQueue(new Mock<IDbConnection>().Object, null));
+				() => new PostgreSqlJobQueue(new PostgreSqlStorage(ConnectionUtils.GetConnectionString()), null));
 
 			Assert.Equal("options", exception.ParamName);
 		}
@@ -35,9 +34,9 @@ namespace Hangfire.PostgreSql.Tests
 		[Fact, CleanDatabase]
 		public void Dequeue_ShouldThrowAnException_WhenQueuesCollectionIsNull()
 		{
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
-				var queue = CreateJobQueue(connection, false);
+				var queue = CreateJobQueue(storage, false);
 
 				var exception = Assert.Throws<ArgumentNullException>(
 					() => queue.Dequeue(null, CreateTimingOutCancellationToken()));
@@ -49,9 +48,9 @@ namespace Hangfire.PostgreSql.Tests
         [Fact, CleanDatabase]
         public void Dequeue_ShouldFetchAJob_FromQueueWithHigherPriority()
         {
-            UseConnection(connection =>
+            UseConnection((connection, storage) =>
             {
-                var queue = CreateJobQueue(connection, false);
+                var queue = CreateJobQueue(storage, false);
                 var token = CreateTimingOutCancellationToken();
 
                 queue.Enqueue("1", "1");
@@ -78,9 +77,9 @@ namespace Hangfire.PostgreSql.Tests
 
 		private void Dequeue_ShouldThrowAnException_WhenQueuesCollectionIsEmpty(bool useNativeDatabaseTransactions)
 		{
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				var exception = Assert.Throws<ArgumentException>(
 					() => queue.Dequeue(new string[0], CreateTimingOutCancellationToken()));
@@ -106,11 +105,11 @@ namespace Hangfire.PostgreSql.Tests
 		private void Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning(
 			bool useNativeDatabaseTransactions)
 		{
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				var cts = new CancellationTokenSource();
 				cts.Cancel();
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				Assert.Throws<OperationCanceledException>(
 					() => queue.Dequeue(DefaultQueues, cts.Token));
@@ -131,10 +130,10 @@ namespace Hangfire.PostgreSql.Tests
 
 		private void Dequeue_ShouldWaitIndefinitely_WhenThereAreNoJobs(bool useNativeDatabaseTransactions)
 		{
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				var cts = new CancellationTokenSource(200);
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				Assert.Throws<OperationCanceledException>(
 					() => queue.Dequeue(DefaultQueues, cts.Token));
@@ -160,12 +159,12 @@ insert into """ + GetSchemaName() + @""".""jobqueue"" (""jobid"", ""queue"")
 values (@jobId, @queue) returning ""id""";
 
 			// Arrange
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				var id = (long) connection.Query(
 					arrangeSql,
 					new {jobId = 1, queue = "default"}).Single().id;
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				// Act
 				var payload = (PostgreSqlFetchedJob) queue.Dequeue(
@@ -203,12 +202,12 @@ select i.""id"", @queue from i;
 ";
 
 			// Arrange
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				connection.Execute(
 					arrangeSql,
 					new {invocationData = "", arguments = "", queue = "default"});
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				// Act
 				var payload = queue.Dequeue(
@@ -252,7 +251,7 @@ select i.""id"", @queue, @fetchedAt from i;
 
 
 			// Arrange
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				connection.Execute(
 					arrangeSql,
@@ -263,7 +262,7 @@ select i.""id"", @queue, @fetchedAt from i;
 						invocationData = "",
 						arguments = ""
 					});
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				// Act
 				var payload = queue.Dequeue(
@@ -298,7 +297,7 @@ insert into """ + GetSchemaName() + @""".""jobqueue"" (""jobid"", ""queue"")
 select i.""id"", @queue from i;
 ";
 
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				connection.Execute(
 					arrangeSql,
@@ -307,7 +306,7 @@ select i.""id"", @queue from i;
 						new {queue = "default", invocationData = "", arguments = ""},
 						new {queue = "default", invocationData = "", arguments = ""}
 					});
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				// Act
 				var payload = queue.Dequeue(
@@ -346,9 +345,9 @@ RETURNING ""id"")
 insert into """ + GetSchemaName() + @""".""jobqueue"" (""jobid"", ""queue"")
 select i.""id"", @queue from i;
 ";
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				connection.Execute(
 					arrangeSql,
@@ -386,7 +385,7 @@ select i.""id"", @queue from i;
 
 			var queueNames = new[] {"default", "critical"};
 
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
 				connection.Execute(
 					arrangeSql,
@@ -396,7 +395,7 @@ select i.""id"", @queue from i;
 						new {queue = queueNames.Last(), invocationData = "", arguments = ""}
 					});
 
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				var queueFirst = (PostgreSqlFetchedJob) queue.Dequeue(
 					queueNames,
@@ -429,9 +428,9 @@ select i.""id"", @queue from i;
 		[Fact, CleanDatabase]
 		public void Queues_Should_Support_Long_Queue_Names()
 		{
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
-				var queue = CreateJobQueue(connection, false);
+				var queue = CreateJobQueue(storage, false);
 
 				var name = "very_long_name_that_is_over_20_characters_long_or_something";
 
@@ -446,9 +445,9 @@ select i.""id"", @queue from i;
 
 		private void Enqueue_AddsAJobToTheQueue(bool useNativeDatabaseTransactions)
 		{
-			UseConnection(connection =>
+			UseConnection((connection, storage) =>
 			{
-				var queue = CreateJobQueue(connection, useNativeDatabaseTransactions);
+				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
 				queue.Enqueue("default", "1");
 
@@ -471,21 +470,25 @@ select i.""id"", @queue from i;
 		{
 		}
 
-		private static PostgreSqlJobQueue CreateJobQueue(IDbConnection connection, bool useNativeDatabaseTransactions)
+		private static PostgreSqlJobQueue CreateJobQueue(PostgreSqlStorage storage, bool useNativeDatabaseTransactions)
 		{
-			return new PostgreSqlJobQueue(connection, new PostgreSqlStorageOptions()
+			return new PostgreSqlJobQueue(storage, new PostgreSqlStorageOptions()
 			{
 				SchemaName = GetSchemaName(),
 				UseNativeDatabaseTransactions = useNativeDatabaseTransactions
 			});
 		}
 
-		private static void UseConnection(Action<NpgsqlConnection> action)
+		private static void UseConnection(Action<IDbConnection, PostgreSqlStorage> action)
 		{
-			using (var connection = ConnectionUtils.CreateConnection())
+			var storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
+
+			storage.UseConnection(connection =>
 			{
-				action(connection);
-			}
+				action(connection, storage);
+				
+				return true;
+			});
 		}
 
 		private static string GetSchemaName()

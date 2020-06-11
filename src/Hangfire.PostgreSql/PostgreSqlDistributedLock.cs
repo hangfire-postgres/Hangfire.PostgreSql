@@ -27,12 +27,7 @@ using Dapper;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETSTANDARD2_0)
-    public
-#else
-	internal
-#endif
-    sealed class PostgreSqlDistributedLock : IDisposable
+    public sealed class PostgreSqlDistributedLock : IDisposable
     {
         private readonly string _resource;
         private readonly IDbConnection _connection;
@@ -43,12 +38,10 @@ namespace Hangfire.PostgreSql
             PostgreSqlStorageOptions options)
         {
             if (string.IsNullOrEmpty(resource)) throw new ArgumentNullException(nameof(resource));
-            if (connection == null) throw new ArgumentNullException(nameof(connection));
-            if (options == null) throw new ArgumentNullException(nameof(options));
 
             _resource = resource;
-            _connection = connection;
-            _options = options;
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
 
             if (_options.UseNativeDatabaseTransactions)
                 PostgreSqlDistributedLock_Init_Transaction(resource, timeout, connection, options);

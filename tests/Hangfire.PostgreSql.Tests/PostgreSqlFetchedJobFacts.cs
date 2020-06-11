@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using Dapper;
 using Moq;
+using Npgsql;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
@@ -13,32 +14,29 @@ namespace Hangfire.PostgreSql.Tests
 		private const string JobId = "id";
 		private const string Queue = "queue";
 
-		private readonly Mock<IDbConnection> _connection;
 		private readonly PostgreSqlStorageOptions _options;
+		private PostgreSqlStorage _storage;
 
 		public PostgreSqlFetchedJobFacts()
 		{
-			_connection = new Mock<IDbConnection>();
-			_options = new PostgreSqlStorageOptions()
-			{
-				SchemaName = GetSchemaName()
-			};
+			_options = new PostgreSqlStorageOptions();
+			_storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
 		}
 
 		[Fact]
 		public void Ctor_ThrowsAnException_WhenConnectionIsNull()
 		{
 			var exception = Assert.Throws<ArgumentNullException>(
-				() => new PostgreSqlFetchedJob(null, _options, 1, JobId, Queue));
+				() => new PostgreSqlFetchedJob(null, new PostgreSqlStorageOptions(), 1, JobId, Queue));
 
-			Assert.Equal("connection", exception.ParamName);
+			Assert.Equal("storage", exception.ParamName);
 		}
 
 		[Fact]
 		public void Ctor_ThrowsAnException_WhenOptionsIsNull()
 		{
 			var exception = Assert.Throws<ArgumentNullException>(
-				() => new PostgreSqlFetchedJob(_connection.Object, null, 1, JobId, Queue));
+				() => new PostgreSqlFetchedJob(_storage, null, 1, JobId, Queue));
 
 			Assert.Equal("options", exception.ParamName);
 		}
@@ -47,7 +45,7 @@ namespace Hangfire.PostgreSql.Tests
 		public void Ctor_ThrowsAnException_WhenJobIdIsNull()
 		{
 			var exception = Assert.Throws<ArgumentNullException>(
-				() => new PostgreSqlFetchedJob(_connection.Object, _options, 1, null, Queue));
+				() => new PostgreSqlFetchedJob(_storage, _options, 1, null, Queue));
 
 			Assert.Equal("jobId", exception.ParamName);
 		}
@@ -56,7 +54,7 @@ namespace Hangfire.PostgreSql.Tests
 		public void Ctor_ThrowsAnException_WhenQueueIsNull()
 		{
 			var exception = Assert.Throws<ArgumentNullException>(
-				() => new PostgreSqlFetchedJob(_connection.Object, _options, 1, JobId, null));
+				() => new PostgreSqlFetchedJob(_storage, _options, 1, JobId, null));
 
 			Assert.Equal("queue", exception.ParamName);
 		}
@@ -64,7 +62,7 @@ namespace Hangfire.PostgreSql.Tests
 		[Fact]
 		public void Ctor_CorrectlySets_AllInstanceProperties()
 		{
-			var fetchedJob = new PostgreSqlFetchedJob(_connection.Object, _options, 1, JobId, Queue);
+			var fetchedJob = new PostgreSqlFetchedJob(_storage, _options, 1, JobId, Queue);
 
 			Assert.Equal(1, fetchedJob.Id);
 			Assert.Equal(JobId, fetchedJob.JobId);
@@ -74,79 +72,71 @@ namespace Hangfire.PostgreSql.Tests
 		[Fact, CleanDatabase]
 		public void RemoveFromQueue_ReallyDeletesTheJobFromTheQueue()
 		{
-			UseConnection(connection =>
-			{
-				// Arrange
-				var id = CreateJobQueueRecord(connection, "1", "default");
-				var processingJob = new PostgreSqlFetchedJob(connection, _options, id, "1", "default");
+			// Arrange
+			var id = CreateJobQueueRecord(_storage, "1", "default");
+			var processingJob = new PostgreSqlFetchedJob(_storage, _options, id, "1", "default");
 
-				// Act
-				processingJob.RemoveFromQueue();
+			// Act
+			processingJob.RemoveFromQueue();
 
-				// Assert
-				var count = connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""jobqueue""").Single();
-				Assert.Equal(0, count);
-			});
+			// Assert
+			var count = _storage.UseConnection(connection =>
+				connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""jobqueue""").Single());
+			Assert.Equal(0, count);
 		}
 
 		[Fact, CleanDatabase]
 		public void RemoveFromQueue_DoesNotDelete_UnrelatedJobs()
 		{
-			UseConnection(connection =>
-			{
-				// Arrange
-				CreateJobQueueRecord(connection, "1", "default");
-				CreateJobQueueRecord(connection, "1", "critical");
-				CreateJobQueueRecord(connection, "2", "default");
+			// Arrange
+			CreateJobQueueRecord(_storage, "1", "default");
+			CreateJobQueueRecord(_storage, "1", "critical");
+			CreateJobQueueRecord(_storage, "2", "default");
 
-				var fetchedJob = new PostgreSqlFetchedJob(connection, _options, 999, "1", "default");
+			var fetchedJob = new PostgreSqlFetchedJob(_storage, _options, 999, "1", "default");
 
-				// Act
-				fetchedJob.RemoveFromQueue();
+			// Act
+			fetchedJob.RemoveFromQueue();
 
-				// Assert
-				var count = connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""jobqueue""").Single();
-				Assert.Equal(3, count);
-			});
+			// Assert
+			var count = _storage.UseConnection(connection =>
+				connection.Query<long>(@"select count(*) from """ + GetSchemaName() + @""".""jobqueue""").Single());
+			Assert.Equal(3, count);
 		}
 
 		[Fact, CleanDatabase]
 		public void Requeue_SetsFetchedAtValueToNull()
 		{
-			UseConnection(connection =>
-			{
-				// Arrange
-				var id = CreateJobQueueRecord(connection, "1", "default");
-				var processingJob = new PostgreSqlFetchedJob(connection, _options, id, "1", "default");
+			// Arrange
+			var id = CreateJobQueueRecord(_storage, "1", "default");
+			var processingJob = new PostgreSqlFetchedJob(_storage, _options, id, "1", "default");
 
-				// Act
-				processingJob.Requeue();
+			// Act
+			processingJob.Requeue();
 
-				// Assert
-				var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
-				Assert.Null(record.FetchedAt);
-			});
+			// Assert
+			var record = _storage.UseConnection(connection =>
+				connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single());
+			Assert.Null(record.FetchedAt);
 		}
 
 		[Fact, CleanDatabase]
 		public void Dispose_SetsFetchedAtValueToNull_IfThereWereNoCallsToComplete()
 		{
-			UseConnection(connection =>
-			{
-				// Arrange
-				var id = CreateJobQueueRecord(connection, "1", "default");
-				var processingJob = new PostgreSqlFetchedJob(connection, _options, id, "1", "default");
+			// Arrange
+			var id = CreateJobQueueRecord(_storage, "1", "default");
+			var processingJob = new PostgreSqlFetchedJob(_storage, _options, id, "1", "default");
 
-				// Act
-				processingJob.Dispose();
+			// Act
+			processingJob.Dispose();
 
-				// Assert
-				var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
-				Assert.Null(record.fetchedat);
-			});
+			// Assert
+			var record = _storage.UseConnection(connection =>
+				connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single());
+			Assert.Null(record.fetchedat);
 		}
 
-		private static long CreateJobQueueRecord(IDbConnection connection, string jobId, string queue)
+		private static long CreateJobQueueRecord(PostgreSqlStorage storage, string jobId, string queue)
 		{
 			string arrangeSql = @"
 insert into """ + GetSchemaName() + @""".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
@@ -154,17 +144,9 @@ values (@id, @queue, now() at time zone 'utc') returning ""id""";
 
 			return
 				(long)
-					connection.Query(arrangeSql, new {id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), queue = queue})
+					storage.UseConnection(connection => connection.Query(arrangeSql, new {id = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), queue = queue})
 						.Single()
-						.id;
-		}
-
-		private static void UseConnection(Action<IDbConnection> action)
-		{
-			using (var connection = ConnectionUtils.CreateConnection())
-			{
-				action(connection);
-			}
+						.id);
 		}
 
 		private static string GetSchemaName()
