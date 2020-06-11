@@ -12,7 +12,7 @@ var target = Argument("target", "Default");
 
 IEnumerable<string> GetFrameworks(string path) 
 {
-	return new string[] { "netstandard2.0", "net451" };
+	return new string[] { "netstandard2.0" };
 }
 
 //////////////////////////////////////////////////////////////////////

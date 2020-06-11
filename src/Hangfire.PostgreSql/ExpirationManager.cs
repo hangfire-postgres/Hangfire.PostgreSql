@@ -29,21 +29,12 @@ using Hangfire.Server;
 
 namespace Hangfire.PostgreSql
 {
-#if (NETSTANDARD2_0)
-    public
-#else
-	internal
-#endif
-    class ExpirationManager : IBackgroundProcess, IServerComponent
+    internal class ExpirationManager : IBackgroundProcess, IServerComponent
     {
         private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
         private const int NumberOfRecordsInSinglePass = 1000;
 
-#if (NETSTANDARD2_0)
         private static readonly ILog Logger = LogProvider.GetLogger(typeof(ExpirationManager));
-#else
-        private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
-#endif
 
         private static readonly string[] ProcessedCounters =
         {
@@ -78,7 +69,7 @@ namespace Hangfire.PostgreSql
 
         public override string ToString() => "SQL Records Expiration Manager";
 
-        public void Execute(BackgroundProcessContext context) => Execute(context.CancellationToken);
+        public void Execute(BackgroundProcessContext context) => Execute(context.StoppingToken);
 
         public void Execute(CancellationToken cancellationToken)
         {
