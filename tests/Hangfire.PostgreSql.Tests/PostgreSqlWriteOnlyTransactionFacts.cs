@@ -266,7 +266,7 @@ returning ""id""";
 
                 Commit(sql, x => x.AddToQueue("default", "1"));
 
-                correctJobQueue.Verify(x => x.Enqueue("default", "1"));
+                correctJobQueue.Verify(x => x.Enqueue(sql, "default", "1"));
             });
         }
 

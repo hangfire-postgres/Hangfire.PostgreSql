@@ -19,6 +19,7 @@
 //   
 //    Special thanks goes to him.
 
+using System.Data;
 using System.Threading;
 using Hangfire.Storage;
 
@@ -27,6 +28,6 @@ namespace Hangfire.PostgreSql
     public interface IPersistentJobQueue
     {
         IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken);
-        void Enqueue(string queue, string jobId);
+        void Enqueue(IDbConnection connection, string queue, string jobId);
     }
 }

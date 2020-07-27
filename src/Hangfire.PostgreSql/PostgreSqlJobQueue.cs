@@ -229,14 +229,14 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 				markJobAsFetched.Queue);
 		}
 
-		public void Enqueue(string queue, string jobId)
+		public void Enqueue(IDbConnection connection, string queue, string jobId)
 		{
 			string enqueueJobSql = @"
 INSERT INTO """ + _options.SchemaName + @""".""jobqueue"" (""jobid"", ""queue"") 
 VALUES (@jobId, @queue);
 ";
 
-			_storage.UseConnection(connection => connection.Execute(enqueueJobSql, new {jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), queue = queue}));
+			connection.Execute(enqueueJobSql, new {jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), queue = queue});
 		}
 
 		[UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
