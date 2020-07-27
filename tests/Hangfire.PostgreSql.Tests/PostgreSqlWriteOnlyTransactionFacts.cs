@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Transactions;
 using Dapper;
+using Hangfire.Common;
 using Hangfire.States;
 using Moq;
 using Npgsql;
@@ -1048,6 +1049,35 @@ returning ""id""";
                 var records = sql.Query(@"select * from """ + GetSchemaName() + @""".""list""").ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
                 Assert.Null(records["list-1"]);
                 Assert.NotNull(records["list-2"]);
+            });
+        }
+
+        [Fact, CleanDatabase]
+        public void AddToQueue_AddsAJobToTheQueue_UsingStorageConnection_WithTransactionScopeEnlistment()
+        {
+            string jobId;
+            var storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString(), new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true });
+            using (var storageConnection = storage.GetConnection())
+            {
+                using (var writeTransaction = storageConnection.CreateWriteTransaction())
+                {
+                    // Explicitly call multiple write commands here, as AddToQueue previously opened an own connection.
+                    // This triggered a prepared transaction which should be avoided.
+                    jobId = storageConnection.CreateExpiredJob(Job.FromExpression(() => Console.Write("Hi")), new Dictionary<string, string>(), DateTime.UtcNow, TimeSpan.FromMinutes(1));
+
+                    writeTransaction.SetJobState(jobId, new ScheduledState(DateTime.UtcNow));
+                    writeTransaction.AddToQueue("default", jobId);
+                    writeTransaction.PersistJob(jobId);
+                    writeTransaction.Commit();
+                }
+            }
+
+            UseConnection(connection =>
+            {
+                var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
+                Assert.Equal(jobId, record.jobid.ToString());
+                Assert.Equal("default", record.queue);
+                Assert.Null(record.FetchedAt);
             });
         }
 
