@@ -53,9 +53,9 @@ namespace Hangfire.PostgreSql.Tests
                 var queue = CreateJobQueue(storage, false);
                 var token = CreateTimingOutCancellationToken();
 
-                queue.Enqueue("1", "1");
-                queue.Enqueue("2", "2");
-                queue.Enqueue("3", "3");
+                queue.Enqueue(connection, "1", "1");
+                queue.Enqueue(connection, "2", "2");
+                queue.Enqueue(connection, "3", "3");
 
                 Assert.Equal("1", queue.Dequeue(new[] { "1", "2", "3" }, token).JobId);
                 Assert.Equal("2", queue.Dequeue(new[] { "2", "3", "1" }, token).JobId);
@@ -436,7 +436,7 @@ select i.""id"", @queue from i;
 
 				Assert.True(name.Length > 21);
 
-				queue.Enqueue(name, "1");
+				queue.Enqueue(connection, name, "1");
 
 				var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
 				Assert.Equal(name, record.queue.ToString());
@@ -449,7 +449,7 @@ select i.""id"", @queue from i;
 			{
 				var queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
-				queue.Enqueue("default", "1");
+				queue.Enqueue(connection, "default", "1");
 
 				var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
 				Assert.Equal("1", record.jobid.ToString());
