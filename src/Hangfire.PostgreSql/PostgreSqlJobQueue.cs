@@ -77,6 +77,7 @@ WHERE ""id"" IN (
         ELSE {queues.Length}
     END,
     ""fetchedat"", ""jobid""
+    FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
 RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
@@ -98,7 +99,7 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 
 					try
 					{
-						using (var trx = connection.BeginTransaction(IsolationLevel.RepeatableRead))
+						using (var trx = connection.BeginTransaction(IsolationLevel.ReadCommitted))
 						{
 							var jobToFetch = connection.Query<FetchedJob>(
 									fetchJobSql,
