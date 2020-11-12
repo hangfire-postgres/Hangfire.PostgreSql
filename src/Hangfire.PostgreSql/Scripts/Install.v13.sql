@@ -11,4 +11,4 @@ BEGIN
 END
 $$;
 
-CREATE INDEX IF NOT EXISTS jobqueue_queue_fetchat_jobId ON hangfire.jobqueue USING btree (queue asc, fetchedat asc nulls last, jobid asc)
+CREATE INDEX IF NOT EXISTS jobqueue_queue_fetchat_jobId ON hangfire.jobqueue USING btree (queue asc, fetchedat asc nulls last, jobid asc);
