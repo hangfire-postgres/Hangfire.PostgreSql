@@ -4,7 +4,7 @@
     <Description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET and aspnet core applications).</Description>
     <Copyright>Copyright © 2014-2020 Frank Hommers and others</Copyright>
     <AssemblyTitle>Hangfire PostgreSql Storage</AssemblyTitle>
-    <VersionPrefix>1.7.0</VersionPrefix>
+    <VersionPrefix>1.8.0</VersionPrefix>
     <Authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask), Vincent Vrijburg, David Roth (davidroth).</Authors>
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>Hangfire.PostgreSql</AssemblyName>
@@ -14,9 +14,9 @@
     <PackageReleaseNotes>https://github.com/frankhommers/Hangfire.PostgreSql/releases</PackageReleaseNotes>
     <PackageProjectUrl>http://hmm.rs/Hangfire.PostgreSql</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
-    <Version>1.7.1.0</Version>
-    <FileVersion>1.7.1.0</FileVersion>
-    <AssemblyVersion>1.7.1.0</AssemblyVersion>
+    <Version>1.8.0.0</Version>
+    <FileVersion>1.8.0.0</FileVersion>
+    <AssemblyVersion>1.8.0.0</AssemblyVersion>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <RepositoryUrl>https://github.com/frankhommers/Hangfire.PostgreSql</RepositoryUrl>
@@ -32,6 +32,7 @@
     <None Remove="Scripts\Install.v10.sql" />
     <None Remove="Scripts\Install.v11.sql" />
     <None Remove="Scripts\Install.v12.sql" />
+    <None Remove="Scripts\Install.v13.sql" />
     <None Remove="Scripts\Install.v3.sql" />
     <None Remove="Scripts\Install.v4.sql" />
     <None Remove="Scripts\Install.v5.sql" />
@@ -42,6 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Scripts\Install.v13.sql" />
     <EmbeddedResource Include="Scripts\Install.v10.sql" />
     <EmbeddedResource Include="Scripts\Install.v11.sql" />
     <EmbeddedResource Include="Scripts\Install.v12.sql" />

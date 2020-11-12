@@ -71,12 +71,7 @@ WHERE ""id"" IN (
     FROM """ + _options.SchemaName + $@""".""jobqueue"" 
     WHERE ""queue"" = ANY (@queues)
     AND ""fetchedat"" {{0}}
-    ORDER BY
-    CASE ""queue""
-        {string.Join("\n", queues.Select((q, i) => $"WHEN '{q}' THEN {i}"))}
-        ELSE {queues.Length}
-    END,
-    ""fetchedat"", ""jobid""
+    ORDER BY ""queue"", ""fetchedat"", ""jobid""
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
@@ -169,12 +164,7 @@ SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetch
 FROM """ + _options.SchemaName + $@""".""jobqueue"" 
 WHERE ""queue"" = ANY (@queues)
 AND ""fetchedat"" {{0}} 
-ORDER BY
-CASE ""queue""
-    {string.Join("\n", queues.Select((q, i) => $"WHEN '{q}' THEN {i}"))}
-    ELSE {queues.Length}
-END,
-""fetchedat"", ""jobid"" 
+ORDER BY ""queue"", ""fetchedat"", ""jobid"" 
 LIMIT 1;
 ";
 
