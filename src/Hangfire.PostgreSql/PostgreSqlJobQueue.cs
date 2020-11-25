@@ -66,7 +66,7 @@ namespace Hangfire.PostgreSql
 			string fetchJobSqlTemplate = @"
 UPDATE """ + _options.SchemaName + @""".""jobqueue"" 
 SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
-WHERE ""id"" IN (
+WHERE ""id"" = (
     SELECT ""id"" 
     FROM """ + _options.SchemaName + $@""".""jobqueue"" 
     WHERE ""queue"" = ANY (@queues)

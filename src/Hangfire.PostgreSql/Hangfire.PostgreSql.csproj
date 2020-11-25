@@ -25,43 +25,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="*.sql" Exclude="bin\**;obj\**;**\*.xproj;packages\**;@(EmbeddedResource)" />
+    <EmbeddedResource Include="Scripts\*.sql" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="Scripts\Install.v10.sql" />
-    <None Remove="Scripts\Install.v11.sql" />
-    <None Remove="Scripts\Install.v12.sql" />
-    <None Remove="Scripts\Install.v13.sql" />
-    <None Remove="Scripts\Install.v3.sql" />
-    <None Remove="Scripts\Install.v4.sql" />
-    <None Remove="Scripts\Install.v5.sql" />
-    <None Remove="Scripts\Install.v6.sql" />
-    <None Remove="Scripts\Install.v7.sql" />
-    <None Remove="Scripts\Install.v8.sql" />
-    <None Remove="Scripts\Install.v9.sql" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Scripts\Install.v13.sql" />
-    <EmbeddedResource Include="Scripts\Install.v10.sql" />
-    <EmbeddedResource Include="Scripts\Install.v11.sql" />
-    <EmbeddedResource Include="Scripts\Install.v12.sql" />
-    <EmbeddedResource Include="Scripts\Install.v3.sql" />
-    <EmbeddedResource Include="Scripts\Install.v4.sql" />
-    <EmbeddedResource Include="Scripts\Install.v5.sql" />
-    <EmbeddedResource Include="Scripts\Install.v6.sql" />
-    <EmbeddedResource Include="Scripts\Install.v7.sql" />
-    <EmbeddedResource Include="Scripts\Install.v8.sql" />
-    <EmbeddedResource Include="Scripts\Install.v9.sql" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.0.30" />
-    <PackageReference Include="Hangfire.Core" Version="1.7.10" />
+    <PackageReference Include="Dapper" Version="2.0.78" />
+    <PackageReference Include="Hangfire.Core" Version="1.7.18" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.1" />
-    <PackageReference Include="Npgsql" Version="4.1.3.1" />
+    <PackageReference Include="Npgsql" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
