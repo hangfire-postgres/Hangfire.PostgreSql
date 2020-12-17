@@ -106,6 +106,10 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 							return jobToFetch;
 						}
 					}
+					catch (InvalidOperationException)
+					{
+						// thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
+					}
 					finally
 					{
 						_storage.ReleaseConnection(connection);
