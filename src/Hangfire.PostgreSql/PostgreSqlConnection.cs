@@ -416,7 +416,12 @@ WHERE NOT EXISTS (
 				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
 				WHERE ""id"" = @id;";
 
-			_connection.Execute(query, new { id = serverId });
+			int affectedRows = _connection.Execute(query, new { id = serverId });
+
+			if (affectedRows == 0)
+			{
+				throw new BackgroundServerGoneException();
+			}
 		}
 
 		public override int RemoveTimedOutServers(TimeSpan timeOut)
