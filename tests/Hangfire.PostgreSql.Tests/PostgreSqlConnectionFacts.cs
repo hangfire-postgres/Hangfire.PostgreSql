@@ -644,6 +644,15 @@ values ('Server1', '', now() at time zone 'utc'),
 		}
 
 		[Fact, CleanDatabase]
+		public void Heartbeat_ThrowsBackgroundServerGoneException_WhenServerDisappeared()
+		{
+			string disappearedServerId = Guid.NewGuid().ToString();
+
+			UseConnection(connection => Assert.Throws<BackgroundServerGoneException>(
+				() => connection.Heartbeat(disappearedServerId)));
+		}
+
+		[Fact, CleanDatabase]
 		public void Heartbeat_UpdatesLastHeartbeat_OfTheServerWithGivenId()
 		{
 			string arrangeSql = @"
