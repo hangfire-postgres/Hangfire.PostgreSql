@@ -201,3 +201,5 @@ $$;
 CREATE TABLE IF NOT EXISTS "lock" ( "resource" VARCHAR(100) NOT NULL ,
   UNIQUE ("resource")
 ); 
+
+RESET search_path;

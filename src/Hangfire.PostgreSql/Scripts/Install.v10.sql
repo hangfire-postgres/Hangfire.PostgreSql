@@ -13,3 +13,5 @@ END
 $$;
 
 ALTER TABLE "jobqueue" ALTER COLUMN "queue" TYPE TEXT;
+
+RESET search_path;

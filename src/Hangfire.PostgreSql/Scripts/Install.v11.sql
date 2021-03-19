@@ -1,7 +1,5 @@
 SET search_path = 'hangfire';
 
-
-
 DO
 $$
 BEGIN
@@ -23,3 +21,5 @@ ALTER TABLE "jobqueue" ALTER COLUMN id TYPE BIGINT;
 ALTER TABLE "jobqueue" ALTER COLUMN jobid TYPE BIGINT;
 ALTER TABLE "list" ALTER COLUMN id TYPE BIGINT;
 ALTER TABLE "set" ALTER COLUMN id TYPE BIGINT;
+
+RESET search_path;
