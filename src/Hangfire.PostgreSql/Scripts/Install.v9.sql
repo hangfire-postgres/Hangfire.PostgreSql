@@ -13,3 +13,5 @@ END
 $$;
 
 ALTER TABLE "lock" ALTER COLUMN "resource" TYPE TEXT;
+
+RESET search_path;

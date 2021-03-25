@@ -12,3 +12,5 @@ END
 $$;
 
 CREATE INDEX IF NOT EXISTS jobqueue_queue_fetchat_jobId ON jobqueue USING btree (queue asc, fetchedat asc nulls last, jobid asc);
+
+RESET search_path;

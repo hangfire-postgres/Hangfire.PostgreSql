@@ -1,7 +1,5 @@
 SET search_path = 'hangfire';
 
-
-
 DO
 $$
 BEGIN
@@ -21,3 +19,5 @@ ALTER TABLE "set" ALTER COLUMN "key" TYPE TEXT;
 ALTER TABLE "jobparameter" ALTER COLUMN "name" TYPE TEXT;
 ALTER TABLE "state" ALTER COLUMN "name" TYPE TEXT;
 ALTER TABLE "state" ALTER COLUMN reason TYPE TEXT;
+
+RESET search_path;

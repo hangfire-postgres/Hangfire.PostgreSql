@@ -13,3 +13,5 @@ END
 $$;
 
 ALTER TABLE "server" ALTER COLUMN "id" TYPE VARCHAR(100);
+
+RESET search_path;
