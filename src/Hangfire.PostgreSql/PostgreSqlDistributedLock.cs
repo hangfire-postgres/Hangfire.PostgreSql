@@ -24,11 +24,14 @@ using System.Data;
 using System.Diagnostics;
 using System.Threading;
 using Dapper;
+using Hangfire.Logging;
 
 namespace Hangfire.PostgreSql
 {
     public sealed class PostgreSqlDistributedLock : IDisposable
     {
+        private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+
         private readonly string _resource;
         private readonly IDbConnection _connection;
         private readonly PostgreSqlStorageOptions _options;
@@ -58,11 +61,16 @@ namespace Hangfire.PostgreSql
 
             while (tryAcquireLock)
             {
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+
                 TryRemoveDeadlock(resource, connection, options);
 
                 try
                 {
-                    int rowsAffected = -1;
+                    int rowsAffected;
                     using (var trx = connection.BeginTransaction(IsolationLevel.RepeatableRead))
                     {
                         rowsAffected = connection.Execute($@"
@@ -82,8 +90,9 @@ WHERE NOT EXISTS (
                     }
                     if (rowsAffected > 0) return;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Log(resource, "Failed to lock with transaction", ex);
                 }
 
                 if (lockAcquiringTime.ElapsedMilliseconds > timeout.TotalMilliseconds)
@@ -127,8 +136,9 @@ WHERE NOT EXISTS (
                     transaction.Commit();
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Log(resource, "Failed to remove lock", ex);
             }
         }
 
@@ -140,6 +150,11 @@ WHERE NOT EXISTS (
 
             while (tryAcquireLock)
             {
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+
                 try
                 {
                     connection.Execute($@"
@@ -155,8 +170,9 @@ WHERE NOT EXISTS (
                         acquired = DateTime.UtcNow
                     });
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Log(resource, "Failed to lock with update count", ex);
                 }
 
                 int rowsAffected = connection.Execute(
@@ -181,6 +197,9 @@ WHERE NOT EXISTS (
             throw new PostgreSqlDistributedLockException(
                 $"Could not place a lock on the resource '{resource}': Lock timeout.");
         }
+
+        private static void Log(string resource, string message, Exception ex) =>
+            Logger.WarnException($"{resource}: {message}", ex);
 
         public void Dispose()
         {
