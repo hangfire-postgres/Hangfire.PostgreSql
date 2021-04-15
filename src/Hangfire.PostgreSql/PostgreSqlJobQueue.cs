@@ -37,10 +37,13 @@ namespace Hangfire.PostgreSql
 		private readonly PostgreSqlStorageOptions _options;
 		private readonly PostgreSqlStorage _storage;
 
+		private AutoResetEvent SignalDequeue { get; }
+
 		public PostgreSqlJobQueue(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
 		{
 			_options = options ?? throw new ArgumentNullException(nameof(options));
 			_storage = storage ?? throw new ArgumentNullException(nameof(storage));
+			SignalDequeue = new AutoResetEvent(false);
 		}
 
 
@@ -53,6 +56,13 @@ namespace Hangfire.PostgreSql
 			return Dequeue_UpdateCount(queues, cancellationToken);
 		}
 
+		/// <summary>
+		///		Signal the waiting Thread to lookup a new Job
+		/// </summary>
+		public void FetchNextJob()
+		{
+			SignalDequeue.Set();
+		}
 
 		[NotNull]
 		internal IFetchedJob Dequeue_Transaction(string[] queues, CancellationToken cancellationToken)
@@ -131,7 +141,12 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 				{
 					if (currentQueryIndex == fetchConditions.Length - 1)
 					{
-                        WaitHandle.WaitAny(new []{cancellationToken.WaitHandle, NewItemInQueueEvent},_options.QueuePollInterval);
+                        WaitHandle.WaitAny(new []
+                        {
+	                        cancellationToken.WaitHandle,
+	                        NewItemInQueueEvent,
+	                        SignalDequeue
+                        },_options.QueuePollInterval);
 						cancellationToken.ThrowIfCancellationRequested();
 					}
 				}
@@ -196,7 +211,11 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
 				{
 					if (currentQueryIndex == fetchConditions.Length - 1)
 					{
-						cancellationToken.WaitHandle.WaitOne(_options.QueuePollInterval);
+						WaitHandle.WaitAny(new []
+						{
+							cancellationToken.WaitHandle,
+							SignalDequeue
+						},_options.QueuePollInterval);
 						cancellationToken.ThrowIfCancellationRequested();
 					}
 				}
