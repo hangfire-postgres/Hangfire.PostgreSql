@@ -52,8 +52,8 @@ namespace Hangfire.PostgreSql
                     try
                     {
                         script = GetStringResource(
-                          typeof(PostgreSqlObjectsInstaller).GetTypeInfo().Assembly,
-                          $"Hangfire.PostgreSql.Scripts.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
+                            typeof(PostgreSqlObjectsInstaller).GetTypeInfo().Assembly,
+                            $"Hangfire.PostgreSql.Scripts.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
                     }
                     catch (MissingManifestResourceException)
                     {
@@ -65,29 +65,34 @@ namespace Hangfire.PostgreSql
                         script = script.Replace("'hangfire'", $"'{schemaName}'").Replace(@"""hangfire""", $@"""{schemaName}""");
                     }
 
-                    using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
-#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-                    using (var command = new NpgsqlCommand(script, connection, transaction))
-#pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
+                    if (!VersionAlreadyApplied(connection, schemaName, version))
                     {
-                        command.CommandTimeout = 120;
-                        try
+                        using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
                         {
 #pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-                            command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion";
+                            using (var command = new NpgsqlCommand(script, connection, transaction))
 #pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
-                            command.Parameters.AddWithValue("version", version);
-                            command.Parameters.AddWithValue("previousVersion", previousVersion);
-
-                            command.ExecuteNonQuery();
-
-                            transaction.Commit();
-                        }
-                        catch (PostgresException ex)
-                        {
-                            if ((ex.MessageText ?? "") != "version-already-applied")
                             {
-                                throw;
+                                command.CommandTimeout = 120;
+                                try
+                                {
+#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
+                                    command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @version WHERE ""version"" = @previousVersion";
+#pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
+                                    command.Parameters.AddWithValue("version", version);
+                                    command.Parameters.AddWithValue("previousVersion", previousVersion);
+
+                                    command.ExecuteNonQuery();
+
+                                    transaction.Commit();
+                                }
+                                catch (PostgresException ex)
+                                {
+                                    if ((ex.MessageText ?? "") != "version-already-applied")
+                                    {
+                                        throw;
+                                    }
+                                }
                             }
                         }
                     }
@@ -105,6 +110,28 @@ namespace Hangfire.PostgreSql
             } while (true);
 
             Log.Info("Hangfire SQL objects installed.");
+        }
+
+        private static bool VersionAlreadyApplied(NpgsqlConnection connection, string schemaName, int version)
+        {
+            try
+            {
+                using (NpgsqlCommand command = new NpgsqlCommand($@"SELECT true :: boolean ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version""::integer >= @version", connection))
+                {
+                    command.Parameters.AddWithValue("version", version);
+                    object result = command.ExecuteScalar();
+                    if (true.Equals(result)) return true;
+                }
+            }
+            catch (PostgresException ex)
+            {
+                if (ex.SqlState == "42P01")    //Relation (table) does not exist. So no schema table yet.
+                    return false;
+
+                throw;
+            }
+
+            return false;
         }
 
         private static string GetStringResource(Assembly assembly, string resourceName)
