@@ -44,7 +44,7 @@ namespace Hangfire.PostgreSql
 
         public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi()
         {
-            return new PostgreSqlJobQueueMonitoringApi(Storage, Options);
+            return new PostgreSqlJobQueueMonitoringApi(Storage);
         }
     }
 }

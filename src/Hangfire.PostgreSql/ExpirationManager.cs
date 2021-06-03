@@ -19,18 +19,22 @@
 //   
 //    Special thanks goes to him.
 
+using Dapper;
+using Hangfire.Logging;
+using Hangfire.Server;
+using Hangfire.Storage;
 using System;
 using System.Data;
 using System.Globalization;
 using System.Threading;
-using Dapper;
-using Hangfire.Logging;
-using Hangfire.Server;
 
 namespace Hangfire.PostgreSql
 {
     internal class ExpirationManager : IBackgroundProcess, IServerComponent
     {
+        private const string DistributedLockKey = "locks:expirationmanager";
+        private static readonly TimeSpan DefaultLockTimeout = TimeSpan.FromMinutes(5);
+
         private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
         private const int NumberOfRecordsInSinglePass = 1000;
 
@@ -52,18 +56,16 @@ namespace Hangfire.PostgreSql
         };
 
         private readonly PostgreSqlStorage _storage;
-        private readonly PostgreSqlStorageOptions _options;
         private readonly TimeSpan _checkInterval;
 
-        public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
-            : this(storage, options, TimeSpan.FromHours(1))
+        public ExpirationManager(PostgreSqlStorage storage)
+            : this(storage, TimeSpan.FromHours(1))
         {
         }
 
-        public ExpirationManager(PostgreSqlStorage storage, PostgreSqlStorageOptions options, TimeSpan checkInterval)
+        public ExpirationManager(PostgreSqlStorage storage, TimeSpan checkInterval)
         {
             _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
             _checkInterval = checkInterval;
         }
 
@@ -81,33 +83,34 @@ namespace Hangfire.PostgreSql
 
                 do
                 {
-                    using (var storageConnection = (PostgreSqlConnection)_storage.GetConnection())
+                    UseConnectionDistributedLock(_storage, connection =>
                     {
-                        using (var transaction = storageConnection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                        using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                         {
-                            removedCount = storageConnection.Connection.Execute(
+                            removedCount = connection.Execute(
                                 string.Format(@"
-DELETE FROM """ + _options.SchemaName + @""".""{0}"" 
+DELETE FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
 WHERE ""id"" IN (
     SELECT ""id"" 
-    FROM """ + _options.SchemaName + @""".""{0}"" 
+    FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
     WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
     LIMIT {1}
 )", table, NumberOfRecordsInSinglePass.ToString(CultureInfo.InvariantCulture)), transaction);
 
                             transaction.Commit();
                         }
-                    }
 
-                    if (removedCount > 0)
-                    {
-                        Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
+                        if (removedCount > 0)
+                        {
+                            Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
-                        cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
+                            cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                    });
                 } while (removedCount != 0);
             }
+
             AggregateCounters(cancellationToken);
             cancellationToken.WaitHandle.WaitOne(_checkInterval);
         }
@@ -123,13 +126,13 @@ WHERE ""id"" IN (
 
         private void AggregateCounter(string counterName)
         {
-            using (var connection = (PostgreSqlConnection)_storage.GetConnection())
+            UseConnectionDistributedLock(_storage, connection =>
             {
-                using (var transaction = connection.Connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
                     var aggregateQuery = $@"
 WITH counters AS (
-DELETE FROM ""{_options.SchemaName}"".""counter""
+DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
 WHERE ""key"" = '{counterName}'
 AND ""expireat"" IS NULL
 RETURNING *
@@ -138,15 +141,44 @@ RETURNING *
 SELECT SUM(value) FROM counters;
 ";
 
-                    var aggregatedValue = connection.Connection.ExecuteScalar<long>(aggregateQuery, transaction: transaction);
+                    var aggregatedValue = connection.ExecuteScalar<long>(aggregateQuery, transaction: transaction);
                     transaction.Commit();
 
                     if (aggregatedValue > 0)
                     {
-                        var insertQuery = $@"INSERT INTO ""{_options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@key, @value);";
-                        connection.Connection.Execute(insertQuery, new { key = counterName, value = aggregatedValue });
+                        var insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@key, @value);";
+                        connection.Execute(insertQuery, new { key = counterName, value = aggregatedValue });
                     }
                 }
+            });
+        }
+
+        private void UseConnectionDistributedLock(PostgreSqlStorage storage, Action<IDbConnection> action)
+        {
+            try
+            {
+                storage.UseConnection(null, connection =>
+                {
+                    PostgreSqlDistributedLock.Acquire(connection, DistributedLockKey, DefaultLockTimeout, _storage.Options);
+
+                    try
+                    {
+                        action(connection);
+                    }
+                    finally
+                    {
+                        PostgreSqlDistributedLock.Release(connection, DistributedLockKey, _storage.Options);
+                    }
+                });
+            }
+            catch (DistributedLockTimeoutException e) when (e.Resource == DistributedLockKey)
+            {
+                // DistributedLockTimeoutException here doesn't mean that outdated records weren't removed.
+                // It just means another Hangfire server did this work.
+                Logger.Log(
+                    LogLevel.Debug,
+                    () => $@"An exception was thrown during acquiring distributed lock on the {DistributedLockKey} resource within {DefaultLockTimeout.TotalSeconds} seconds. Outdated records were not removed. It will be retried in {_checkInterval.TotalSeconds} seconds.",
+                    e);
             }
         }
     }

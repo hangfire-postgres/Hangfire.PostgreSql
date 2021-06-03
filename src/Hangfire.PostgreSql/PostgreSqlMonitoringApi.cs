@@ -19,34 +19,30 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Globalization;
-using System.Linq;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Entities;
 using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
-using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.Linq;
 
 namespace Hangfire.PostgreSql
 {
     public class PostgreSqlMonitoringApi : IMonitoringApi
     {
         private readonly PostgreSqlStorage _storage;
-        private readonly PostgreSqlStorageOptions _options;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
         public PostgreSqlMonitoringApi(
             PostgreSqlStorage storage,
-            PostgreSqlStorageOptions options,
             PersistentJobQueueProviderCollection queueProviders)
         {
             _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
             _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
         }
 
@@ -57,18 +53,18 @@ namespace Hangfire.PostgreSql
 
         public long EnqueuedCount(string queue)
         {
-	        var queueApi = GetQueueApi(queue);
-	        var counters = queueApi.GetEnqueuedAndFetchedCount(queue);
+            var queueApi = GetQueueApi(queue);
+            var counters = queueApi.GetEnqueuedAndFetchedCount(queue);
 
-	        return counters.EnqueuedCount ?? 0;
+            return counters.EnqueuedCount ?? 0;
         }
 
         public long FetchedCount(string queue)
         {
-	        var queueApi = GetQueueApi(queue);
-	        var counters = queueApi.GetEnqueuedAndFetchedCount(queue);
+            var queueApi = GetQueueApi(queue);
+            var counters = queueApi.GetEnqueuedAndFetchedCount(queue);
 
-	        return counters.FetchedCount ?? 0;
+            return counters.FetchedCount ?? 0;
         }
 
         public long FailedCount()
@@ -119,10 +115,10 @@ namespace Hangfire.PostgreSql
 
         public IList<ServerDto> Servers()
         {
-            return _storage.UseConnection(connection =>
+            return UseConnection(connection =>
             {
                 var servers = connection.Query<Entities.Server>(
-                    @"SELECT * FROM """ + _options.SchemaName + @""".""server""")
+                    @"SELECT * FROM """ + _storage.Options.SchemaName + @""".""server""")
                     .ToList();
 
                 var result = new List<ServerDto>();
@@ -144,10 +140,10 @@ namespace Hangfire.PostgreSql
             });
         }
 
-        public JobList<FailedJobDto> FailedJobs(int @from, int count)
+        public JobList<FailedJobDto> FailedJobs(int from, int count)
         {
             return GetJobs(
-                @from,
+                from,
                 count,
                 FailedState.StateName,
                 (sqlJob, job, stateData) => new FailedJobDto
@@ -161,10 +157,10 @@ namespace Hangfire.PostgreSql
                 });
         }
 
-        public JobList<SucceededJobDto> SucceededJobs(int @from, int count)
+        public JobList<SucceededJobDto> SucceededJobs(int from, int count)
         {
             return GetJobs(
-                @from,
+                from,
                 count,
                 SucceededState.StateName,
                 (sqlJob, job, stateData) => new SucceededJobDto
@@ -178,10 +174,10 @@ namespace Hangfire.PostgreSql
                 });
         }
 
-        public JobList<DeletedJobDto> DeletedJobs(int @from, int count)
+        public JobList<DeletedJobDto> DeletedJobs(int from, int count)
         {
             return GetJobs(
-                @from,
+                from,
                 count,
                 DeletedState.StateName,
                 (sqlJob, job, stateData) => new DeletedJobDto
@@ -193,45 +189,45 @@ namespace Hangfire.PostgreSql
 
         public IList<QueueWithTopEnqueuedJobsDto> Queues()
         {
-	        var tuples = _queueProviders
-		        .Select(x => x.GetJobQueueMonitoringApi())
-		        .SelectMany(x => x.GetQueues(), (monitoring, queue) => new {Monitoring = monitoring, Queue = queue})
-		        .OrderBy(x => x.Queue)
-		        .ToArray();
+            var tuples = _queueProviders
+                .Select(x => x.GetJobQueueMonitoringApi())
+                .SelectMany(x => x.GetQueues(), (monitoring, queue) => new { Monitoring = monitoring, Queue = queue })
+                .OrderBy(x => x.Queue)
+                .ToArray();
 
-	        var result = new List<QueueWithTopEnqueuedJobsDto>(tuples.Length);
+            var result = new List<QueueWithTopEnqueuedJobsDto>(tuples.Length);
 
-	        foreach (var tuple in tuples)
-	        {
-		        var enqueuedJobIds = tuple.Monitoring.GetEnqueuedJobIds(tuple.Queue, 0, 5);
-		        var counters = tuple.Monitoring.GetEnqueuedAndFetchedCount(tuple.Queue);
+            foreach (var tuple in tuples)
+            {
+                var enqueuedJobIds = tuple.Monitoring.GetEnqueuedJobIds(tuple.Queue, 0, 5);
+                var counters = tuple.Monitoring.GetEnqueuedAndFetchedCount(tuple.Queue);
 
-		        result.Add(new QueueWithTopEnqueuedJobsDto
-		        {
-			        Name = tuple.Queue,
-			        Length = counters.EnqueuedCount ?? 0,
-			        Fetched = counters.FetchedCount,
-			        FirstJobs = EnqueuedJobs(enqueuedJobIds)
-		        });
-	        }
+                result.Add(new QueueWithTopEnqueuedJobsDto
+                {
+                    Name = tuple.Queue,
+                    Length = counters.EnqueuedCount ?? 0,
+                    Fetched = counters.FetchedCount,
+                    FirstJobs = EnqueuedJobs(enqueuedJobIds)
+                });
+            }
 
-	        return result;
+            return result;
         }
 
         public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int @from, int perPage)
         {
-	        var queueApi = GetQueueApi(queue);
-	        var enqueuedJobIds = queueApi.GetEnqueuedJobIds(queue, @from, perPage);
+            var queueApi = GetQueueApi(queue);
+            var enqueuedJobIds = queueApi.GetEnqueuedJobIds(queue, @from, perPage);
 
-	        return EnqueuedJobs(enqueuedJobIds);
+            return EnqueuedJobs(enqueuedJobIds);
         }
 
         public JobList<FetchedJobDto> FetchedJobs(string queue, int @from, int perPage)
         {
-	        var queueApi = GetQueueApi(queue);
-	        var fetchedJobIds = queueApi.GetFetchedJobIds(queue, @from, perPage);
+            var queueApi = GetQueueApi(queue);
+            var fetchedJobIds = queueApi.GetFetchedJobIds(queue, @from, perPage);
 
-	        return FetchedJobs(fetchedJobIds);
+            return FetchedJobs(fetchedJobIds);
         }
 
         public IDictionary<DateTime, long> HourlySucceededJobs()
@@ -241,25 +237,25 @@ namespace Hangfire.PostgreSql
 
         public IDictionary<DateTime, long> HourlyFailedJobs()
         {
-            return GetHourlyTimelineStats( "failed");
+            return GetHourlyTimelineStats("failed");
         }
 
         public JobDetailsDto JobDetails(string jobId)
         {
-            return _storage.UseConnection(connection =>
+            return UseConnection(connection =>
             {
 
 
                 string sql = @"
 SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt"" 
-FROM """ + _options.SchemaName + @""".""job"" 
+FROM """ + _storage.Options.SchemaName + @""".""job"" 
 WHERE ""id"" = @id;
 
-SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value"" from """ + _options.SchemaName + @""".""jobparameter"" 
+SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value"" from """ + _storage.Options.SchemaName + @""".""jobparameter"" 
 WHERE ""jobid"" = @id;
 
 SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""reason"" ""Reason"", ""createdat"" ""CreatedAt"", ""data"" ""Data"" 
-FROM """ + _options.SchemaName + @""".""state"" 
+FROM """ + _storage.Options.SchemaName + @""".""state"" 
 WHERE ""jobid"" = @id 
 ORDER BY ""id"" DESC;
 ";
@@ -306,27 +302,27 @@ ORDER BY ""id"" DESC;
 
         public StatisticsDto GetStatistics()
         {
-            return _storage.UseConnection(connection =>
+            return UseConnection(connection =>
             {
                 var sql = $@"
 SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
-FROM ""{_options.SchemaName}"".""job""
+FROM ""{_storage.Options.SchemaName}"".""job""
 WHERE ""statename"" IS NOT NULL
 GROUP BY ""statename"";
 
 SELECT COUNT(*) 
-FROM ""{_options.SchemaName}"".""server"";
+FROM ""{_storage.Options.SchemaName}"".""server"";
 
 SELECT SUM(""value"") 
-FROM ""{_options.SchemaName}"".""counter"" 
+FROM ""{_storage.Options.SchemaName}"".""counter"" 
 WHERE ""key"" = 'stats:succeeded';
 
 SELECT SUM(""value"") 
-FROM ""{_options.SchemaName}"".""counter"" 
+FROM ""{_storage.Options.SchemaName}"".""counter"" 
 WHERE ""key"" = 'stats:deleted';
 
 SELECT COUNT(*) 
-FROM ""{_options.SchemaName}"".""set"" 
+FROM ""{_storage.Options.SchemaName}"".""set"" 
 WHERE ""key"" = 'recurring-jobs';
 ";
 
@@ -392,12 +388,12 @@ WHERE ""key"" = 'recurring-jobs';
         {
             var query = $@"
 SELECT ""key"", COUNT(""value"") AS ""count"" 
-FROM ""{_options.SchemaName}"".""counter""
+FROM ""{_storage.Options.SchemaName}"".""counter""
 WHERE ""key"" = ANY (@keys)
 GROUP BY ""key"";
 ";
 
-            var valuesMap = _storage.UseConnection(connection => connection.Query(
+            var valuesMap = UseConnection(connection => connection.Query(
                 query,
                 new { keys = keyMaps.Keys.ToList() })
                 .ToList()
@@ -430,14 +426,14 @@ GROUP BY ""key"";
         {
             string enqueuedJobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", j.""expireat"" ""ExpireAt"", s.""name"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-FROM """ + _options.SchemaName + @""".""job"" j
-LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON s.""id"" = j.""stateid""
-LEFT JOIN """ + _options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
+FROM """ + _storage.Options.SchemaName + @""".""job"" j
+LEFT JOIN """ + _storage.Options.SchemaName + @""".""state"" s ON s.""id"" = j.""stateid""
+LEFT JOIN """ + _storage.Options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
 WHERE j.""id"" = ANY (@jobIds)
 AND jq.""fetchedat"" IS NULL;
 ";
 
-            var jobs = _storage.UseConnection(connection => connection.Query<SqlJob>(
+            var jobs = UseConnection(connection => connection.Query<SqlJob>(
                 enqueuedJobsSql,
                 new { jobIds = jobIds.ToList() })
                 .ToList());
@@ -458,11 +454,11 @@ AND jq.""fetchedat"" IS NULL;
         {
             string sqlQuery = @"
 SELECT COUNT(""id"") 
-FROM """ + _options.SchemaName + @""".""job"" 
+FROM """ + _storage.Options.SchemaName + @""".""job"" 
 WHERE ""statename"" = @state;
 ";
 
-            var count = _storage.UseConnection(connection => connection.Query<long>(
+            var count = UseConnection(connection => connection.Query<long>(
                  sqlQuery,
                  new { state = stateName })
                  .Single());
@@ -490,14 +486,14 @@ WHERE ""statename"" = @state;
             string jobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 
     j.""expireat"" ""ExpireAt"", NULL ""FetchedAt"", j.""statename"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-FROM """ + _options.SchemaName + @""".""job"" j
-LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
+FROM """ + _storage.Options.SchemaName + @""".""job"" j
+LEFT JOIN """ + _storage.Options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
 WHERE j.""statename"" = @stateName 
 ORDER BY j.""id"" DESC
 LIMIT @count OFFSET @start;
 ";
 
-            var jobs = _storage.UseConnection(connection => connection.Query<SqlJob>(
+            var jobs = UseConnection(connection => connection.Query<SqlJob>(
                         jobsSql,
                         new { stateName = stateName, start = from, count = count })
                         .ToList());
@@ -538,14 +534,14 @@ LIMIT @count OFFSET @start;
             string fetchedJobsSql = @"
 SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 
     j.""expireat"" ""ExpireAt"", jq.""fetchedat"" ""FetchedAt"", j.""statename"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-FROM """ + _options.SchemaName + @""".""job"" j
-LEFT JOIN """ + _options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
-LEFT JOIN """ + _options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
+FROM """ + _storage.Options.SchemaName + @""".""job"" j
+LEFT JOIN """ + _storage.Options.SchemaName + @""".""state"" s ON j.""stateid"" = s.""id""
+LEFT JOIN """ + _storage.Options.SchemaName + @""".""jobqueue"" jq ON jq.""jobid"" = j.""id""
 WHERE j.""id"" = ANY (@jobIds)
 AND ""jq"".""fetchedat"" IS NOT NULL;
 ";
 
-            var jobs = _storage.UseConnection(connection => connection.Query<SqlJob>(
+            var jobs = UseConnection(connection => connection.Query<SqlJob>(
                 fetchedJobsSql,
                 new { jobIds = jobIds.ToList() })
                 .ToList());
@@ -565,6 +561,11 @@ AND ""jq"".""fetchedat"" IS NOT NULL;
             }
 
             return new JobList<FetchedJobDto>(result);
+        }
+
+        private T UseConnection<T>(Func<IDbConnection, T> func)
+        {
+            return _storage.UseConnection(null, func);
         }
 
         /// <summary>

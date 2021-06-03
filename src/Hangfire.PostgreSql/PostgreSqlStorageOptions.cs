@@ -35,7 +35,7 @@ namespace Hangfire.PostgreSql
             QueuePollInterval = TimeSpan.FromSeconds(15);
             InvisibilityTimeout = TimeSpan.FromMinutes(30);
             DistributedLockTimeout = TimeSpan.FromMinutes(10);
-	        TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
+            TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
             SchemaName = "hangfire";
             UseNativeDatabaseTransactions = true;
             PrepareSchemaIfNecessary = true;
@@ -44,7 +44,7 @@ namespace Hangfire.PostgreSql
         public TimeSpan QueuePollInterval
         {
             get => _queuePollInterval;
-	        set
+            set
             {
                 ThrowIfValueIsNotPositive(value, nameof(QueuePollInterval));
                 _queuePollInterval = value;
@@ -54,7 +54,7 @@ namespace Hangfire.PostgreSql
         public TimeSpan InvisibilityTimeout
         {
             get => _invisibilityTimeout;
-	        set
+            set
             {
                 ThrowIfValueIsNotPositive(value, nameof(InvisibilityTimeout));
                 _invisibilityTimeout = value;
@@ -64,22 +64,22 @@ namespace Hangfire.PostgreSql
         public TimeSpan DistributedLockTimeout
         {
             get => _distributedLockTimeout;
-	        set
+            set
             {
                 ThrowIfValueIsNotPositive(value, nameof(DistributedLockTimeout));
                 _distributedLockTimeout = value;
             }
         }
 
-	    public TimeSpan TransactionSynchronisationTimeout
-	    {
-			get => _transactionSerializationTimeout;
-		    set
-		    {
-			    ThrowIfValueIsNotPositive(value, nameof(TransactionSynchronisationTimeout));
-			    _transactionSerializationTimeout = value;
-		    }
-		}
+        public TimeSpan TransactionSynchronisationTimeout
+        {
+            get => _transactionSerializationTimeout;
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(TransactionSynchronisationTimeout));
+                _transactionSerializationTimeout = value;
+            }
+        }
 
         public bool UseNativeDatabaseTransactions { get; set; }
         public bool PrepareSchemaIfNecessary { get; set; }
