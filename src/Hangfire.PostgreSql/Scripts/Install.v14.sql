@@ -11,6 +11,6 @@ BEGIN
 END
 $$;
 
-ALTER SEQUENCE job_id_seq as bigint;
+ALTER SEQUENCE job_id_seq MAXVALUE 9223372036854775807;
 
 RESET search_path;
