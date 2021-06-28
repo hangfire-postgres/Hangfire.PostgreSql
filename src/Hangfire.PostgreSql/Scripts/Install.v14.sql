@@ -1,7 +1,5 @@
 SET search_path = 'hangfire';
 
-
-
 DO
 $$
 BEGIN
@@ -11,6 +9,14 @@ BEGIN
 END
 $$;
 
-ALTER SEQUENCE job_id_seq MAXVALUE 9223372036854775807;
+do
+$$
+DECLARE
+BEGIN
+ 	EXECUTE('ALTER SEQUENCE ' || 'hangfire' || '.job_id_seq AS bigint MAXVALUE 9223372036854775807');
+EXCEPTION WHEN syntax_error THEN
+	EXECUTE('ALTER SEQUENCE ' || 'hangfire' || '.job_id_seq MAXVALUE 9223372036854775807');
+END;
+$$;
 
 RESET search_path;
