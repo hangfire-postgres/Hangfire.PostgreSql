@@ -54,7 +54,7 @@ namespace Hangfire.PostgreSql
 
         public override void Commit()
         {
-            var isolationLevel = IsolationLevel.RepeatableRead;
+            var isolationLevel = IsolationLevel.ReadCommitted;
             var scopeOption = TransactionScopeOption.RequiresNew;
             if (_options.EnableTransactionScopeEnlistment)
             {
