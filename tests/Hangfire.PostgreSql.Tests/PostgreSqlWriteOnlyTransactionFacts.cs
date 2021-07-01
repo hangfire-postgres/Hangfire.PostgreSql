@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
 using Hangfire.Common;
@@ -460,6 +461,54 @@ returning ""id""";
                 var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(3.2, record.score, 3);
+            });
+        }
+
+        [SkippableFact, CleanDatabase]
+        public void AddToSet_DoesNotFailWithConcurrencyError_WhenRunningMultipleThreads()
+        {
+            if (Environment.ProcessorCount < 2)
+            {
+                throw new SkipException("You need to have more than 1 CPU to run the test");
+            }
+
+            void CommitTags(PostgreSqlWriteOnlyTransaction transaction, IEnumerable<string> tags, string jobId)
+            {
+                //Imitating concurrency issue scenario from Hangfire.Tags library.
+                //Details: https://github.com/frankhommers/Hangfire.PostgreSql/issues/191
+
+                foreach (var tag in tags)
+                {
+                    var score = DateTime.Now.Ticks;
+
+                    transaction.AddToSet("tags", tag, score);
+                    transaction.AddToSet($"tags:{jobId}", tag, score);
+                    transaction.AddToSet($"tags:{tag}", jobId, score);
+                }
+            }
+
+            Parallel.For(1, 1_000, i =>
+            {
+                UseConnection(sql =>
+                {
+                    Utils.Utils.TryExecute(() =>
+                    {
+                        Commit(sql, x =>
+                        {
+                            int jobTypeIndex = i % 10;
+                            CommitTags(x, new[] {"my-shared-tag", $"job-type-{jobTypeIndex}"}, i.ToString());
+                        });
+                    }, e =>
+                    {
+                        /* Account for 'duplicate key value violates unique constraint "set_key_value_key"' error
+                         * Details: https://github.com/frankhommers/Hangfire.PostgreSql/issues/191#issuecomment-872367869
+                         *
+                         * Once AddToSet is improved to use MERGE statement, we should be able to remove
+                         * retry-policy from this unit-test.
+                         */
+                        return e is PostgresException postgresException && postgresException.SqlState == "23505";
+                    });
+                });
             });
         }
 
