@@ -506,7 +506,7 @@ returning ""id""";
             UseConnection(sql =>
             {
                 var jobsCountUnderMySharedTag = sql.Query<int>(
-@$"select count(*) 
+$@"select count(*) 
 from ""{GetSchemaName()}"".set
 where key like 'tags:my-shared-tag'").Single();
                 Assert.Equal(loopIterations, jobsCountUnderMySharedTag);
@@ -521,7 +521,7 @@ group by key;").ToArray();
                 Assert.All(jobsCountsUnderJobTypeTags, count => Assert.Equal(loopIterations / jobGroups, count));
                 
                 var jobLinkTagsCount = sql.Query<int>(
-@$"select count(*) from ""{GetSchemaName()}"".set
+$@"select count(*) from ""{GetSchemaName()}"".set
 where value ~ '^\d+$'").Single();
 
                 Assert.Equal(loopIterations * totalTagsCount, jobLinkTagsCount);
