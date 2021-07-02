@@ -218,26 +218,10 @@ VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.Total
         public override void AddToSet(string key, string value, double score)
         {
             var addSql = $@"
-WITH ""inputvalues"" AS (
-	SELECT @key ""key"", @value ""value"", @score ""score""
-), ""updatedrows"" AS ( 
-	UPDATE ""{_options.SchemaName}"".""set"" ""updatetarget""
-	SET ""score"" = ""inputvalues"".""score""
-	FROM ""inputvalues""
-	WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
-	AND ""updatetarget"".""value"" = ""inputvalues"".""value""
-	RETURNING ""updatetarget"".""key"", ""updatetarget"".""value""
-)
 INSERT INTO ""{_options.SchemaName}"".""set""(""key"", ""value"", ""score"")
-SELECT ""key"", ""value"", ""score"" FROM ""inputvalues"" ""insertvalues""
-WHERE NOT EXISTS (
-	SELECT 1 
-	FROM ""updatedrows"" 
-	WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
-	AND ""updatedrows"".""value"" = ""insertvalues"".""value""
-);
-";
-
+VALUES(@key, @value, @score)
+ON CONFLICT (""key"", ""value"")
+DO UPDATE SET ""score"" = EXCLUDED.""score""";
             QueueCommand((con) => con.Execute(
                 addSql,
                 new { key, value, score }));
