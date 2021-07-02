@@ -487,28 +487,44 @@ returning ""id""";
                 }
             }
 
-            Parallel.For(1, 1_000, i =>
+            const int loopIterations = 1_000;
+            const int jobGroups = 10;
+            const int totalTagsCount = 2;
+
+            Parallel.For(1, 1 + loopIterations, i =>
             {
                 UseConnection(sql =>
                 {
-                    Utils.Utils.TryExecute(() =>
+                    Commit(sql, x =>
                     {
-                        Commit(sql, x =>
-                        {
-                            int jobTypeIndex = i % 10;
-                            CommitTags(x, new[] {"my-shared-tag", $"job-type-{jobTypeIndex}"}, i.ToString());
-                        });
-                    }, e =>
-                    {
-                        /* Account for 'duplicate key value violates unique constraint "set_key_value_key"' error
-                         * Details: https://github.com/frankhommers/Hangfire.PostgreSql/issues/191#issuecomment-872367869
-                         *
-                         * Once AddToSet is improved to use MERGE statement, we should be able to remove
-                         * retry-policy from this unit-test.
-                         */
-                        return e is PostgresException postgresException && postgresException.SqlState == "23505";
+                        int jobTypeIndex = i % jobGroups;
+                        CommitTags(x, new[] {"my-shared-tag", $"job-type-{jobTypeIndex}"}, i.ToString());
                     });
                 });
+            });
+            
+            UseConnection(sql =>
+            {
+                var jobsCountUnderMySharedTag = sql.Query<int>(
+@$"select count(*) 
+from ""{GetSchemaName()}"".set
+where key like 'tags:my-shared-tag'").Single();
+                Assert.Equal(loopIterations, jobsCountUnderMySharedTag);
+                
+                
+                var jobsCountsUnderJobTypeTags = sql.Query<int>(
+$@"select count(*)
+from ""{GetSchemaName()}"".set
+where key like 'tags:job-type-%'
+group by key;").ToArray();
+                
+                Assert.All(jobsCountsUnderJobTypeTags, count => Assert.Equal(loopIterations / jobGroups, count));
+                
+                var jobLinkTagsCount = sql.Query<int>(
+@$"select count(*) from ""{GetSchemaName()}"".set
+where value ~ '^\d+$'").Single();
+
+                Assert.Equal(loopIterations * totalTagsCount, jobLinkTagsCount);
             });
         }
 
