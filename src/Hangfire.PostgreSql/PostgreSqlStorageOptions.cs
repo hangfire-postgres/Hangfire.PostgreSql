@@ -29,6 +29,7 @@ namespace Hangfire.PostgreSql
         private TimeSpan _invisibilityTimeout;
         private TimeSpan _distributedLockTimeout;
         private TimeSpan _transactionSerializationTimeout;
+        private TimeSpan _jobExpirationCheckInterval;
 
         public PostgreSqlStorageOptions()
         {
@@ -36,6 +37,7 @@ namespace Hangfire.PostgreSql
             InvisibilityTimeout = TimeSpan.FromMinutes(30);
             DistributedLockTimeout = TimeSpan.FromMinutes(10);
 	        TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
+	        JobExpirationCheckInterval = TimeSpan.FromHours(1);
             SchemaName = "hangfire";
             UseNativeDatabaseTransactions = true;
             PrepareSchemaIfNecessary = true;
@@ -79,6 +81,16 @@ namespace Hangfire.PostgreSql
 			    ThrowIfValueIsNotPositive(value, nameof(TransactionSynchronisationTimeout));
 			    _transactionSerializationTimeout = value;
 		    }
+		}
+
+		public TimeSpan JobExpirationCheckInterval
+		{
+			get => _jobExpirationCheckInterval;
+			set
+			{
+				ThrowIfValueIsNotPositive(value, nameof(JobExpirationCheckInterval));
+				_jobExpirationCheckInterval = value;
+			}
 		}
 
         public bool UseNativeDatabaseTransactions { get; set; }
