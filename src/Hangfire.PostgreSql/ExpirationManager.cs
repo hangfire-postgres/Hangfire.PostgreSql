@@ -32,7 +32,6 @@ namespace Hangfire.PostgreSql
     internal class ExpirationManager : IBackgroundProcess, IServerComponent
     {
         private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
-        private const int NumberOfRecordsInSinglePass = 1000;
 
         private static readonly ILog Logger = LogProvider.GetLogger(typeof(ExpirationManager));
 
@@ -93,7 +92,7 @@ WHERE ""id"" IN (
     FROM """ + _options.SchemaName + @""".""{0}"" 
     WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
     LIMIT {1}
-)", table, NumberOfRecordsInSinglePass.ToString(CultureInfo.InvariantCulture)), transaction);
+)", table, _options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)), transaction);
 
                             transaction.Commit();
                         }
