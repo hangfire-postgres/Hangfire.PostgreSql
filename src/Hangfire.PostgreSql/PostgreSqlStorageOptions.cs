@@ -129,7 +129,7 @@ namespace Hangfire.PostgreSql
 
         private static void ThrowIfValueIsNotPositive(int value, string fieldName)
         {
-            if (value < 0)
+            if (value <= 0)
 		        throw new ArgumentException($"The {fieldName} property value should be positive. Given: {value}.");
         }
     }
