@@ -45,23 +45,20 @@ namespace Hangfire.PostgreSql
 			_storage = storage ?? throw new ArgumentNullException(nameof(storage));
 			SignalDequeue = new AutoResetEvent(false);
 		}
-        public PostgreSqlJobQueue(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
-        {
-            _options = options ?? throw new ArgumentNullException(nameof(options));
-            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-        }
 
+		[NotNull]
+		public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
+		{
+			if (_options.UseNativeDatabaseTransactions)
+				return Dequeue_Transaction(queues, cancellationToken);
 
-        [NotNull]
-        public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
-        {
-            if (_options.UseNativeDatabaseTransactions)
-                return Dequeue_Transaction(queues, cancellationToken);
+			return Dequeue_UpdateCount(queues, cancellationToken);
+		}
 
-		/// <summary>
-		///		Signal the waiting Thread to lookup a new Job
-		/// </summary>
-		public void FetchNextJob()
+        /// <summary>
+        ///		Signal the waiting Thread to lookup a new Job
+        /// </summary>
+        public void FetchNextJob()
 		{
 			SignalDequeue.Set();
 		}
