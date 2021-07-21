@@ -37,6 +37,14 @@ namespace Hangfire.PostgreSql
         private readonly PostgreSqlStorageOptions _options;
         private readonly PostgreSqlStorage _storage;
 
+		private AutoResetEvent SignalDequeue { get; }
+
+		public PostgreSqlJobQueue(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+		{
+			_options = options ?? throw new ArgumentNullException(nameof(options));
+			_storage = storage ?? throw new ArgumentNullException(nameof(storage));
+			SignalDequeue = new AutoResetEvent(false);
+		}
         public PostgreSqlJobQueue(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -50,8 +58,13 @@ namespace Hangfire.PostgreSql
             if (_options.UseNativeDatabaseTransactions)
                 return Dequeue_Transaction(queues, cancellationToken);
 
-            return Dequeue_UpdateCount(queues, cancellationToken);
-        }
+		/// <summary>
+		///		Signal the waiting Thread to lookup a new Job
+		/// </summary>
+		public void FetchNextJob()
+		{
+			SignalDequeue.Set();
+		}
 
         public void Enqueue(IDbConnection connection, string queue, string jobId)
         {
@@ -149,7 +162,8 @@ RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fe
                     WaitHandle.WaitAny(new[]
                         {
                             cancellationToken.WaitHandle, 
-                            NewItemInQueueEvent
+                            NewItemInQueueEvent,
+	                        SignalDequeue
                         },
                         _options.QueuePollInterval);
 

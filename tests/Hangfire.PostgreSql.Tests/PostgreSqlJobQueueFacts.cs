@@ -3,7 +3,9 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Dapper;
+using Hangfire.Storage;
 using Npgsql;
 using Xunit;
 
@@ -440,6 +442,37 @@ select i.""id"", @queue from i;
 
 				var record = connection.Query(@"select * from """ + GetSchemaName() + @""".""jobqueue""").Single();
 				Assert.Equal(name, record.queue.ToString());
+			});
+		}
+		
+		[Fact, CleanDatabase]
+		public void Queues_Can_Dequeue_On_Signal()
+		{
+			UseConnection((connection, storage) =>
+			{
+				var queue = CreateJobQueue(storage, false);
+				IFetchedJob job = null;
+				//as UseConnection does not support async-await we have to work with Thread.Sleep
+
+				Task.Run(() =>
+				{
+					//dequeue the job asynchronously
+					job = queue.Dequeue(new[] {"default"}, CreateTimingOutCancellationToken());
+				});
+				//all sleeps are possibly way to high but this ensures that any race condition is unlikely
+				//to ensure that the task would run 
+				Thread.Sleep(1000);
+				Assert.Null(job);
+				//enqueue a job that does not trigger the existing queue to reevaluate its state
+				queue.Enqueue(connection, "default", "1");
+				Thread.Sleep(1000);
+				//the job should still be unset
+				Assert.Null(job);
+				//trigger a reevaluation
+				queue.FetchNextJob();
+				//wait for the Dequeue to execute and return the next job
+				Thread.Sleep(1000);
+				Assert.NotNull(job);
 			});
 		}
 
