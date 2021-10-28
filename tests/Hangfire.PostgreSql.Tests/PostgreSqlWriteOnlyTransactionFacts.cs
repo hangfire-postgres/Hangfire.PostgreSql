@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
 using Hangfire.Common;
@@ -460,6 +461,70 @@ returning ""id""";
                 var record = sql.Query(@"select * from """ + GetSchemaName() + @""".""set""").Single();
 
                 Assert.Equal(3.2, record.score, 3);
+            });
+        }
+
+        [SkippableFact, CleanDatabase]
+        public void AddToSet_DoesNotFailWithConcurrencyError_WhenRunningMultipleThreads()
+        {
+            if (Environment.ProcessorCount < 2)
+            {
+                throw new SkipException("You need to have more than 1 CPU to run the test");
+            }
+
+            void CommitTags(PostgreSqlWriteOnlyTransaction transaction, IEnumerable<string> tags, string jobId)
+            {
+                //Imitating concurrency issue scenario from Hangfire.Tags library.
+                //Details: https://github.com/frankhommers/Hangfire.PostgreSql/issues/191
+
+                foreach (var tag in tags)
+                {
+                    var score = DateTime.Now.Ticks;
+
+                    transaction.AddToSet("tags", tag, score);
+                    transaction.AddToSet($"tags:{jobId}", tag, score);
+                    transaction.AddToSet($"tags:{tag}", jobId, score);
+                }
+            }
+
+            const int loopIterations = 1_000;
+            const int jobGroups = 10;
+            const int totalTagsCount = 2;
+
+            Parallel.For(1, 1 + loopIterations, i =>
+            {
+                UseConnection(sql =>
+                {
+                    Commit(sql, x =>
+                    {
+                        int jobTypeIndex = i % jobGroups;
+                        CommitTags(x, new[] {"my-shared-tag", $"job-type-{jobTypeIndex}"}, i.ToString());
+                    });
+                });
+            });
+            
+            UseConnection(sql =>
+            {
+                var jobsCountUnderMySharedTag = sql.Query<int>(
+$@"select count(*) 
+from ""{GetSchemaName()}"".set
+where key like 'tags:my-shared-tag'").Single();
+                Assert.Equal(loopIterations, jobsCountUnderMySharedTag);
+                
+                
+                var jobsCountsUnderJobTypeTags = sql.Query<int>(
+$@"select count(*)
+from ""{GetSchemaName()}"".set
+where key like 'tags:job-type-%'
+group by key;").ToArray();
+                
+                Assert.All(jobsCountsUnderJobTypeTags, count => Assert.Equal(loopIterations / jobGroups, count));
+                
+                var jobLinkTagsCount = sql.Query<int>(
+$@"select count(*) from ""{GetSchemaName()}"".set
+where value ~ '^\d+$'").Single();
+
+                Assert.Equal(loopIterations * totalTagsCount, jobLinkTagsCount);
             });
         }
 

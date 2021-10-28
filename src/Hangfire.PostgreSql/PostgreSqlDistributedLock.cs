@@ -97,7 +97,8 @@ SELECT @resource, @acquired
 WHERE NOT EXISTS (
     SELECT 1 FROM ""{options.SchemaName}"".""lock"" 
     WHERE ""resource"" = @resource
-);
+)
+ON CONFLICT DO NOTHING;
 ",
                                 new
                                 {
@@ -179,7 +180,8 @@ SELECT @resource, 0, @acquired
 WHERE NOT EXISTS (
     SELECT 1 FROM ""{options.SchemaName}"".""lock"" 
     WHERE ""resource"" = @resource
-);
+)
+ON CONFLICT DO NOTHING;
 ", new
                         {
                             resource = resource,

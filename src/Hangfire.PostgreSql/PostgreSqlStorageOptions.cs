@@ -29,6 +29,8 @@ namespace Hangfire.PostgreSql
         private TimeSpan _invisibilityTimeout;
         private TimeSpan _distributedLockTimeout;
         private TimeSpan _transactionSerializationTimeout;
+        private TimeSpan _jobExpirationCheckInterval;
+        private int _deleteExpiredBatchSize;
 
         public PostgreSqlStorageOptions()
         {
@@ -36,9 +38,11 @@ namespace Hangfire.PostgreSql
             InvisibilityTimeout = TimeSpan.FromMinutes(30);
             DistributedLockTimeout = TimeSpan.FromMinutes(10);
             TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
+            JobExpirationCheckInterval = TimeSpan.FromHours(1);
             SchemaName = "hangfire";
             UseNativeDatabaseTransactions = true;
             PrepareSchemaIfNecessary = true;
+            DeleteExpiredBatchSize = 1000;
         }
 
         public TimeSpan QueuePollInterval
@@ -81,6 +85,29 @@ namespace Hangfire.PostgreSql
             }
         }
 
+        public TimeSpan JobExpirationCheckInterval
+        {
+            get => _jobExpirationCheckInterval;
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(JobExpirationCheckInterval));
+                _jobExpirationCheckInterval = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the number of records deleted in a single batch in expiration manager
+        /// </summary>
+        public int DeleteExpiredBatchSize
+        {
+            get => _deleteExpiredBatchSize;
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(DeleteExpiredBatchSize));
+                _deleteExpiredBatchSize = value;
+            }
+        }
+
         public bool UseNativeDatabaseTransactions { get; set; }
         public bool PrepareSchemaIfNecessary { get; set; }
         public string SchemaName { get; set; }
@@ -98,6 +125,12 @@ namespace Hangfire.PostgreSql
             {
                 throw new ArgumentException(message, nameof(value));
             }
+        }
+
+        private static void ThrowIfValueIsNotPositive(int value, string fieldName)
+        {
+            if (value <= 0)
+                throw new ArgumentException($"The {fieldName} property value should be positive. Given: {value}.");
         }
     }
 }

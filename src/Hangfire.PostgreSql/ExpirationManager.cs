@@ -36,7 +36,6 @@ namespace Hangfire.PostgreSql
         private static readonly TimeSpan DefaultLockTimeout = TimeSpan.FromMinutes(5);
 
         private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromSeconds(1);
-        private const int NumberOfRecordsInSinglePass = 1000;
 
         private static readonly ILog Logger = LogProvider.GetLogger(typeof(ExpirationManager));
 
@@ -59,7 +58,7 @@ namespace Hangfire.PostgreSql
         private readonly TimeSpan _checkInterval;
 
         public ExpirationManager(PostgreSqlStorage storage)
-            : this(storage, TimeSpan.FromHours(1))
+            : this(storage, storage.Options.JobExpirationCheckInterval)
         {
         }
 
@@ -95,7 +94,7 @@ WHERE ""id"" IN (
     FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
     WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
     LIMIT {1}
-)", table, NumberOfRecordsInSinglePass.ToString(CultureInfo.InvariantCulture)), transaction);
+)", table, _storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)), transaction);
 
                             transaction.Commit();
                         }
