@@ -58,7 +58,7 @@ namespace Hangfire.PostgreSql
         private readonly TimeSpan _checkInterval;
 
         public ExpirationManager(PostgreSqlStorage storage)
-            : this(storage, storage.Options.JobExpirationCheckInterval)
+            : this(storage ?? throw new ArgumentNullException(nameof(storage)), storage.Options.JobExpirationCheckInterval)
         {
         }
 

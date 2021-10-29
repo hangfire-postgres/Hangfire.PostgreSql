@@ -332,7 +332,7 @@ WHERE NOT EXISTS (
                             connection.Execute(sql, new { key = key, field = keyValuePair.Key, value = keyValuePair.Value }, transaction);
                         }
 
-                        transaction.Commit();
+                        transaction?.Commit();
                         execute = false;
                     });
                 }

@@ -133,7 +133,7 @@ namespace Hangfire.PostgreSql
             InitializeQueueProviders();
         }
 
-        public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
+        public PersistentJobQueueProviderCollection QueueProviders { get; internal set; }
 
         public override IMonitoringApi GetMonitoringApi()
         {

@@ -1,19 +1,20 @@
-﻿using System;
+﻿using Dapper;
+using Npgsql;
+using System;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
-using Dapper;
-using Npgsql;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    public class ExpirationManagerFacts
+    public class ExpirationManagerFacts : IClassFixture<PostgreSqlStorageFixture>
     {
         private readonly CancellationToken _token;
         private readonly PostgreSqlStorageOptions _options;
+        private readonly PostgreSqlStorageFixture _fixture;
 
-        public ExpirationManagerFacts()
+        public ExpirationManagerFacts(PostgreSqlStorageFixture fixture)
         {
             var cts = new CancellationTokenSource();
             _token = cts.Token;
@@ -22,12 +23,13 @@ namespace Hangfire.PostgreSql.Tests
                 SchemaName = GetSchemaName(),
                 EnableTransactionScopeEnlistment = true
             };
+            _fixture = fixture;
         }
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()
         {
-            Assert.Throws<ArgumentNullException>(() => new ExpirationManager(null, _options));
+            Assert.Throws<ArgumentNullException>(() => new ExpirationManager(null));
         }
 
         [Fact, CleanDatabase]
@@ -242,8 +244,8 @@ values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning "
 
         private ExpirationManager CreateManager(NpgsqlConnection connection)
         {
-            var storage = new PostgreSqlStorage(connection, _options);
-            return new ExpirationManager(storage, _options, TimeSpan.Zero);
+            _fixture.ForceInit(_options, connection: connection);
+            return new ExpirationManager(_fixture.Storage, TimeSpan.Zero);
         }
     }
 }

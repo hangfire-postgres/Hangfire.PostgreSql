@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Dapper;
+﻿using Dapper;
 using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
 using Moq;
 using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
@@ -45,8 +45,8 @@ namespace Hangfire.PostgreSql.Tests
 
             UseConnection(sql =>
             {
-                var jobId = sql.Query(arrangeSql, 
-                    new 
+                var jobId = sql.Query(arrangeSql,
+                    new
                     {
                         invocationData = SerializationHelper.Serialize(invocationData),
                         arguments = invocationData.Arguments,
@@ -83,7 +83,7 @@ namespace Hangfire.PostgreSql.Tests
             NpgsqlConnection connection,
             Action<PostgreSqlWriteOnlyTransaction> action)
         {
-            using (var transaction = new PostgreSqlWriteOnlyTransaction(connection, _options, _queueProviders))
+            using (var transaction = new PostgreSqlWriteOnlyTransaction(_storage, () => connection))
             {
                 action(transaction);
                 transaction.Commit();
@@ -91,9 +91,9 @@ namespace Hangfire.PostgreSql.Tests
         }
 
 #pragma warning disable xUnit1013 // Public method should be marked as test
-		public static void SampleMethod(string arg)
+        public static void SampleMethod(string arg)
 #pragma warning restore xUnit1013 // Public method should be marked as test
-		{
+        {
         }
     }
 }

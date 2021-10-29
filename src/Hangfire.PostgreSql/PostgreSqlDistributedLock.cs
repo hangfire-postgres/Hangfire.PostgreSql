@@ -37,6 +37,21 @@ namespace Hangfire.PostgreSql
 
         internal static void Acquire(IDbConnection connection, string resource, TimeSpan timeout, PostgreSqlStorageOptions options)
         {
+            if (connection == null)
+            {
+                throw new ArgumentNullException(nameof(connection));
+            }
+
+            if (string.IsNullOrEmpty(resource))
+            {
+                throw new ArgumentNullException(nameof(resource));
+            }
+
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
             if (connection.State != ConnectionState.Open)
             {
                 // When we are passing a closed connection to Dapper's Execute method,
@@ -59,6 +74,21 @@ namespace Hangfire.PostgreSql
 
         internal static void Release(IDbConnection connection, string resource, PostgreSqlStorageOptions options)
         {
+            if (connection == null)
+            {
+                throw new ArgumentNullException(nameof(connection));
+            }
+
+            if (resource == null)
+            {
+                throw new ArgumentNullException(nameof(resource));
+            }
+
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
             var rowsAffected = connection.Execute(
                 $@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @resource;",
                 new { resource });
