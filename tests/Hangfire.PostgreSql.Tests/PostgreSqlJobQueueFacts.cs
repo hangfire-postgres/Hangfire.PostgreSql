@@ -10,9 +10,16 @@ using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    public class PostgreSqlJobQueueFacts
+    public class PostgreSqlJobQueueFacts : IClassFixture<PostgreSqlStorageFixture>
     {
         private static readonly string[] DefaultQueues = { "default" };
+
+        private readonly PostgreSqlStorageFixture _fixture;
+
+        public PostgreSqlJobQueueFacts(PostgreSqlStorageFixture fixture)
+        {
+            _fixture = fixture;
+        }
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()
@@ -500,10 +507,9 @@ select i.""id"", @queue from i;
             return new PostgreSqlJobQueue(storage);
         }
 
-        private static void UseConnection(Action<IDbConnection, PostgreSqlStorage> action)
+        private void UseConnection(Action<IDbConnection, PostgreSqlStorage> action)
         {
-            var storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
-
+            var storage = _fixture.SafeInit();
             storage.UseConnection(null, connection =>
             {
                 action(connection, storage);

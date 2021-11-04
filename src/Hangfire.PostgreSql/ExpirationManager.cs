@@ -78,36 +78,30 @@ namespace Hangfire.PostgreSql
             {
                 Logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
-                int removedCount = 0;
-
-                do
+                UseConnectionDistributedLock(_storage, connection =>
                 {
-                    UseConnectionDistributedLock(_storage, connection =>
+                    int removedCount;
+
+                    do
                     {
-                        using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                        {
-                            removedCount = connection.Execute(
-                                string.Format(@"
+                        removedCount = connection.Execute(
+                            string.Format(@"
 DELETE FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
 WHERE ""id"" IN (
     SELECT ""id"" 
     FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
     WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
     LIMIT {1}
-)", table, _storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)), transaction);
+)", table, _storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)));
 
-                            transaction.Commit();
-                        }
+                        if (removedCount <= 0) continue;
 
-                        if (removedCount > 0)
-                        {
-                            Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
+                        Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
-                            cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
-                            cancellationToken.ThrowIfCancellationRequested();
-                        }
-                    });
-                } while (removedCount != 0);
+                        cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
+                        cancellationToken.ThrowIfCancellationRequested();
+                    } while (removedCount != 0);
+                });
             }
 
             AggregateCounters(cancellationToken);

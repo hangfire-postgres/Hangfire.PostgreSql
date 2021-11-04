@@ -33,6 +33,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql
 {
@@ -109,7 +110,7 @@ RETURNING ""id"";
 
             var invocationData = InvocationData.SerializeJob(job);
 
-            return _storage.UseConnection(_dedicatedConnection, connection =>
+            return _storage.UseTransaction(_dedicatedConnection, (connection, transaction) =>
             {
                 var jobId = connection.Query<long>(
                     createJobSql,
@@ -331,14 +332,12 @@ WHERE NOT EXISTS (
                         {
                             connection.Execute(sql, new { key = key, field = keyValuePair.Key, value = keyValuePair.Value }, transaction);
                         }
-
-                        transaction?.Commit();
-                        execute = false;
-                    });
+                    }, IsolationLevel.Serializable);
+                    execute = false;
                 }
                 catch (PostgresException exception)
                 {
-                    if (!exception.SqlState.Equals("40001"))
+                    if (!exception.SqlState.Equals(PostgresErrorCodes.SerializationFailure)) // 40001
                         throw;
                 }
 

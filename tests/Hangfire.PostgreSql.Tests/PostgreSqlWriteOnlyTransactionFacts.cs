@@ -16,24 +16,10 @@ namespace Hangfire.PostgreSql.Tests
 {
     public class PostgreSqlWriteOnlyTransactionFacts : IClassFixture<PostgreSqlStorageFixture>
     {
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
-        private readonly PostgreSqlStorageOptions _options;
         private readonly PostgreSqlStorageFixture _fixture;
-
-        private PostgreSqlStorage Storage => _fixture.Storage;
 
         public PostgreSqlWriteOnlyTransactionFacts(PostgreSqlStorageFixture fixture)
         {
-            var defaultProvider = new Mock<IPersistentJobQueueProvider>();
-            defaultProvider.Setup(x => x.GetJobQueue())
-                .Returns(new Mock<IPersistentJobQueue>().Object);
-
-            _queueProviders = new PersistentJobQueueProviderCollection(defaultProvider.Object);
-            _options = new PostgreSqlStorageOptions()
-            {
-                SchemaName = GetSchemaName(),
-                EnableTransactionScopeEnlistment = true
-            };
             _fixture = fixture;
         }
 
@@ -49,8 +35,9 @@ namespace Hangfire.PostgreSql.Tests
         [Fact]
         public void Ctor_ThrowsAnException_IfDedicatedConnectionFuncIsNull()
         {
+            var options = new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true };
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(ConnectionUtils.CreateConnection(), _options), null));
+                () => new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(ConnectionUtils.CreateConnection(), options), null));
 
             Assert.Equal("dedicatedConnectionFunc", exception.ParamName);
         }
@@ -257,11 +244,18 @@ returning ""id""";
                 correctProvider.Setup(x => x.GetJobQueue())
                     .Returns(correctJobQueue.Object);
 
-                _queueProviders.Add(correctProvider.Object, new[] { "default" });
+                _fixture.PersistentJobQueueProviderCollection.Add(correctProvider.Object, new[] { "default" });
 
-                Commit(sql, x => x.AddToQueue("default", "1"));
+                try
+                {
+                    Commit(sql, x => x.AddToQueue("default", "1"));
 
-                correctJobQueue.Verify(x => x.Enqueue(sql, "default", "1"));
+                    correctJobQueue.Verify(x => x.Enqueue(sql, "default", "1"));
+                }
+                finally
+                {
+                    _fixture.PersistentJobQueueProviderCollection.Remove("default");
+                }
             });
         }
 
@@ -487,9 +481,9 @@ returning ""id""";
 
             Parallel.For(1, 1 + loopIterations, i =>
             {
-                UseConnection(sql =>
+                UseDisposableConnection(sql =>
                 {
-                    Commit(sql, x =>
+                    CommitDisposable(sql, x =>
                     {
                         int jobTypeIndex = i % jobGroups;
                         CommitTags(x, new[] { "my-shared-tag", $"job-type-{jobTypeIndex}" }, i.ToString());
@@ -1142,21 +1136,38 @@ where value ~ '^\d+$'").Single();
 
         private void UseConnection(Action<NpgsqlConnection> action)
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            var storage = _fixture.SafeInit();
+            action(storage.CreateAndOpenConnection());
+        }
+
+        private static void UseDisposableConnection(Action<NpgsqlConnection> action)
+        {
+            using (var sqlConnection = ConnectionUtils.CreateConnection())
             {
-                action(connection);
+                action(sqlConnection);
             }
         }
 
-        private void Commit(
-            NpgsqlConnection connection,
-            Action<PostgreSqlWriteOnlyTransaction> action)
+        private void Commit(NpgsqlConnection connection, Action<PostgreSqlWriteOnlyTransaction> action)
         {
-            _fixture.SafeInit(_options, _queueProviders);
-            _fixture.Storage.QueueProviders = _queueProviders;
-            using (var transaction = new PostgreSqlWriteOnlyTransaction(Storage, () => connection))
+            var storage = _fixture.ForceInit(connection);
+            using (var transaction = storage.GetConnection().CreateWriteTransaction())
             {
-                action(transaction);
+                action(transaction as PostgreSqlWriteOnlyTransaction);
+                transaction.Commit();
+            }
+        }
+
+        private void CommitDisposable(NpgsqlConnection connection, Action<PostgreSqlWriteOnlyTransaction> action)
+        {
+            var storage = new PostgreSqlStorage(connection, new PostgreSqlStorageOptions
+            {
+                EnableTransactionScopeEnlistment = true,
+                SchemaName = GetSchemaName()
+            });
+            using (var transaction = storage.GetConnection().CreateWriteTransaction())
+            {
+                action(transaction as PostgreSqlWriteOnlyTransaction);
                 transaction.Commit();
             }
         }

@@ -7,45 +7,22 @@ using Npgsql;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Hangfire.PostgreSql.Tests
 {
     public class PostgreSqlConnectionFacts : IClassFixture<PostgreSqlStorageFixture>
     {
-        private readonly Mock<IPersistentJobQueue> _queue;
-        private readonly Mock<IPersistentJobQueueProvider> _provider;
-        private readonly PersistentJobQueueProviderCollection _providers;
-        private readonly PostgreSqlStorageOptions _options;
         private readonly PostgreSqlStorageFixture _fixture;
-        private readonly ITestOutputHelper _outputHelper;
 
-        private PostgreSqlStorage Storage => _fixture.Storage;
-
-        public PostgreSqlConnectionFacts(PostgreSqlStorageFixture fixture, ITestOutputHelper outputHelper)
+        public PostgreSqlConnectionFacts(PostgreSqlStorageFixture fixture)
         {
-            _queue = new Mock<IPersistentJobQueue>();
-
-            _provider = new Mock<IPersistentJobQueueProvider>();
-            _provider.Setup(x => x.GetJobQueue())
-                .Returns(_queue.Object);
-
-            _providers = new PersistentJobQueueProviderCollection(_provider.Object);
-
-            _options = new PostgreSqlStorageOptions()
-            {
-                SchemaName = GetSchemaName(),
-                EnableTransactionScopeEnlistment = true
-            };
             _fixture = fixture;
-            _outputHelper = outputHelper;
+            _fixture.SetupOptions(o => o.TransactionSynchronisationTimeout = TimeSpan.FromSeconds(2));
         }
 
         [Fact]
@@ -77,7 +54,7 @@ namespace Hangfire.PostgreSql.Tests
 
                 connection.FetchNextJob(queues, token);
 
-                _queue.Verify(x => x.Dequeue(queues, token));
+                _fixture.PersistentJobQueueMock.Verify(x => x.Dequeue(queues, token));
             });
         }
 
@@ -88,10 +65,17 @@ namespace Hangfire.PostgreSql.Tests
             {
                 var token = new CancellationToken();
                 var anotherProvider = new Mock<IPersistentJobQueueProvider>();
-                _providers.Add(anotherProvider.Object, new[] { "critical" });
+                _fixture.PersistentJobQueueProviderCollection.Add(anotherProvider.Object, new[] { "critical" });
 
-                Assert.Throws<InvalidOperationException>(
-                    () => connection.FetchNextJob(new[] { "critical", "default" }, token));
+                try
+                {
+                    Assert.Throws<InvalidOperationException>(
+                        () => connection.FetchNextJob(new[] { "critical", "default" }, token));
+                }
+                finally
+                {
+                    _fixture.PersistentJobQueueProviderCollection.Remove("critical");
+                }
             });
         }
 
@@ -771,44 +755,17 @@ values (@key, 0.0, @value)";
             });
         }
 
-        private class Converter : TextWriter
-        {
-            ITestOutputHelper _output;
-            public Converter(ITestOutputHelper output)
-            {
-                _output = output;
-            }
-            public override Encoding Encoding
-            {
-                get { return Encoding.UTF8; }
-            }
-            public override void WriteLine(string message)
-            {
-                _output.WriteLine(message);
-            }
-            public override void WriteLine(string format, params object[] args)
-            {
-                _output.WriteLine(format, args);
-            }
-
-            public override void Write(char value)
-            {
-                throw new NotSupportedException("This text writer only supports WriteLine(string) and WriteLine(string, params object[]).");
-            }
-        }
-
         [Fact, CleanDatabase]
         public void SetRangeInHash_DoesNotThrowSerializationException()
         {
-            Console.SetOut(new Converter(_outputHelper));
-            Parallel.For(1, 100, (i) =>
+            Parallel.For(1, 100, i =>
             {
-                UseConnection((connection2) =>
+                UseDisposableConnection(connection =>
                 {
-                    connection2.SetRangeInHash("some-hash", new Dictionary<string, string>
+                    connection.SetRangeInHash("some-hash", new Dictionary<string, string>
                     {
-                        {"Key1", "Value1"},
-                        {"Key2", "Value2"}
+                        { "Key1", "Value1" },
+                        { "Key2", "Value2" }
                     });
                 });
             });
@@ -1339,11 +1296,11 @@ values (@key, @field, @value)";
         [InlineData(true)]
         public void CreateExpiredJob_EnlistsInTransaction(bool completeTransactionScope)
         {
-            TransactionScope CreateTransactionScope(System.Transactions.IsolationLevel isolationLevel = System.Transactions.IsolationLevel.RepeatableRead)
+            TransactionScope CreateTransactionScope()
             {
                 var transactionOptions = new TransactionOptions()
                 {
-                    IsolationLevel = isolationLevel,
+                    IsolationLevel = IsolationLevel.ReadCommitted,
                     Timeout = TransactionManager.MaximumTimeout
                 };
 
@@ -1392,17 +1349,30 @@ values (@key, @field, @value)";
 
         private void UseConnections(Action<NpgsqlConnection, PostgreSqlConnection> action)
         {
-            _fixture.SafeInit(_options, _providers);
-            var connection = new PostgreSqlConnection(Storage);
-            action(Storage.CreateAndOpenConnection(), connection);
+            var storage = _fixture.SafeInit();
+            action(storage.CreateAndOpenConnection(), storage.GetStorageConnection());
         }
 
         private void UseConnection(Action<PostgreSqlConnection> action)
         {
-            _fixture.SafeInit(_options, _providers);
-            _fixture.Storage.QueueProviders = _providers;
-            var connection = new PostgreSqlConnection(Storage);
-            action(connection);
+            var storage = _fixture.SafeInit();
+            action(storage.GetStorageConnection());
+        }
+
+        private static void UseDisposableConnection(Action<PostgreSqlConnection> action)
+        {
+            using (var sqlConnection = ConnectionUtils.CreateConnection())
+            {
+                var storage = new PostgreSqlStorage(sqlConnection, new PostgreSqlStorageOptions
+                {
+                    EnableTransactionScopeEnlistment = true,
+                    SchemaName = GetSchemaName()
+                });
+                using (var connection = storage.GetStorageConnection())
+                {
+                    action(connection);
+                }
+            }
         }
 
         private static string GetSchemaName()

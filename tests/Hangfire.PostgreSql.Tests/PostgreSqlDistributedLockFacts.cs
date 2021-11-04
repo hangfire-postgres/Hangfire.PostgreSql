@@ -10,9 +10,15 @@ using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    public class PostgreSqlDistributedLockFacts
+    public class PostgreSqlDistributedLockFacts : IDisposable
     {
         private readonly TimeSpan _timeout = TimeSpan.FromSeconds(5);
+        private NpgsqlConnection _connection;
+
+        public void Dispose()
+        {
+            _connection?.Dispose();
+        }
 
         [Fact]
         public void Acquire_ThrowsAnException_WhenResourceIsNullOrEmpty()
@@ -232,13 +238,10 @@ namespace Hangfire.PostgreSql.Tests
             });
         }
 
-
         private void UseConnection(Action<NpgsqlConnection> action)
         {
-            using (var connection = ConnectionUtils.CreateConnection())
-            {
-                action(connection);
-            }
+            _connection = _connection ?? ConnectionUtils.CreateConnection();
+            action(_connection);
         }
 
         private static string GetSchemaName()

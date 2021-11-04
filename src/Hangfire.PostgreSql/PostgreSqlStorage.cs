@@ -186,18 +186,21 @@ namespace Hangfire.PostgreSql
 
         internal NpgsqlConnection CreateAndOpenConnection()
         {
-            var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString);
-            if (!Options.EnableTransactionScopeEnlistment)
+            var connection = _existingConnection;
+            if (connection == null)
             {
-                connectionStringBuilder.Enlist = false;
+                var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString);
+                if (!Options.EnableTransactionScopeEnlistment)
+                {
+                    connectionStringBuilder.Enlist = false;
+                }
+
+                connection = new NpgsqlConnection(connectionStringBuilder.ToString());
+                _connectionSetup?.Invoke(connection);
             }
 
-            var connection = _existingConnection;
             try
             {
-                connection = connection ?? new NpgsqlConnection(connectionStringBuilder.ToString());
-                _connectionSetup?.Invoke(connection);
-
                 if (connection.State == ConnectionState.Closed)
                 {
                     connection.Open();
@@ -212,7 +215,7 @@ namespace Hangfire.PostgreSql
             }
         }
 
-        internal void UseTransaction(IDbConnection dedicatedConnection, [InstantHandle] Action<IDbConnection, IDbTransaction> action, IsolationLevel? isolationLevel = null)
+        internal void UseTransaction(DbConnection dedicatedConnection, [InstantHandle] Action<DbConnection, IDbTransaction> action, IsolationLevel? isolationLevel = null)
         {
             UseTransaction(dedicatedConnection, (connection, transaction) =>
             {
@@ -221,24 +224,41 @@ namespace Hangfire.PostgreSql
             }, isolationLevel);
         }
 
-        internal T UseTransaction<T>(IDbConnection dedicatedConnection, [InstantHandle] Func<IDbConnection, IDbTransaction, T> func, IsolationLevel? isolationLevel = null)
+        internal T UseTransaction<T>(DbConnection dedicatedConnection, [InstantHandle] Func<DbConnection, IDbTransaction, T> func, IsolationLevel? isolationLevel = null)
         {
             isolationLevel = isolationLevel ?? IsolationLevel.ReadCommitted;
 
-            if (!IsRunningOnWindows())
+            if (IsRunningOnWindows())
             {
-                return UseConnection(dedicatedConnection, connection =>
+                using (var transaction = CreateTransaction(isolationLevel))
                 {
-                    var transactionIsolationLevel = ConvertIsolationLevel(isolationLevel) ?? System.Data.IsolationLevel.ReadCommitted;
-                    using (var transaction = connection.BeginTransaction(transactionIsolationLevel))
+                    var result = UseConnection(dedicatedConnection, connection =>
                     {
-                        try
-                        {
-                            var result = func(connection, transaction);
-                            transaction.Commit();
-                            return result;
-                        }
-                        catch when (transaction.Connection != null)
+                        connection.EnlistTransaction(Transaction.Current);
+                        return func(connection, null);
+                    });
+
+                    transaction.Complete();
+
+                    return result;
+                }
+            }
+
+            return UseConnection(dedicatedConnection, connection =>
+            {
+                var transactionIsolationLevel = ConvertIsolationLevel(isolationLevel) ?? System.Data.IsolationLevel.ReadCommitted;
+                using (var transaction = connection.BeginTransaction(transactionIsolationLevel))
+                {
+                    T result;
+
+                    try
+                    {
+                        result = func(connection, transaction);
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        if (transaction.Connection != null)
                         {
                             // Don't rely on implicit rollback when calling the Dispose
                             // method, because some implementations may throw the
@@ -248,32 +268,17 @@ namespace Hangfire.PostgreSql
                             // https://github.com/dotnet/efcore/issues/12864
                             // https://github.com/HangfireIO/Hangfire/issues/1494
                             transaction.Rollback();
-
-                            throw;
                         }
-                    }
-                });
-            }
 
-            using (var transaction = CreateTransaction(isolationLevel))
-            {
-                var result = UseConnection(dedicatedConnection, connection =>
-                {
-                    if (Options.EnableTransactionScopeEnlistment)
-                    {
-                        ((DbConnection)connection).EnlistTransaction(Transaction.Current);
+                        throw;
                     }
 
-                    return func(connection, null);
-                });
-
-                transaction.Complete();
-
-                return result;
-            }
+                    return result;
+                }
+            });
         }
 
-        internal void UseTransaction(IDbConnection dedicatedConnection, Action<IDbConnection, IDbTransaction> action, Func<TransactionScope> transactionScopeFactory)
+        internal void UseTransaction(DbConnection dedicatedConnection, Action<DbConnection, DbTransaction> action, Func<TransactionScope> transactionScopeFactory)
         {
             UseTransaction(dedicatedConnection, (connection, transaction) =>
             {
@@ -282,13 +287,13 @@ namespace Hangfire.PostgreSql
             }, transactionScopeFactory);
         }
 
-        internal T UseTransaction<T>(IDbConnection dedicatedConnection, Func<IDbConnection, IDbTransaction, T> func, Func<TransactionScope> transactionScopeFactory)
+        internal T UseTransaction<T>(DbConnection dedicatedConnection, Func<DbConnection, DbTransaction, T> func, Func<TransactionScope> transactionScopeFactory)
         {
             return UseConnection(dedicatedConnection, connection =>
             {
                 using (var transaction = transactionScopeFactory())
                 {
-                    ((DbConnection)connection).EnlistTransaction(Transaction.Current);
+                    connection.EnlistTransaction(Transaction.Current);
 
                     var result = func(connection, null);
 
@@ -321,8 +326,7 @@ namespace Hangfire.PostgreSql
         private static TransactionScope CreateTransaction(IsolationLevel? isolationLevel)
         {
             return isolationLevel != null
-                ? new TransactionScope(
-                    TransactionScopeOption.Required,
+                ? new TransactionScope(TransactionScopeOption.Required,
                     new TransactionOptions { IsolationLevel = isolationLevel.Value })
                 : new TransactionScope();
         }
@@ -352,7 +356,7 @@ namespace Hangfire.PostgreSql
             }
         }
 
-        internal void UseConnection(IDbConnection dedicatedConnection, [InstantHandle] Action<IDbConnection> action)
+        internal void UseConnection(DbConnection dedicatedConnection, [InstantHandle] Action<DbConnection> action)
         {
             UseConnection(dedicatedConnection, connection =>
             {
@@ -361,9 +365,9 @@ namespace Hangfire.PostgreSql
             });
         }
 
-        internal T UseConnection<T>(IDbConnection dedicatedConnection, Func<IDbConnection, T> func)
+        internal T UseConnection<T>(DbConnection dedicatedConnection, Func<DbConnection, T> func)
         {
-            IDbConnection connection = null;
+            DbConnection connection = null;
 
             try
             {
@@ -379,7 +383,7 @@ namespace Hangfire.PostgreSql
             }
         }
 
-        internal void ReleaseConnection(IDbConnection connection)
+        internal void ReleaseConnection(DbConnection connection)
         {
             if (connection != null && !IsExistingConnection(connection))
                 connection.Dispose();

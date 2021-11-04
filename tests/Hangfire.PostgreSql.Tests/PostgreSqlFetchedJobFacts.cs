@@ -11,12 +11,10 @@ namespace Hangfire.PostgreSql.Tests
         private const string JobId = "id";
         private const string Queue = "queue";
 
-        private readonly PostgreSqlStorageOptions _options;
-        private PostgreSqlStorage _storage;
+        private readonly PostgreSqlStorage _storage;
 
         public PostgreSqlFetchedJobFacts()
         {
-            _options = new PostgreSqlStorageOptions();
             _storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
         }
 

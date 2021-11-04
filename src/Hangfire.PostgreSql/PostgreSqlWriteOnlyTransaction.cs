@@ -83,14 +83,6 @@ namespace Hangfire.PostgreSql
             return new TransactionScope(scopeOption, transactionOptions);
         }
 
-        private static void Current_TransactionCompleted(object sender, TransactionEventArgs e)
-        {
-            if (e.Transaction.TransactionInformation.Status == TransactionStatus.Committed)
-            {
-                PostgreSqlJobQueue.NewItemInQueueEvent.Set();
-            }
-        }
-
         public override void ExpireJob(string jobId, TimeSpan expireIn)
         {
             var sql = $@"
