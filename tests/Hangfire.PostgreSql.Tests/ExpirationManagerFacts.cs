@@ -18,6 +18,7 @@ namespace Hangfire.PostgreSql.Tests
             var cts = new CancellationTokenSource();
             _token = cts.Token;
             _fixture = fixture;
+            _fixture.SetupOptions(o => o.DeleteExpiredBatchSize = 2);
         }
 
         [Fact]
@@ -31,11 +32,14 @@ namespace Hangfire.PostgreSql.Tests
         {
             UseConnection((connection, manager) =>
             {
-                var entryId = CreateExpirationEntry(connection, DateTime.UtcNow.AddMonths(-1));
+                long CreateEntry(string key) =>
+                    CreateExpirationEntry(connection, DateTime.UtcNow.AddMonths(-1), key);
+
+                var entryIds = Enumerable.Range(1, 3).Select(i => CreateEntry($"key{i}")).ToList();
 
                 manager.Execute(_token);
 
-                Assert.True(IsEntryExpired(connection, entryId));
+                entryIds.ForEach(entryId => Assert.True(IsEntryExpired(connection, entryId)));
             });
         }
 
@@ -183,15 +187,15 @@ values ('key', 'field', '', @expireAt)";
             });
         }
 
-        private static long CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt)
+        private static long CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt, string key = "key")
         {
             string insertSqlNull = @"
-insert into """ + GetSchemaName() + @""".""counter""(""key"", ""value"", ""expireat"")
-values ('key', 1, null) returning ""id""";
+insert into """ + GetSchemaName() + $@""".""counter""(""key"", ""value"", ""expireat"")
+values ('{key}', 1, null) returning ""id""";
 
             string insertSqlValue = @"
-insert into """ + GetSchemaName() + @""".""counter""(""key"", ""value"", ""expireat"")
-values ('key', 1, now() at time zone 'utc' - interval '{0} seconds') returning ""id""";
+insert into """ + GetSchemaName() + $@""".""counter""(""key"", ""value"", ""expireat"")
+values ('{key}', 1, now() at time zone 'utc' - interval '{{0}} seconds') returning ""id""";
 
             string insertSql = expireAt == null
                 ? insertSqlNull

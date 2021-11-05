@@ -80,27 +80,31 @@ namespace Hangfire.PostgreSql
 
                 UseConnectionDistributedLock(_storage, connection =>
                 {
-                    int removedCount;
-
-                    do
+                    using (var transaction = connection.BeginTransaction())
                     {
-                        removedCount = connection.Execute(
-                            string.Format(@"
+                        int removedCount;
+                        do
+                        {
+                            removedCount = connection.Execute(
+                                string.Format(@"
 DELETE FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
 WHERE ""id"" IN (
     SELECT ""id"" 
     FROM """ + _storage.Options.SchemaName + @""".""{0}"" 
     WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
     LIMIT {1}
-)", table, _storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)));
+)", table, _storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)), transaction: transaction);
 
-                        if (removedCount <= 0) continue;
+                            if (removedCount <= 0) continue;
 
-                        Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
+                            Logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
-                        cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
-                        cancellationToken.ThrowIfCancellationRequested();
-                    } while (removedCount != 0);
+                            cancellationToken.WaitHandle.WaitOne(DelayBetweenPasses);
+                            cancellationToken.ThrowIfCancellationRequested();
+                        } while (removedCount != 0);
+
+                        transaction.Commit();
+                    }
                 });
             }
 
