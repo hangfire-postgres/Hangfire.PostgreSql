@@ -19,33 +19,30 @@
 //   
 //    Special thanks goes to him.
 
+using Dapper;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
-using Dapper;
 
 namespace Hangfire.PostgreSql
 {
     internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
     {
         private readonly PostgreSqlStorage _storage;
-        private readonly PostgreSqlStorageOptions _options;
 
-        public PostgreSqlJobQueueMonitoringApi(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+        public PostgreSqlJobQueueMonitoringApi(PostgreSqlStorage storage)
         {
-	        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         }
 
         public IEnumerable<string> GetQueues()
         {
             string sqlQuery = @"
 SELECT DISTINCT ""queue"" 
-FROM """ + _options.SchemaName + @""".""jobqueue"";
+FROM """ + _storage.Options.SchemaName + @""".""jobqueue"";
 ";
 
-            return _storage.UseConnection(connection => connection.Query(sqlQuery).Select(x => (string)x.queue).ToList());
+            return _storage.UseConnection(null, connection => connection.Query(sqlQuery).Select(x => (string)x.queue).ToList());
         }
 
         public IEnumerable<long> GetEnqueuedJobIds(string queue, int @from, int perPage)
@@ -57,17 +54,17 @@ FROM """ + _options.SchemaName + @""".""jobqueue"";
         {
             string sqlQuery = string.Format(@"
 SELECT j.""id"" 
-FROM """ + _options.SchemaName + @""".""jobqueue"" jq
-LEFT JOIN """ + _options.SchemaName + @""".""job"" j ON jq.""jobid"" = j.""id""
+FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" jq
+LEFT JOIN """ + _storage.Options.SchemaName + @""".""job"" j ON jq.""jobid"" = j.""id""
 WHERE jq.""queue"" = @queue 
 AND jq.""fetchedat"" {0}
 AND j.""id"" IS NOT NULL
 LIMIT @count OFFSET @start;
 ", fetched ? "IS NOT NULL" : "IS NULL");
 
-            return _storage.UseConnection(connection => connection.Query<long>(
+            return _storage.UseConnection(null, connection => connection.Query<long>(
                 sqlQuery,
-                new {queue = queue, start = @from, count = perPage})
+                new { queue = queue, start = @from, count = perPage })
                 .ToList());
         }
 
@@ -81,19 +78,19 @@ LIMIT @count OFFSET @start;
             string sqlQuery = @"
 SELECT (
         SELECT COUNT(*) 
-        FROM """ + _options.SchemaName + @""".""jobqueue"" 
+        FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" 
         WHERE ""fetchedat"" IS NULL 
         AND ""queue"" = @queue
     ) ""EnqueuedCount"", 
     (
         SELECT COUNT(*) 
-        FROM """ + _options.SchemaName + @""".""jobqueue"" 
+        FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" 
         WHERE ""fetchedat"" IS NOT NULL 
         AND ""queue"" = @queue
     ) ""FetchedCount"";
 ";
 
-            var result = _storage.UseConnection(connection => connection.Query(sqlQuery, new { queue = queue }).Single());
+            var result = _storage.UseConnection(null, connection => connection.Query(sqlQuery, new { queue = queue }).Single());
 
             return new EnqueuedAndFetchedCountDto
             {

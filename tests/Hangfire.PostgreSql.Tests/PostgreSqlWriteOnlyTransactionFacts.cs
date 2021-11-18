@@ -1,64 +1,45 @@
-﻿using System;
+﻿using Dapper;
+using Hangfire.Common;
+using Hangfire.States;
+using Moq;
+using Npgsql;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Transactions;
-using Dapper;
-using Hangfire.Common;
-using Hangfire.States;
-using Moq;
-using Npgsql;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    public class PostgreSqlWriteOnlyTransactionFacts
+    public class PostgreSqlWriteOnlyTransactionFacts : IClassFixture<PostgreSqlStorageFixture>
     {
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
-        private readonly PostgreSqlStorageOptions _options;
+        private readonly PostgreSqlStorageFixture _fixture;
 
-        public PostgreSqlWriteOnlyTransactionFacts()
+        public PostgreSqlWriteOnlyTransactionFacts(PostgreSqlStorageFixture fixture)
         {
-            var defaultProvider = new Mock<IPersistentJobQueueProvider>();
-            defaultProvider.Setup(x => x.GetJobQueue())
-                .Returns(new Mock<IPersistentJobQueue>().Object);
-
-            _queueProviders = new PersistentJobQueueProviderCollection(defaultProvider.Object);
-            _options = new PostgreSqlStorageOptions()
-            {
-                SchemaName = GetSchemaName(),
-                EnableTransactionScopeEnlistment = true
-            };
+            _fixture = fixture;
         }
 
         [Fact]
-        public void Ctor_ThrowsAnException_IfConnectionIsNull()
+        public void Ctor_ThrowsAnException_IfStorageIsNull()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlWriteOnlyTransaction(null, _options, _queueProviders));
+                () => new PostgreSqlWriteOnlyTransaction(null, () => null));
 
-            Assert.Equal("connection", exception.ParamName);
+            Assert.Equal("storage", exception.ParamName);
         }
 
         [Fact]
-        public void Ctor_ThrowsAnException_IfOptionsIsNull()
+        public void Ctor_ThrowsAnException_IfDedicatedConnectionFuncIsNull()
         {
+            var options = new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true };
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlWriteOnlyTransaction(ConnectionUtils.CreateConnection(), null, _queueProviders));
+                () => new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(ConnectionUtils.CreateConnection(), options), null));
 
-            Assert.Equal("options", exception.ParamName);
-        }
-
-
-        [Fact, CleanDatabase]
-        public void Ctor_ThrowsAnException_IfProvidersCollectionIsNull()
-        {
-            var exception = Assert.Throws<ArgumentNullException>(
-                () => new PostgreSqlWriteOnlyTransaction(ConnectionUtils.CreateConnection(), _options, null));
-
-            Assert.Equal("queueProviders", exception.ParamName);
+            Assert.Equal("dedicatedConnectionFunc", exception.ParamName);
         }
 
         [Fact, CleanDatabase]
@@ -122,7 +103,7 @@ values ('', '', now() at time zone 'utc') returning ""id""";
                 state.Setup(x => x.Name).Returns("State");
                 state.Setup(x => x.Reason).Returns("Reason");
                 state.Setup(x => x.SerializeData())
-                    .Returns(new Dictionary<string, string> {{"Name", "Value"}});
+                    .Returns(new Dictionary<string, string> { { "Name", "Value" } });
 
                 Commit(sql, x => x.SetJobState(jobId, state.Object));
 
@@ -200,7 +181,7 @@ values ('', '', now() at time zone 'utc') returning ""id""";
                     Assert.NotNull(job.stateid);
 
                     var jobState = sql.Query(@"select * from """ + GetSchemaName() + @""".""state""").Single();
-                    Assert.Equal((string) jobId, jobState.jobid.ToString());
+                    Assert.Equal((string)jobId, jobState.jobid.ToString());
                     Assert.Equal("State", jobState.name);
                     Assert.Equal("Reason", jobState.reason);
                     Assert.NotNull(jobState.createdat);
@@ -263,11 +244,18 @@ returning ""id""";
                 correctProvider.Setup(x => x.GetJobQueue())
                     .Returns(correctJobQueue.Object);
 
-                _queueProviders.Add(correctProvider.Object, new[] { "default" });
+                _fixture.PersistentJobQueueProviderCollection.Add(correctProvider.Object, new[] { "default" });
 
-                Commit(sql, x => x.AddToQueue("default", "1"));
+                try
+                {
+                    Commit(sql, x => x.AddToQueue("default", "1"));
 
-                correctJobQueue.Verify(x => x.Enqueue(sql, "default", "1"));
+                    correctJobQueue.Verify(x => x.Enqueue(sql, "default", "1"));
+                }
+                finally
+                {
+                    _fixture.PersistentJobQueueProviderCollection.Remove("default");
+                }
             });
         }
 
@@ -493,16 +481,16 @@ returning ""id""";
 
             Parallel.For(1, 1 + loopIterations, i =>
             {
-                UseConnection(sql =>
+                UseDisposableConnection(sql =>
                 {
-                    Commit(sql, x =>
+                    CommitDisposable(sql, x =>
                     {
                         int jobTypeIndex = i % jobGroups;
-                        CommitTags(x, new[] {"my-shared-tag", $"job-type-{jobTypeIndex}"}, i.ToString());
+                        CommitTags(x, new[] { "my-shared-tag", $"job-type-{jobTypeIndex}" }, i.ToString());
                     });
                 });
             });
-            
+
             UseConnection(sql =>
             {
                 var jobsCountUnderMySharedTag = sql.Query<int>(
@@ -510,16 +498,16 @@ $@"select count(*)
 from ""{GetSchemaName()}"".set
 where key like 'tags:my-shared-tag'").Single();
                 Assert.Equal(loopIterations, jobsCountUnderMySharedTag);
-                
-                
+
+
                 var jobsCountsUnderJobTypeTags = sql.Query<int>(
 $@"select count(*)
 from ""{GetSchemaName()}"".set
 where key like 'tags:job-type-%'
 group by key;").ToArray();
-                
+
                 Assert.All(jobsCountsUnderJobTypeTags, count => Assert.Equal(loopIterations / jobGroups, count));
-                
+
                 var jobLinkTagsCount = sql.Query<int>(
 $@"select count(*) from ""{GetSchemaName()}"".set
 where value ~ '^\d+$'").Single();
@@ -1148,19 +1136,38 @@ where value ~ '^\d+$'").Single();
 
         private void UseConnection(Action<NpgsqlConnection> action)
         {
-            using (var connection = ConnectionUtils.CreateConnection())
+            var storage = _fixture.SafeInit();
+            action(storage.CreateAndOpenConnection());
+        }
+
+        private static void UseDisposableConnection(Action<NpgsqlConnection> action)
+        {
+            using (var sqlConnection = ConnectionUtils.CreateConnection())
             {
-                action(connection);
+                action(sqlConnection);
             }
         }
 
-        private void Commit(
-            NpgsqlConnection connection,
-            Action<PostgreSqlWriteOnlyTransaction> action)
+        private void Commit(NpgsqlConnection connection, Action<PostgreSqlWriteOnlyTransaction> action)
         {
-            using (var transaction = new PostgreSqlWriteOnlyTransaction(connection, _options, _queueProviders))
+            var storage = _fixture.ForceInit(connection);
+            using (var transaction = storage.GetConnection().CreateWriteTransaction())
             {
-                action(transaction);
+                action(transaction as PostgreSqlWriteOnlyTransaction);
+                transaction.Commit();
+            }
+        }
+
+        private void CommitDisposable(NpgsqlConnection connection, Action<PostgreSqlWriteOnlyTransaction> action)
+        {
+            var storage = new PostgreSqlStorage(connection, new PostgreSqlStorageOptions
+            {
+                EnableTransactionScopeEnlistment = true,
+                SchemaName = GetSchemaName()
+            });
+            using (var transaction = storage.GetConnection().CreateWriteTransaction())
+            {
+                action(transaction as PostgreSqlWriteOnlyTransaction);
                 transaction.Commit();
             }
         }

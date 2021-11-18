@@ -37,8 +37,8 @@ namespace Hangfire.PostgreSql
             QueuePollInterval = TimeSpan.FromSeconds(15);
             InvisibilityTimeout = TimeSpan.FromMinutes(30);
             DistributedLockTimeout = TimeSpan.FromMinutes(10);
-	        TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
-	        JobExpirationCheckInterval = TimeSpan.FromHours(1);
+            TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
+            JobExpirationCheckInterval = TimeSpan.FromHours(1);
             SchemaName = "hangfire";
             UseNativeDatabaseTransactions = true;
             PrepareSchemaIfNecessary = true;
@@ -48,7 +48,7 @@ namespace Hangfire.PostgreSql
         public TimeSpan QueuePollInterval
         {
             get => _queuePollInterval;
-	        set
+            set
             {
                 ThrowIfValueIsNotPositive(value, nameof(QueuePollInterval));
                 _queuePollInterval = value;
@@ -58,7 +58,7 @@ namespace Hangfire.PostgreSql
         public TimeSpan InvisibilityTimeout
         {
             get => _invisibilityTimeout;
-	        set
+            set
             {
                 ThrowIfValueIsNotPositive(value, nameof(InvisibilityTimeout));
                 _invisibilityTimeout = value;
@@ -68,47 +68,47 @@ namespace Hangfire.PostgreSql
         public TimeSpan DistributedLockTimeout
         {
             get => _distributedLockTimeout;
-	        set
+            set
             {
                 ThrowIfValueIsNotPositive(value, nameof(DistributedLockTimeout));
                 _distributedLockTimeout = value;
             }
         }
 
-	    public TimeSpan TransactionSynchronisationTimeout
-	    {
-			get => _transactionSerializationTimeout;
-		    set
-		    {
-			    ThrowIfValueIsNotPositive(value, nameof(TransactionSynchronisationTimeout));
-			    _transactionSerializationTimeout = value;
-		    }
-		}
+        public TimeSpan TransactionSynchronisationTimeout
+        {
+            get => _transactionSerializationTimeout;
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(TransactionSynchronisationTimeout));
+                _transactionSerializationTimeout = value;
+            }
+        }
 
-		public TimeSpan JobExpirationCheckInterval
-		{
-			get => _jobExpirationCheckInterval;
-			set
-			{
-				ThrowIfValueIsNotPositive(value, nameof(JobExpirationCheckInterval));
-				_jobExpirationCheckInterval = value;
-			}
-		}
+        public TimeSpan JobExpirationCheckInterval
+        {
+            get => _jobExpirationCheckInterval;
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(JobExpirationCheckInterval));
+                _jobExpirationCheckInterval = value;
+            }
+        }
 
-		/// <summary>
-		/// Gets or sets the number of records deleted in a single batch in expiration manager
-		/// </summary>
-		public int DeleteExpiredBatchSize
-		{
-			get => _deleteExpiredBatchSize;
-			set 
-			{
-				ThrowIfValueIsNotPositive(value, nameof(DeleteExpiredBatchSize));
+        /// <summary>
+        /// Gets or sets the number of records deleted in a single batch in expiration manager
+        /// </summary>
+        public int DeleteExpiredBatchSize
+        {
+            get => _deleteExpiredBatchSize;
+            set
+            {
+                ThrowIfValueIsNotPositive(value, nameof(DeleteExpiredBatchSize));
                 _deleteExpiredBatchSize = value;
-			}
-		}
+            }
+        }
 
-		public bool UseNativeDatabaseTransactions { get; set; }
+        public bool UseNativeDatabaseTransactions { get; set; }
         public bool PrepareSchemaIfNecessary { get; set; }
         public string SchemaName { get; set; }
         public bool EnableTransactionScopeEnlistment { get; set; }
@@ -130,7 +130,7 @@ namespace Hangfire.PostgreSql
         private static void ThrowIfValueIsNotPositive(int value, string fieldName)
         {
             if (value <= 0)
-		        throw new ArgumentException($"The {fieldName} property value should be positive. Given: {value}.");
+                throw new ArgumentException($"The {fieldName} property value should be positive. Given: {value}.");
         }
     }
 }

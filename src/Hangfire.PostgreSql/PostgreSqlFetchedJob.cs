@@ -19,30 +19,26 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Data;
 using Dapper;
 using Hangfire.Storage;
+using System;
 
 namespace Hangfire.PostgreSql
 {
     public class PostgreSqlFetchedJob : IFetchedJob
     {
         private readonly PostgreSqlStorage _storage;
-        private readonly PostgreSqlStorageOptions _options;
         private bool _disposed;
         private bool _removedFromQueue;
         private bool _requeued;
 
         public PostgreSqlFetchedJob(
-            PostgreSqlStorage storage, 
-            PostgreSqlStorageOptions options,
-            long id, 
-            string jobId, 
+            PostgreSqlStorage storage,
+            long id,
+            string jobId,
             string queue)
         {
-	        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
 
             Id = id;
             JobId = jobId ?? throw new ArgumentNullException(nameof(jobId));
@@ -55,9 +51,9 @@ namespace Hangfire.PostgreSql
 
         public void RemoveFromQueue()
         {
-            _storage.UseConnection(connection => connection.Execute(
+            _storage.UseConnection(null, connection => connection.Execute(
                 @"
-DELETE FROM """ + _options.SchemaName + @""".""jobqueue"" 
+DELETE FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" 
 WHERE ""id"" = @id;
 ",
                 new { id = Id }));
@@ -67,9 +63,9 @@ WHERE ""id"" = @id;
 
         public void Requeue()
         {
-            _storage.UseConnection(connection => connection.Execute(
+            _storage.UseConnection(null, connection => connection.Execute(
                 @"
-UPDATE """ + _options.SchemaName + @""".""jobqueue"" 
+UPDATE """ + _storage.Options.SchemaName + @""".""jobqueue"" 
 SET ""fetchedat"" = NULL 
 WHERE ""id"" = @id;
 ",

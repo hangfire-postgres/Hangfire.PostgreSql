@@ -19,44 +19,52 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Transactions;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
-using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Globalization;
+using System.Linq;
+using System.Transactions;
+using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql
 {
     public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
     {
-        private readonly Queue<Action<NpgsqlConnection>> _commandQueue = new Queue<Action<NpgsqlConnection>>();
+        private readonly Queue<Action<IDbConnection>> _commandQueue = new Queue<Action<IDbConnection>>();
 
-        private readonly NpgsqlConnection _connection;
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
-        private readonly PostgreSqlStorageOptions _options;
+        private readonly PostgreSqlStorage _storage;
+        private readonly Func<DbConnection> _dedicatedConnectionFunc;
 
         public PostgreSqlWriteOnlyTransaction(
-            NpgsqlConnection connection,
-            PostgreSqlStorageOptions options,
-            PersistentJobQueueProviderCollection queueProviders)
+            PostgreSqlStorage storage,
+            Func<DbConnection> dedicatedConnectionFunc)
         {
-            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
-            _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            _dedicatedConnectionFunc = dedicatedConnectionFunc ?? throw new ArgumentNullException(nameof(dedicatedConnectionFunc));
         }
-
-        public override void Dispose() { }
 
         public override void Commit()
         {
+            _storage.UseTransaction(_dedicatedConnectionFunc(), (connection, transaction) =>
+            {
+                foreach (var command in _commandQueue)
+                {
+                    command(connection);
+                }
+            }, CreateTransactionScope);
+        }
+
+        private TransactionScope CreateTransactionScope()
+        {
             var isolationLevel = IsolationLevel.ReadCommitted;
             var scopeOption = TransactionScopeOption.RequiresNew;
-            if (_options.EnableTransactionScopeEnlistment)
+            if (_storage.Options.EnableTransactionScopeEnlistment)
             {
                 var currentTransaction = Transaction.Current;
                 if (currentTransaction != null)
@@ -66,38 +74,19 @@ namespace Hangfire.PostgreSql
                 }
             }
 
-            var transactionOptions = new TransactionOptions()
+            var transactionOptions = new TransactionOptions
             {
                 IsolationLevel = isolationLevel,
                 Timeout = TransactionManager.MaximumTimeout
             };
 
-            using (var transaction = new TransactionScope(scopeOption, transactionOptions))
-            {
-                _connection.EnlistTransaction(Transaction.Current);
-
-                foreach (var command in _commandQueue)
-                {
-                    command(_connection);
-                }
-                // TransactionCompleted event is required here, because if this TransactionScope is enlisted within an ambient TransactionScope, the ambient TransactionScope controls when the TransactionScope completes.
-                Transaction.Current.TransactionCompleted += Current_TransactionCompleted;
-                transaction.Complete();
-            }
-        }
-
-        private static void Current_TransactionCompleted(object sender, TransactionEventArgs e)
-        {
-            if (e.Transaction.TransactionInformation.Status == TransactionStatus.Committed)
-            {
-                PostgreSqlJobQueue.NewItemInQueueEvent.Set();
-            }
+            return new TransactionScope(scopeOption, transactionOptions);
         }
 
         public override void ExpireJob(string jobId, TimeSpan expireIn)
         {
             var sql = $@"
-UPDATE ""{_options.SchemaName}"".""job""
+UPDATE ""{_storage.Options.SchemaName}"".""job""
 SET ""expireat"" = NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS'
 WHERE ""id"" = @id;
 ";
@@ -110,7 +99,7 @@ WHERE ""id"" = @id;
         public override void PersistJob(string jobId)
         {
             var sql = $@"
-UPDATE ""{_options.SchemaName}"".""job"" 
+UPDATE ""{_storage.Options.SchemaName}"".""job"" 
 SET ""expireat"" = NULL 
 WHERE ""id"" = @id;
 ";
@@ -123,10 +112,10 @@ WHERE ""id"" = @id;
         {
             var addAndSetStateSql = $@"
 WITH s AS (
-    INSERT INTO ""{_options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
+    INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
     VALUES (@jobId, @name, @reason, @createdAt, @data) RETURNING ""id""
 )
-UPDATE ""{_options.SchemaName}"".""job"" j
+UPDATE ""{_storage.Options.SchemaName}"".""job"" j
 SET ""stateid"" = s.""id"", ""statename"" = @name
 FROM s
 WHERE j.""id"" = @id;
@@ -148,7 +137,7 @@ WHERE j.""id"" = @id;
         public override void AddJobState(string jobId, IState state)
         {
             var addStateSql = $@"
-INSERT INTO ""{_options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
+INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
 VALUES (@jobId, @name, @reason, @createdAt, @data);
 ";
 
@@ -166,7 +155,7 @@ VALUES (@jobId, @name, @reason, @createdAt, @data);
 
         public override void AddToQueue(string queue, string jobId)
         {
-            var provider = _queueProviders.GetProvider(queue);
+            var provider = _storage.QueueProviders.GetProvider(queue);
             var persistentQueue = provider.GetJobQueue();
 
             QueueCommand((con) => persistentQueue.Enqueue(con, queue, jobId));
@@ -174,7 +163,7 @@ VALUES (@jobId, @name, @reason, @createdAt, @data);
 
         public override void IncrementCounter(string key)
         {
-            var sql = $@"INSERT INTO ""{_options.SchemaName}"".""counter"" (""key"", ""value"") VALUES (@key, @value);";
+            var sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter"" (""key"", ""value"") VALUES (@key, @value);";
             QueueCommand((con) => con.Execute(
                 sql,
                 new { key, value = +1 }));
@@ -183,7 +172,7 @@ VALUES (@jobId, @name, @reason, @createdAt, @data);
         public override void IncrementCounter(string key, TimeSpan expireIn)
         {
             var sql = $@"
-INSERT INTO ""{_options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
+INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
 VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS');";
 
             QueueCommand((con) => con.Execute(
@@ -193,7 +182,7 @@ VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.Total
 
         public override void DecrementCounter(string key)
         {
-            var sql = $@"INSERT INTO ""{_options.SchemaName}"".""counter"" (""key"", ""value"") VALUES (@key, @value);";
+            var sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter"" (""key"", ""value"") VALUES (@key, @value);";
             QueueCommand((con) => con.Execute(
                 sql,
                 new { key, value = -1 }));
@@ -202,7 +191,7 @@ VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.Total
         public override void DecrementCounter(string key, TimeSpan expireIn)
         {
             var sql = $@"
-INSERT INTO ""{_options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
+INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
 VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS');";
 
             QueueCommand((con) => con.Execute(sql
@@ -218,7 +207,7 @@ VALUES (@key, @value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.Total
         public override void AddToSet(string key, string value, double score)
         {
             var addSql = $@"
-INSERT INTO ""{_options.SchemaName}"".""set""(""key"", ""value"", ""score"")
+INSERT INTO ""{_storage.Options.SchemaName}"".""set""(""key"", ""value"", ""score"")
 VALUES(@key, @value, @score)
 ON CONFLICT (""key"", ""value"")
 DO UPDATE SET ""score"" = EXCLUDED.""score""";
@@ -231,7 +220,7 @@ DO UPDATE SET ""score"" = EXCLUDED.""score""";
         {
             QueueCommand((con) => con.Execute(
                 $@"
-DELETE FROM ""{_options.SchemaName}"".""set"" 
+DELETE FROM ""{_storage.Options.SchemaName}"".""set"" 
 WHERE ""key"" = @key 
 AND ""value"" = @value;
 ",
@@ -242,7 +231,7 @@ AND ""value"" = @value;
         {
             QueueCommand((con) => con.Execute(
                 $@"
-INSERT INTO ""{_options.SchemaName}"".""list"" (""key"", ""value"") 
+INSERT INTO ""{_storage.Options.SchemaName}"".""list"" (""key"", ""value"") 
 VALUES (@key, @value);
 ",
                 new { key, value }));
@@ -252,7 +241,7 @@ VALUES (@key, @value);
         {
             QueueCommand((con) => con.Execute(
                 $@"
-DELETE FROM ""{_options.SchemaName}"".""list"" 
+DELETE FROM ""{_storage.Options.SchemaName}"".""list"" 
 WHERE ""key"" = @key 
 AND ""value"" = @value;
 ",
@@ -262,11 +251,11 @@ AND ""value"" = @value;
         public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
         {
             var trimSql = $@"
-DELETE FROM ""{_options.SchemaName}"".""list"" AS source
+DELETE FROM ""{_storage.Options.SchemaName}"".""list"" AS source
 WHERE ""key"" = @key
 AND ""id"" NOT IN (
     SELECT ""id"" 
-    FROM ""{_options.SchemaName}"".""list"" AS keep
+    FROM ""{_storage.Options.SchemaName}"".""list"" AS keep
     WHERE keep.""key"" = source.""key""
     ORDER BY ""id"" 
     OFFSET @start LIMIT @end
@@ -287,14 +276,14 @@ AND ""id"" NOT IN (
 WITH ""inputvalues"" AS (
 	SELECT @key ""key"", @field ""field"", @value ""value""
 ), ""updatedrows"" AS ( 
-	UPDATE ""{_options.SchemaName}"".""hash"" ""updatetarget""
+	UPDATE ""{_storage.Options.SchemaName}"".""hash"" ""updatetarget""
 	SET ""value"" = ""inputvalues"".""value""
 	FROM ""inputvalues""
 	WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
 	AND ""updatetarget"".""field"" = ""inputvalues"".""field""
 	RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
 )
-INSERT INTO ""{_options.SchemaName}"".""hash""(""key"", ""field"", ""value"")
+INSERT INTO ""{_storage.Options.SchemaName}"".""hash""(""key"", ""field"", ""value"")
 SELECT ""key"", ""field"", ""value"" 
 FROM ""inputvalues"" ""insertvalues""
 WHERE NOT EXISTS (
@@ -317,7 +306,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"DELETE FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @key";
+            var sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""hash"" WHERE ""key"" = @key";
             QueueCommand((con) => con.Execute(
                 sql,
                 new { key }));
@@ -327,7 +316,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"UPDATE ""{_options.SchemaName}"".""set"" SET ""expireat"" = @expireAt WHERE ""key"" = @key";
+            var sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET ""expireat"" = @expireAt WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(
                 sql,
@@ -338,7 +327,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"UPDATE ""{_options.SchemaName}"".""list"" SET ""expireat"" = @expireAt WHERE ""key"" = @key";
+            var sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET ""expireat"" = @expireAt WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(
                 sql,
@@ -350,7 +339,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"UPDATE ""{_options.SchemaName}"".""hash"" SET expireat = @expireAt WHERE ""key"" = @key";
+            var sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = @expireAt WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(
                 sql,
@@ -362,7 +351,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"UPDATE ""{_options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @key";
+            var sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(sql, new { key }));
         }
@@ -371,7 +360,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"UPDATE ""{_options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @key";
+            var sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(sql, new { key }));
         }
@@ -380,7 +369,7 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"UPDATE ""{_options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @key";
+            var sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(
                 sql,
@@ -392,7 +381,7 @@ WHERE NOT EXISTS (
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (items == null) throw new ArgumentNullException(nameof(items));
 
-            var sql = $@"INSERT INTO ""{_options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@key, @value, 0.0)";
+            var sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@key, @value, 0.0)";
 
             QueueCommand((connection) => connection.Execute(
                 sql,
@@ -403,12 +392,12 @@ WHERE NOT EXISTS (
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            var sql = $@"DELETE FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @key";
+            var sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""set"" WHERE ""key"" = @key";
 
             QueueCommand((connection) => connection.Execute(sql, new { key }));
         }
 
-        internal void QueueCommand(Action<NpgsqlConnection> action)
+        internal void QueueCommand(Action<IDbConnection> action)
         {
             _commandQueue.Enqueue(action);
         }

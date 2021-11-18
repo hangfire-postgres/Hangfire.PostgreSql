@@ -1,36 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Dapper;
+﻿using Dapper;
 using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
 using Moq;
 using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-    public class PostgreSqlMonitoringApiFacts
+    public class PostgreSqlMonitoringApiFacts : IClassFixture<PostgreSqlStorageFixture>
     {
-        private readonly PersistentJobQueueProviderCollection _queueProviders;
-        private readonly PostgreSqlStorageOptions _options;
-        private readonly PostgreSqlStorage _storage;
+        private readonly PostgreSqlStorageFixture _fixture;
 
-        public PostgreSqlMonitoringApiFacts()
+        public PostgreSqlMonitoringApiFacts(PostgreSqlStorageFixture fixture)
         {
-            var defaultProvider = new Mock<IPersistentJobQueueProvider>();
-            defaultProvider.Setup(x => x.GetJobQueue())
-                .Returns(new Mock<IPersistentJobQueue>().Object);
-
-            _queueProviders = new PersistentJobQueueProviderCollection(defaultProvider.Object);
-            _options = new PostgreSqlStorageOptions()
-            {
-                PrepareSchemaIfNecessary = false,
-                SchemaName = ConnectionUtils.GetSchemaName()
-            };
-
-            _storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString(), _options);
+            _fixture = fixture;
         }
 
         [Fact, CleanDatabase]
@@ -45,8 +32,8 @@ namespace Hangfire.PostgreSql.Tests
 
             UseConnection(sql =>
             {
-                var jobId = sql.Query(arrangeSql, 
-                    new 
+                var jobId = sql.Query(arrangeSql,
+                    new
                     {
                         invocationData = SerializationHelper.Serialize(invocationData),
                         arguments = invocationData.Arguments,
@@ -64,7 +51,7 @@ namespace Hangfire.PostgreSql.Tests
 
                 Commit(sql, x => x.SetJobState(jobId, state.Object));
 
-                var monitoringApi = _storage.GetMonitoringApi();
+                var monitoringApi = _fixture.Storage.GetMonitoringApi();
                 var jobs = monitoringApi.SucceededJobs(0, 10);
 
                 Assert.NotNull(jobs);
@@ -73,17 +60,16 @@ namespace Hangfire.PostgreSql.Tests
 
         private void UseConnection(Action<NpgsqlConnection> action)
         {
-            using (var connection = ConnectionUtils.CreateConnection())
-            {
-                action(connection);
-            }
+            var storage = _fixture.SafeInit();
+            action(storage.CreateAndOpenConnection());
         }
 
         private void Commit(
             NpgsqlConnection connection,
             Action<PostgreSqlWriteOnlyTransaction> action)
         {
-            using (var transaction = new PostgreSqlWriteOnlyTransaction(connection, _options, _queueProviders))
+            var storage = _fixture.SafeInit();
+            using (var transaction = new PostgreSqlWriteOnlyTransaction(storage, () => connection))
             {
                 action(transaction);
                 transaction.Commit();
@@ -91,9 +77,9 @@ namespace Hangfire.PostgreSql.Tests
         }
 
 #pragma warning disable xUnit1013 // Public method should be marked as test
-		public static void SampleMethod(string arg)
+        public static void SampleMethod(string arg)
 #pragma warning restore xUnit1013 // Public method should be marked as test
-		{
+        {
         }
     }
 }

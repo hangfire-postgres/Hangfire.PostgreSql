@@ -20,31 +20,30 @@
 //    Special thanks goes to him.
 
 using System;
-using System.Data;
 
 namespace Hangfire.PostgreSql
 {
-	public class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
+    public class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
     {
-	    
 
-	    public PostgreSqlJobQueueProvider(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
-	    {
-		    Storage = storage ?? throw new ArgumentNullException(nameof(storage));
-		    Options = options ?? throw new ArgumentNullException(nameof(options));
-	    }
+
+        public PostgreSqlJobQueueProvider(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
+        {
+            Storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            Options = options ?? throw new ArgumentNullException(nameof(options));
+        }
 
         public PostgreSqlStorageOptions Options { get; }
         public PostgreSqlStorage Storage { get; }
 
         public IPersistentJobQueue GetJobQueue()
         {
-            return new PostgreSqlJobQueue(Storage, Options);
+            return new PostgreSqlJobQueue(Storage);
         }
 
         public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi()
         {
-            return new PostgreSqlJobQueueMonitoringApi(Storage, Options);
+            return new PostgreSqlJobQueueMonitoringApi(Storage);
         }
     }
 }

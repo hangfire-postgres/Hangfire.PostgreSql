@@ -19,14 +19,18 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Text;
+using Hangfire.Annotations;
 using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Text;
+using System.Transactions;
+using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql
 {
@@ -34,7 +38,6 @@ namespace Hangfire.PostgreSql
     {
         private readonly NpgsqlConnection _existingConnection;
         private readonly Action<NpgsqlConnection> _connectionSetup;
-        private readonly PostgreSqlStorageOptions _options;
         private readonly string _connectionString;
 
         public PostgreSqlStorage(string nameOrConnectionString)
@@ -61,33 +64,33 @@ namespace Hangfire.PostgreSql
         /// a valid SQL Server connection string nor the name of a connection string in the application
         /// config file.</exception>
         public PostgreSqlStorage(string nameOrConnectionString, Action<NpgsqlConnection> connectionSetup,
-	        PostgreSqlStorageOptions options)
+            PostgreSqlStorageOptions options)
         {
-	        if (nameOrConnectionString == null) throw new ArgumentNullException(nameof(nameOrConnectionString));
+            if (nameOrConnectionString == null) throw new ArgumentNullException(nameof(nameOrConnectionString));
 
-	        _options = options ?? throw new ArgumentNullException(nameof(options));
+            Options = options ?? throw new ArgumentNullException(nameof(options));
 
-	        if (IsConnectionString(nameOrConnectionString))
-	        {
-		        _connectionString = nameOrConnectionString;
-	        }
-	        else
-	        {
-		        throw new ArgumentException(
-			        $"Could not find connection string with name '{nameOrConnectionString}' in application config file");
-	        }
+            if (IsConnectionString(nameOrConnectionString))
+            {
+                _connectionString = nameOrConnectionString;
+            }
+            else
+            {
+                throw new ArgumentException(
+                    $"Could not find connection string with name '{nameOrConnectionString}' in application config file");
+            }
 
-	        _connectionSetup = connectionSetup;
+            _connectionSetup = connectionSetup;
 
-	        if (options.PrepareSchemaIfNecessary)
-	        {
-		        using (var connection = CreateAndOpenConnection())
-		        {
-			        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
-		        }
-	        }
+            if (options.PrepareSchemaIfNecessary)
+            {
+                using (var connection = CreateAndOpenConnection())
+                {
+                    PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
+                }
+            }
 
-	        InitializeQueueProviders();
+            InitializeQueueProviders();
         }
 
         /// <summary>
@@ -111,7 +114,7 @@ namespace Hangfire.PostgreSql
             }
 
             _existingConnection = existingConnection;
-            _options = options;
+            Options = options;
 
             InitializeQueueProviders();
         }
@@ -125,36 +128,34 @@ namespace Hangfire.PostgreSql
                     $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(PostgreSqlStorageOptions.EnableTransactionScopeEnlistment)} to `true`.");
 
             _existingConnection = existingConnection;
-            _options = new PostgreSqlStorageOptions();
+            Options = new PostgreSqlStorageOptions();
 
             InitializeQueueProviders();
         }
 
-        public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
+        public PersistentJobQueueProviderCollection QueueProviders { get; internal set; }
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            return new PostgreSqlMonitoringApi(this, _options, QueueProviders);
+            return new PostgreSqlMonitoringApi(this, QueueProviders);
         }
 
         public override IStorageConnection GetConnection()
         {
-            var connection = _existingConnection ?? CreateAndOpenConnection();
-
-            return new PostgreSqlConnection(connection, QueueProviders, _options, _existingConnection == null);
+            return new PostgreSqlConnection(this);
         }
 
         public override IEnumerable<IServerComponent> GetComponents()
         {
-            yield return new ExpirationManager(this, _options);
+            yield return new ExpirationManager(this);
             //TODO: add counters aggregator? (like https://github.com/HangfireIO/Hangfire/blob/master/src/Hangfire.SqlServer/SqlServerStorage.cs#L154)
         }
 
         public override void WriteOptionsToLog(ILog logger)
         {
             logger.Info("Using the following options for SQL Server job storage:");
-            logger.InfoFormat("    Queue poll interval: {0}.", _options.QueuePollInterval);
-            logger.InfoFormat("    Invisibility timeout: {0}.", _options.InvisibilityTimeout);
+            logger.InfoFormat("    Queue poll interval: {0}.", Options.QueuePollInterval);
+            logger.InfoFormat("    Invisibility timeout: {0}.", Options.InvisibilityTimeout);
         }
 
         public override string ToString()
@@ -171,7 +172,7 @@ namespace Hangfire.PostgreSql
                 builder.Append(", DB: ");
                 builder.Append(connectionStringBuilder.Database);
                 builder.Append(", Schema: ");
-                builder.Append(_options.SchemaName);
+                builder.Append(Options.SchemaName);
 
                 return builder.Length != 0
                     ? $"PostgreSQL Server: {builder}"
@@ -185,49 +186,217 @@ namespace Hangfire.PostgreSql
 
         internal NpgsqlConnection CreateAndOpenConnection()
         {
-            var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString);
-            if (!_options.EnableTransactionScopeEnlistment)
+            var connection = _existingConnection;
+            if (connection == null)
             {
-                connectionStringBuilder.Enlist = false;
+                var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString);
+                if (!Options.EnableTransactionScopeEnlistment)
+                {
+                    connectionStringBuilder.Enlist = false;
+                }
+
+                connection = new NpgsqlConnection(connectionStringBuilder.ToString());
+                _connectionSetup?.Invoke(connection);
             }
 
-            var connection = new NpgsqlConnection(connectionStringBuilder.ToString());
+            try
+            {
+                if (connection.State == ConnectionState.Closed)
+                {
+                    connection.Open();
+                }
 
-            _connectionSetup?.Invoke(connection);
-            connection.Open();
-
-            return connection;
+                return connection;
+            }
+            catch
+            {
+                ReleaseConnection(connection);
+                throw;
+            }
         }
 
-        internal T UseConnection<T>(Func<IDbConnection, T> func)
+        internal void UseTransaction(DbConnection dedicatedConnection, [InstantHandle] Action<DbConnection, IDbTransaction> action, IsolationLevel? isolationLevel = null)
         {
-	        IDbConnection connection = null;
-
-	        try
-	        {
-		        connection = CreateAndOpenConnection();
-		        return func(connection);
-	        }
-	        finally
-	        {
-		        ReleaseConnection(connection);
-	        }
+            UseTransaction(dedicatedConnection, (connection, transaction) =>
+            {
+                action(connection, transaction);
+                return true;
+            }, isolationLevel);
         }
 
-        internal void ReleaseConnection(IDbConnection connection)
+        internal T UseTransaction<T>(DbConnection dedicatedConnection, [InstantHandle] Func<DbConnection, IDbTransaction, T> func, IsolationLevel? isolationLevel = null)
         {
-	        if (connection != null && !IsExistingConnection(connection))
+            isolationLevel = isolationLevel ?? IsolationLevel.ReadCommitted;
+
+            if (IsRunningOnWindows())
+            {
+                using (var transaction = CreateTransaction(isolationLevel))
+                {
+                    var result = UseConnection(dedicatedConnection, connection =>
+                    {
+                        connection.EnlistTransaction(Transaction.Current);
+                        return func(connection, null);
+                    });
+
+                    transaction.Complete();
+
+                    return result;
+                }
+            }
+
+            return UseConnection(dedicatedConnection, connection =>
+            {
+                var transactionIsolationLevel = ConvertIsolationLevel(isolationLevel) ?? System.Data.IsolationLevel.ReadCommitted;
+                using (var transaction = connection.BeginTransaction(transactionIsolationLevel))
+                {
+                    T result;
+
+                    try
+                    {
+                        result = func(connection, transaction);
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        if (transaction.Connection != null)
+                        {
+                            // Don't rely on implicit rollback when calling the Dispose
+                            // method, because some implementations may throw the
+                            // NullReferenceException, although it's prohibited to throw
+                            // any exception from a Dispose method, according to the
+                            // .NET Framework Design Guidelines:
+                            // https://github.com/dotnet/efcore/issues/12864
+                            // https://github.com/HangfireIO/Hangfire/issues/1494
+                            transaction.Rollback();
+                        }
+
+                        throw;
+                    }
+
+                    return result;
+                }
+            });
+        }
+
+        internal void UseTransaction(DbConnection dedicatedConnection, Action<DbConnection, DbTransaction> action, Func<TransactionScope> transactionScopeFactory)
+        {
+            UseTransaction(dedicatedConnection, (connection, transaction) =>
+            {
+                action(connection, transaction);
+                return true;
+            }, transactionScopeFactory);
+        }
+
+        internal T UseTransaction<T>(DbConnection dedicatedConnection, Func<DbConnection, DbTransaction, T> func, Func<TransactionScope> transactionScopeFactory)
+        {
+            return UseConnection(dedicatedConnection, connection =>
+            {
+                using (var transaction = transactionScopeFactory())
+                {
+                    connection.EnlistTransaction(Transaction.Current);
+
+                    var result = func(connection, null);
+
+                    // TransactionCompleted event is required here, because if this TransactionScope is enlisted within an ambient TransactionScope, the ambient TransactionScope controls when the TransactionScope completes.
+                    Transaction.Current.TransactionCompleted += Current_TransactionCompleted;
+                    transaction.Complete();
+
+                    return result;
+                }
+            });
+        }
+
+        private static void Current_TransactionCompleted(object sender, TransactionEventArgs e)
+        {
+            if (e.Transaction.TransactionInformation.Status == TransactionStatus.Committed)
+            {
+                PostgreSqlJobQueue.NewItemInQueueEvent.Set();
+            }
+        }
+
+        private static bool IsRunningOnWindows()
+        {
+#if !NETSTANDARD1_3
+            return Environment.OSVersion.Platform == PlatformID.Win32NT;
+#else
+            return System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+#endif
+        }
+
+        private static TransactionScope CreateTransaction(IsolationLevel? isolationLevel)
+        {
+            return isolationLevel != null
+                ? new TransactionScope(TransactionScopeOption.Required,
+                    new TransactionOptions { IsolationLevel = isolationLevel.Value })
+                : new TransactionScope();
+        }
+
+        private static System.Data.IsolationLevel? ConvertIsolationLevel(IsolationLevel? isolationLevel)
+        {
+            switch (isolationLevel)
+            {
+                case IsolationLevel.Chaos:
+                    return System.Data.IsolationLevel.Chaos;
+                case IsolationLevel.ReadCommitted:
+                    return System.Data.IsolationLevel.ReadCommitted;
+                case IsolationLevel.ReadUncommitted:
+                    return System.Data.IsolationLevel.ReadUncommitted;
+                case IsolationLevel.RepeatableRead:
+                    return System.Data.IsolationLevel.RepeatableRead;
+                case IsolationLevel.Serializable:
+                    return System.Data.IsolationLevel.Serializable;
+                case IsolationLevel.Snapshot:
+                    return System.Data.IsolationLevel.Snapshot;
+                case IsolationLevel.Unspecified:
+                    return System.Data.IsolationLevel.Unspecified;
+                case null:
+                    return null;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(isolationLevel), isolationLevel, null);
+            }
+        }
+
+        internal void UseConnection(DbConnection dedicatedConnection, [InstantHandle] Action<DbConnection> action)
+        {
+            UseConnection(dedicatedConnection, connection =>
+            {
+                action(connection);
+                return true;
+            });
+        }
+
+        internal T UseConnection<T>(DbConnection dedicatedConnection, Func<DbConnection, T> func)
+        {
+            DbConnection connection = null;
+
+            try
+            {
+                connection = dedicatedConnection ?? CreateAndOpenConnection();
+                return func(connection);
+            }
+            finally
+            {
+                if (dedicatedConnection == null)
+                {
+                    ReleaseConnection(connection);
+                }
+            }
+        }
+
+        internal void ReleaseConnection(DbConnection connection)
+        {
+            if (connection != null && !IsExistingConnection(connection))
                 connection.Dispose();
         }
 
         private bool IsExistingConnection(IDbConnection connection)
         {
-	        return connection != null && ReferenceEquals(connection, _existingConnection);
+            return connection != null && ReferenceEquals(connection, _existingConnection);
         }
 
         private void InitializeQueueProviders()
         {
-            var defaultQueueProvider = new PostgreSqlJobQueueProvider(this, _options);
+            var defaultQueueProvider = new PostgreSqlJobQueueProvider(this, Options);
             QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
         }
 
@@ -235,5 +404,7 @@ namespace Hangfire.PostgreSql
         {
             return nameOrConnectionString.Contains(";");
         }
+
+        internal PostgreSqlStorageOptions Options { get; }
     }
 }
