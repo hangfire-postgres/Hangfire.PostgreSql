@@ -1,40 +1,39 @@
 ﻿using System;
 using System.Linq;
 using Dapper;
+using Hangfire.PostgreSql.Tests.Utils;
 using Npgsql;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
 {
-	public class PostgreSqlInstallerFacts
-	{
-		[Fact]
-		public void InstallingSchemaUpdatesVersionAndShouldNotThrowAnException()
-		{
-			var ex = Record.Exception(() =>
-			{
-				UseConnection(connection =>
-				{
-					string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
+  public class PostgreSqlInstallerFacts
+  {
+    [Fact]
+    public void InstallingSchemaUpdatesVersionAndShouldNotThrowAnException()
+    {
+      Exception ex = Record.Exception(() => {
+        UseConnection(connection => {
+          string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
 
-					PostgreSqlObjectsInstaller.Install(connection, schemaName);
+          PostgreSqlObjectsInstaller.Install(connection, schemaName);
 
-					var lastVersion = connection.Query<int>(@"select version from """ + schemaName + @""".""schema""").Single();
-					Assert.Equal(15, lastVersion);
+          int lastVersion = connection.Query<int>(@"SELECT version FROM """ + schemaName + @""".""schema""").Single();
+          Assert.Equal(15, lastVersion);
 
-					connection.Execute($@"DROP SCHEMA ""{schemaName}"" CASCADE;");
-				});
-			});
+          connection.Execute($@"DROP SCHEMA ""{schemaName}"" CASCADE;");
+        });
+      });
 
-			Assert.Null(ex);
-		}
+      Assert.Null(ex);
+    }
 
-		private static void UseConnection(Action<NpgsqlConnection> action)
-		{
-			using (var connection = ConnectionUtils.CreateConnection())
-			{
-				action(connection);
-			}
-		}
-	}
+    private static void UseConnection(Action<NpgsqlConnection> action)
+    {
+      using (NpgsqlConnection connection = ConnectionUtils.CreateConnection())
+      {
+        action(connection);
+      }
+    }
+  }
 }

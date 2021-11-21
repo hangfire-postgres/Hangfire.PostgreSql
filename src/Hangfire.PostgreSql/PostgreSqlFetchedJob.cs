@@ -19,71 +19,68 @@
 //   
 //    Special thanks goes to him.
 
+using System;
 using Dapper;
 using Hangfire.Storage;
-using System;
 
 namespace Hangfire.PostgreSql
 {
-    public class PostgreSqlFetchedJob : IFetchedJob
+  public class PostgreSqlFetchedJob : IFetchedJob
+  {
+    private readonly PostgreSqlStorage _storage;
+    private bool _disposed;
+    private bool _removedFromQueue;
+    private bool _requeued;
+
+    public PostgreSqlFetchedJob(
+      PostgreSqlStorage storage,
+      long id,
+      string jobId,
+      string queue)
     {
-        private readonly PostgreSqlStorage _storage;
-        private bool _disposed;
-        private bool _removedFromQueue;
-        private bool _requeued;
+      _storage = storage ?? throw new ArgumentNullException(nameof(storage));
 
-        public PostgreSqlFetchedJob(
-            PostgreSqlStorage storage,
-            long id,
-            string jobId,
-            string queue)
-        {
-            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-
-            Id = id;
-            JobId = jobId ?? throw new ArgumentNullException(nameof(jobId));
-            Queue = queue ?? throw new ArgumentNullException(nameof(queue));
-        }
-
-        public long Id { get; }
-        public string JobId { get; }
-        public string Queue { get; }
-
-        public void RemoveFromQueue()
-        {
-            _storage.UseConnection(null, connection => connection.Execute(
-                @"
-DELETE FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" 
-WHERE ""id"" = @id;
-",
-                new { id = Id }));
-
-            _removedFromQueue = true;
-        }
-
-        public void Requeue()
-        {
-            _storage.UseConnection(null, connection => connection.Execute(
-                @"
-UPDATE """ + _storage.Options.SchemaName + @""".""jobqueue"" 
-SET ""fetchedat"" = NULL 
-WHERE ""id"" = @id;
-",
-                new { id = Id }));
-
-            _requeued = true;
-        }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-
-            if (!_removedFromQueue && !_requeued)
-            {
-                Requeue();
-            }
-
-            _disposed = true;
-        }
+      Id = id;
+      JobId = jobId ?? throw new ArgumentNullException(nameof(jobId));
+      Queue = queue ?? throw new ArgumentNullException(nameof(queue));
     }
+
+    public long Id { get; }
+    public string Queue { get; }
+    public string JobId { get; }
+
+    public void RemoveFromQueue()
+    {
+      _storage.UseConnection(null, connection => connection.Execute($@"
+        DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id;
+      ",
+        new { Id }));
+
+      _removedFromQueue = true;
+    }
+
+    public void Requeue()
+    {
+      _storage.UseConnection(null, connection => connection.Execute($@"
+        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        SET ""fetchedat"" = NULL 
+        WHERE ""id"" = @Id;
+      ",
+      new { Id }));
+
+      _requeued = true;
+    }
+
+    public void Dispose()
+    {
+      if (_disposed) return;
+
+      if (!_removedFromQueue && !_requeued)
+      {
+        Requeue();
+      }
+
+      _disposed = true;
+    }
+  }
 }

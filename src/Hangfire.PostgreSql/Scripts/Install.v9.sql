@@ -5,13 +5,14 @@ SET search_path = 'hangfire';
 
 DO
 $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 9) THEN
-        RAISE EXCEPTION 'version-already-applied';
-    END IF;
-END
+    BEGIN
+        IF EXISTS(SELECT 1 FROM "schema" WHERE "version"::integer >= 9) THEN
+            RAISE EXCEPTION 'version-already-applied';
+        END IF;
+    END
 $$;
 
-ALTER TABLE "lock" ALTER COLUMN "resource" TYPE TEXT;
+ALTER TABLE "lock"
+    ALTER COLUMN "resource" TYPE TEXT;
 
 RESET search_path;

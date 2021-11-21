@@ -1,5 +1,4 @@
-﻿using System;
-using System.Data;
+﻿using System.Data;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -7,76 +6,69 @@ using Dapper;
 using Npgsql;
 using Xunit.Sdk;
 
-namespace Hangfire.PostgreSql.Tests
+namespace Hangfire.PostgreSql.Tests.Utils
 {
-	public class CleanDatabaseAttribute : BeforeAfterTestAttribute
-	{
-		private static readonly object GlobalLock = new object();
-		private static bool _sqlObjectInstalled;
+  public class CleanDatabaseAttribute : BeforeAfterTestAttribute
+  {
+    private static readonly object _globalLock = new();
+    private static bool _sqlObjectInstalled;
 
-		public CleanDatabaseAttribute()
-		{
-		}
+    public override void Before(MethodInfo methodUnderTest)
+    {
+      Monitor.Enter(_globalLock);
 
-		public override void Before(MethodInfo methodUnderTest)
-		{
-			Monitor.Enter(GlobalLock);
+      if (!_sqlObjectInstalled)
+      {
+        RecreateSchemaAndInstallObjects();
+        _sqlObjectInstalled = true;
+      }
 
-			if (!_sqlObjectInstalled)
-			{
-				RecreateSchemaAndInstallObjects();
-				_sqlObjectInstalled = true;
-			}
-			CleanTables();
-		}
+      CleanTables();
+    }
 
-		public override void After(MethodInfo methodUnderTest)
-		{
-			try
-			{
-			}
-			finally
-			{
-				Monitor.Exit(GlobalLock);
-			}
-		}
+    public override void After(MethodInfo methodUnderTest)
+    {
+      try { }
+      finally
+      {
+        Monitor.Exit(_globalLock);
+      }
+    }
 
-		private static void RecreateSchemaAndInstallObjects()
-		{
-			using (var connection = ConnectionUtils.CreateMasterConnection())
-			{
-				bool databaseExists = connection.Query<bool?>(
-					@"select true :: boolean from pg_database where datname = @databaseName;",
-					new
-					{
-						databaseName = ConnectionUtils.GetDatabaseName()
-					}
-					).SingleOrDefault() ?? false;
+    private static void RecreateSchemaAndInstallObjects()
+    {
+      using (NpgsqlConnection connection = ConnectionUtils.CreateMasterConnection())
+      {
+        bool databaseExists = connection.Query<bool?>($@"SELECT true :: boolean FROM pg_database WHERE datname = @DatabaseName;",
+            new {
+              DatabaseName = ConnectionUtils.GetDatabaseName(),
+            }).SingleOrDefault()
+          ?? false;
 
-				if (!databaseExists)
-				{
-					connection.Execute($@"CREATE DATABASE ""{ConnectionUtils.GetDatabaseName()}""");
-				}
-			}
+        if (!databaseExists)
+        {
+          connection.Execute($@"CREATE DATABASE ""{ConnectionUtils.GetDatabaseName()}""");
+        }
+      }
 
-			using (var connection = ConnectionUtils.CreateConnection())
-			{
-				if (connection.State == ConnectionState.Closed)
-				{
-					connection.Open();
-				}
+      using (NpgsqlConnection connection = ConnectionUtils.CreateConnection())
+      {
+        if (connection.State == ConnectionState.Closed)
+        {
+          connection.Open();
+        }
 
-				PostgreSqlObjectsInstaller.Install(connection);
-				PostgreSqlTestObjectsInitializer.CleanTables(connection);
-			}
-		}
+        PostgreSqlObjectsInstaller.Install(connection);
+        PostgreSqlTestObjectsInitializer.CleanTables(connection);
+      }
+    }
 
-		private static void CleanTables()
-		{
-			using (var connection = ConnectionUtils.CreateConnection())
-			{
-				PostgreSqlTestObjectsInitializer.CleanTables(connection);
-			}
-		}
-	}
+    private static void CleanTables()
+    {
+      using (NpgsqlConnection connection = ConnectionUtils.CreateConnection())
+      {
+        PostgreSqlTestObjectsInitializer.CleanTables(connection);
+      }
+    }
+  }
 }

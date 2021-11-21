@@ -5,13 +5,14 @@
 
 DO
 $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 7) THEN
-        RAISE EXCEPTION 'version-already-applied';
-    END IF;
-END
+    BEGIN
+        IF EXISTS(SELECT 1 FROM "schema" WHERE "version"::integer >= 7) THEN
+            RAISE EXCEPTION 'version-already-applied';
+        END IF;
+    END
 $$;
 
-ALTER TABLE "lock" ADD COLUMN acquired timestamp without time zone;
+ALTER TABLE "lock"
+    ADD COLUMN acquired timestamp without time zone;
 
 RESET search_path;

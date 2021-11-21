@@ -5,14 +5,16 @@
 
 DO
 $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 8) THEN
-        RAISE EXCEPTION 'version-already-applied';
-    END IF;
-END
+    BEGIN
+        IF EXISTS(SELECT 1 FROM "schema" WHERE "version"::integer >= 8) THEN
+            RAISE EXCEPTION 'version-already-applied';
+        END IF;
+    END
 $$;
 
-ALTER TABLE "counter" ALTER COLUMN value TYPE bigint;
-ALTER TABLE "counter" DROP COLUMN updatecount RESTRICT;
+ALTER TABLE "counter"
+    ALTER COLUMN value TYPE bigint;
+ALTER TABLE "counter"
+    DROP COLUMN updatecount RESTRICT;
 
 RESET search_path;

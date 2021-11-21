@@ -23,41 +23,31 @@ using System;
 
 namespace Hangfire.PostgreSql.Utils
 {
-    public static partial class Utils
+  public static class Utils
+  {
+    public static bool TryExecute<T>(
+      Func<T> func,
+      out T result,
+      Func<Exception, bool> swallowException = default,
+      int? tryCount = default)
     {
-        public static bool TryExecute(
-            Action action,
-            Func<Exception, bool> smoothExValidator = default(Func<Exception, bool>),
-            int? tryCount = default(int?))
+      while (tryCount == default(int?) || tryCount-- > 0)
+      {
+        try
         {
-            object futile;
-            return TryExecute(() => { action(); return null; }, out futile, smoothExValidator, tryCount);
+          result = func();
+          return true;
         }
-
-        public static bool TryExecute<T>(
-            Func<T> func,
-            out T result,
-            Func<Exception, bool> smoothExValidator = default(Func<Exception, bool>),
-            int? tryCount = default(int?))
+        catch (Exception ex)
         {
-            while (tryCount == default(int?) || tryCount-- > 0)
-            {
-                try
-                {
-                    result = func();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    if (smoothExValidator != null && !smoothExValidator(ex))
-                    {
-                        throw;
-                    }
-                }
-            }
-
-            result = default(T);
-            return false;
+          if (swallowException != null && !swallowException(ex))
+          {
+            throw;
+          }
         }
+      }
+      result = default(T);
+      return false;
     }
+  }
 }

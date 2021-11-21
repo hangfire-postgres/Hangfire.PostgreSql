@@ -1,12 +1,12 @@
 ﻿SET search_path = 'hangfire';
 
-delete from hangfire."counter";
-delete from hangfire."hash";
-delete from hangfire."job";
-delete from hangfire."jobparameter";
-delete from hangfire."jobqueue";
-delete from hangfire."list";
-delete from hangfire."lock";
-delete from hangfire."server";
-delete from hangfire."set";
-delete from hangfire."state";
+DELETE FROM hangfire."counter";
+DELETE FROM hangfire."hash";
+DELETE FROM hangfire."job";
+DELETE FROM hangfire."jobparameter";
+DELETE FROM hangfire."jobqueue";
+DELETE FROM hangfire."list";
+DELETE FROM hangfire."lock";
+DELETE FROM hangfire."server";
+DELETE FROM hangfire."set";
+DELETE FROM hangfire."state";

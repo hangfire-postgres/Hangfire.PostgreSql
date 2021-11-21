@@ -2,11 +2,11 @@ SET search_path = 'hangfire';
 
 DO
 $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM "schema" WHERE "version"::integer >= 15) THEN
-    RAISE EXCEPTION 'version-already-applied';
-  END IF;
-END
+    BEGIN
+        IF EXISTS(SELECT 1 FROM "schema" WHERE "version"::integer >= 15) THEN
+            RAISE EXCEPTION 'version-already-applied';
+        END IF;
+    END
 $$;
 
 CREATE INDEX ix_hangfire_job_expireat ON "job" (expireat);

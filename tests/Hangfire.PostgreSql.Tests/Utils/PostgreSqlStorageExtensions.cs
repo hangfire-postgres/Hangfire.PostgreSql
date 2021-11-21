@@ -1,8 +1,10 @@
-﻿namespace Hangfire.PostgreSql.Tests
+﻿namespace Hangfire.PostgreSql.Tests.Utils
 {
-    internal static class PostgreSqlStorageExtensions
+  internal static class PostgreSqlStorageExtensions
+  {
+    public static PostgreSqlConnection GetStorageConnection(this PostgreSqlStorage storage)
     {
-        public static PostgreSqlConnection GetStorageConnection(this PostgreSqlStorage storage) =>
-            storage.GetConnection() as PostgreSqlConnection;
+      return storage.GetConnection() as PostgreSqlConnection;
     }
+  }
 }

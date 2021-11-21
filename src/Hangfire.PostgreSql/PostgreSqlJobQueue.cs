@@ -19,254 +19,232 @@
 //   
 //    Special thanks goes to him.
 
-using Dapper;
-using Hangfire.PostgreSql.Properties;
-using Hangfire.Storage;
-using Npgsql;
 using System;
 using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using Dapper;
+using Hangfire.PostgreSql.Properties;
+using Hangfire.Storage;
+using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
-    public class PostgreSqlJobQueue : IPersistentJobQueue
+  public class PostgreSqlJobQueue : IPersistentJobQueue
+  {
+    internal static readonly AutoResetEvent _newItemInQueueEvent = new AutoResetEvent(true);
+    private readonly PostgreSqlStorage _storage;
+
+    public PostgreSqlJobQueue(PostgreSqlStorage storage)
     {
-        internal static readonly AutoResetEvent NewItemInQueueEvent = new AutoResetEvent(true);
-        private readonly PostgreSqlStorage _storage;
-
-        private AutoResetEvent SignalDequeue { get; }
-
-        public PostgreSqlJobQueue(PostgreSqlStorage storage)
-        {
-            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            SignalDequeue = new AutoResetEvent(false);
-        }
-
-
-        [NotNull]
-        public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
-        {
-            if (_storage.Options.UseNativeDatabaseTransactions)
-                return Dequeue_Transaction(queues, cancellationToken);
-
-            return Dequeue_UpdateCount(queues, cancellationToken);
-        }
-
-        /// <summary>
-        ///		Signal the waiting Thread to lookup a new Job
-        /// </summary>
-        public void FetchNextJob()
-        {
-            SignalDequeue.Set();
-        }
-
-        public void Enqueue(IDbConnection connection, string queue, string jobId)
-        {
-            var enqueueJobSql = @"
-INSERT INTO """ + _storage.Options.SchemaName + @""".""jobqueue"" (""jobid"", ""queue"") 
-VALUES (@jobId, @queue);
-";
-
-            connection.Execute(enqueueJobSql,
-                new { jobId = Convert.ToInt32(jobId, CultureInfo.InvariantCulture), queue });
-        }
-
-
-        [NotNull]
-        internal IFetchedJob Dequeue_Transaction(string[] queues, CancellationToken cancellationToken)
-        {
-            if (queues == null) throw new ArgumentNullException(nameof(queues));
-            if (queues.Length == 0) throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
-
-            var timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
-            FetchedJob fetchedJob;
-
-            var fetchJobSqlTemplate = @"
-UPDATE """ + _storage.Options.SchemaName + @""".""jobqueue"" 
-SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
-WHERE ""id"" = (
-    SELECT ""id"" 
-    FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" 
-    WHERE ""queue"" = ANY (@queues)
-    AND ""fetchedat"" {0}
-    ORDER BY ""queue"", ""fetchedat"", ""jobid""
-    FOR UPDATE SKIP LOCKED
-    LIMIT 1
-)
-RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
-";
-
-            var fetchConditions = new[]
-            {
-                "IS NULL",
-                $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'"
-            };
-            var currentQueryIndex = 0;
-
-            do
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[currentQueryIndex]);
-
-                Utils.Utils.TryExecute(() =>
-                    {
-                        var connection = _storage.CreateAndOpenConnection();
-
-                        try
-                        {
-                            using (var trx = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                            {
-                                var jobToFetch = connection.Query<FetchedJob>(
-                                        fetchJobSql,
-                                        new { queues = queues.ToList() }, trx)
-                                    .SingleOrDefault();
-
-                                trx.Commit();
-
-                                return jobToFetch;
-                            }
-                        }
-                        catch (InvalidOperationException)
-                        {
-                            // thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
-                        }
-                        finally
-                        {
-                            _storage.ReleaseConnection(connection);
-                        }
-
-                        return null;
-                    },
-                    out fetchedJob,
-                    ex =>
-                    {
-                        var postgresException = ex as PostgresException;
-                        var smoothException = false;
-
-                        if (postgresException != null)
-                        {
-                            if (postgresException.SqlState.Equals("40001"))
-                                smoothException = true;
-                        }
-
-                        return smoothException;
-                    });
-
-                if (fetchedJob == null && currentQueryIndex == fetchConditions.Length - 1)
-                {
-                    WaitHandle.WaitAny(new[]
-                        {
-                            cancellationToken.WaitHandle,
-                            NewItemInQueueEvent,
-                            SignalDequeue
-                        },
-                        _storage.Options.QueuePollInterval);
-
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-
-                currentQueryIndex = (currentQueryIndex + 1) % fetchConditions.Length;
-            } while (fetchedJob == null);
-
-            return new PostgreSqlFetchedJob(
-                _storage,
-                fetchedJob.Id,
-                fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
-                fetchedJob.Queue);
-        }
-
-
-        [NotNull]
-        internal IFetchedJob Dequeue_UpdateCount(string[] queues, CancellationToken cancellationToken)
-        {
-            if (queues == null) throw new ArgumentNullException("queues");
-            if (queues.Length == 0) throw new ArgumentException("Queue array must be non-empty.", "queues");
-
-
-            var timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
-            FetchedJob markJobAsFetched = null;
-
-
-            var jobToFetchSqlTemplate = @"
-SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
-FROM """ + _storage.Options.SchemaName + @""".""jobqueue"" 
-WHERE ""queue"" = ANY (@queues)
-AND ""fetchedat"" {0} 
-ORDER BY ""queue"", ""fetchedat"", ""jobid"" 
-LIMIT 1;
-";
-
-            var markJobAsFetchedSql = @"
-UPDATE """ + _storage.Options.SchemaName + @""".""jobqueue"" 
-SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC', 
-    ""updatecount"" = (""updatecount"" + 1) % 2000000000
-WHERE ""id"" = @Id 
-AND ""updatecount"" = @UpdateCount
-RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
-";
-
-            var fetchConditions = new[]
-            {
-                "IS NULL",
-                $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'"
-            };
-            var currentQueryIndex = 0;
-
-            do
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var jobToFetchJobSql = string.Format(jobToFetchSqlTemplate, fetchConditions[currentQueryIndex]);
-
-                FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(
-                    jobToFetchJobSql,
-                    new { queues = queues.ToList() })
-                    .SingleOrDefault());
-
-                if (jobToFetch == null)
-                {
-                    if (currentQueryIndex == fetchConditions.Length - 1)
-                    {
-                        WaitHandle.WaitAny(new[]
-                            {
-                                cancellationToken.WaitHandle,
-                                SignalDequeue
-                            },
-                            _storage.Options.QueuePollInterval);
-
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-                }
-                else
-                {
-                    markJobAsFetched = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(
-                            markJobAsFetchedSql,
-                            jobToFetch)
-                        .SingleOrDefault());
-                }
-
-
-                currentQueryIndex = (currentQueryIndex + 1) % fetchConditions.Length;
-            } while (markJobAsFetched == null);
-
-            return new PostgreSqlFetchedJob(
-                _storage,
-                markJobAsFetched.Id,
-                markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
-                markJobAsFetched.Queue);
-        }
-
-        [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
-        private class FetchedJob
-        {
-            public long Id { get; set; }
-            public long JobId { get; set; }
-            public string Queue { get; set; }
-            public DateTime? FetchedAt { get; set; }
-            public int UpdateCount { get; set; }
-        }
+      _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+      SignalDequeue = new AutoResetEvent(false);
     }
+
+    private AutoResetEvent SignalDequeue { get; }
+
+    [NotNull]
+    public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
+    {
+      if (_storage.Options.UseNativeDatabaseTransactions)
+        return Dequeue_Transaction(queues, cancellationToken);
+
+      return Dequeue_UpdateCount(queues, cancellationToken);
+    }
+
+    public void Enqueue(IDbConnection connection, string queue, string jobId)
+    {
+      string enqueueJobSql = $@"
+        INSERT INTO ""{_storage.Options.SchemaName}"".""jobqueue"" (""jobid"", ""queue"") 
+        VALUES (@JobId, @Queue);
+      ";
+
+      connection.Execute(enqueueJobSql,
+        new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue});
+    }
+
+    /// <summary>
+    ///   Signal the waiting Thread to lookup a new Job
+    /// </summary>
+    public void FetchNextJob()
+    {
+      SignalDequeue.Set();
+    }
+
+
+    [NotNull]
+    internal IFetchedJob Dequeue_Transaction(string[] queues, CancellationToken cancellationToken)
+    {
+      if (queues == null) throw new ArgumentNullException(nameof(queues));
+      if (queues.Length == 0) throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
+
+      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
+      FetchedJob fetchedJob;
+
+      string fetchJobSqlTemplate = $@"
+        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
+        WHERE ""id"" = (
+            SELECT ""id"" 
+            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+            WHERE ""queue"" = ANY (@Queues)
+            AND ""fetchedat"" {0}
+            ORDER BY ""queue"", ""fetchedat"", ""jobid""
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
+      ";
+
+      string[] fetchConditions = {
+        "IS NULL",
+        $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
+      };
+      
+      int fetchConditionsIndex = 0;
+      do
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[fetchConditionsIndex]);
+
+        Utils.Utils.TryExecute(() => {
+            NpgsqlConnection connection = _storage.CreateAndOpenConnection();
+
+            try
+            {
+              using (NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+              {
+                FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobSql,
+                    new { Queues = queues.ToList() }, trx)
+                  .SingleOrDefault();
+
+                trx.Commit();
+
+                return jobToFetch;
+              }
+            }
+            catch (InvalidOperationException)
+            {
+              // thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
+            }
+            finally
+            {
+              _storage.ReleaseConnection(connection);
+            }
+
+            return null;
+          },
+          out fetchedJob,
+          ex => ex is PostgresException postgresException && postgresException.SqlState.Equals(PostgresErrorCodes.SerializationFailure));
+
+        if (fetchedJob == null && fetchConditionsIndex == fetchConditions.Length - 1)
+        {
+          WaitHandle.WaitAny(new[] {
+              cancellationToken.WaitHandle,
+              _newItemInQueueEvent,
+              SignalDequeue,
+            },
+            _storage.Options.QueuePollInterval);
+
+          cancellationToken.ThrowIfCancellationRequested();
+        }
+        fetchConditionsIndex++;
+        fetchConditionsIndex %= fetchConditions.Length;
+      } 
+      while (fetchedJob == null);
+
+      return new PostgreSqlFetchedJob(_storage,
+        fetchedJob.Id,
+        fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
+        fetchedJob.Queue);
+    }
+
+
+    [NotNull]
+    internal IFetchedJob Dequeue_UpdateCount(string[] queues, CancellationToken cancellationToken)
+    {
+      if (queues == null) throw new ArgumentNullException("queues");
+      if (queues.Length == 0) throw new ArgumentException("Queue array must be non-empty.", "queues");
+
+
+      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
+      FetchedJob markJobAsFetched = null;
+
+
+      string jobToFetchSqlTemplate = $@"
+        SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
+        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        WHERE ""queue"" = ANY (@Queues)
+        AND ""fetchedat"" {{0}} 
+        ORDER BY ""queue"", ""fetchedat"", ""jobid"" 
+        LIMIT 1;
+        ";
+
+      string markJobAsFetchedSql = $@"
+        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC', 
+            ""updatecount"" = (""updatecount"" + 1) % 2000000000
+        WHERE ""id"" = @Id 
+        AND ""updatecount"" = @UpdateCount
+        RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
+      ";
+
+      string[] fetchConditions = {
+        "IS NULL",
+        $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
+      };
+
+      int fetchConditionsIndex = 0;
+      do
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string jobToFetchJobSql = string.Format(jobToFetchSqlTemplate, fetchConditions[fetchConditionsIndex]);
+
+        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(jobToFetchJobSql,
+            new { Queues = queues.ToList() })
+          .SingleOrDefault());
+
+        if (jobToFetch == null)
+        {
+          if (fetchConditionsIndex == fetchConditions.Length - 1)
+          {
+            WaitHandle.WaitAny(new[] {
+                cancellationToken.WaitHandle,
+                SignalDequeue,
+              },
+              _storage.Options.QueuePollInterval);
+
+            cancellationToken.ThrowIfCancellationRequested();
+          }
+        }
+        else
+        {
+          markJobAsFetched = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(markJobAsFetchedSql,
+              jobToFetch)
+            .SingleOrDefault());
+        }
+        fetchConditionsIndex++;
+        fetchConditionsIndex %= fetchConditions.Length;
+      } 
+      while (markJobAsFetched == null);
+
+      return new PostgreSqlFetchedJob(_storage,
+        markJobAsFetched.Id,
+        markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
+        markJobAsFetched.Queue);
+    }
+
+    [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
+    private class FetchedJob
+    {
+      public long Id { get; set; }
+      public long JobId { get; set; }
+      public string Queue { get; set; }
+      public DateTime? FetchedAt { get; set; }
+      public int UpdateCount { get; set; }
+    }
+  }
 }
