@@ -26,7 +26,8 @@ namespace Hangfire.PostgreSql
   [Serializable]
   public class PostgreSqlDistributedLockException : Exception
   {
-    public PostgreSqlDistributedLockException(string message)
-      : base(message) { }
+    public PostgreSqlDistributedLockException(string message) : base(message)
+    {
+    }
   }
 }

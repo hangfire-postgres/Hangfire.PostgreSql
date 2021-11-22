@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Dapper;
 using Hangfire.Common;
@@ -34,11 +35,10 @@ namespace Hangfire.PostgreSql.Tests
       InvocationData invocationData = InvocationData.SerializeJob(job);
 
       UseConnection(connection => {
-        dynamic jobId = connection.Query(arrangeSql,
+        long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = SerializationHelper.Serialize(invocationData),
-            Arguments = invocationData.Arguments,
-          }).Single().id.ToString();
+            InvocationData = SerializationHelper.Serialize(invocationData), invocationData.Arguments,
+          });
 
         Mock<IState> state = new();
         state.Setup(x => x.Name).Returns(SucceededState.StateName);
@@ -49,7 +49,7 @@ namespace Hangfire.PostgreSql.Tests
             { "latency", "6730" },
           });
 
-        Commit(connection, x => x.SetJobState(jobId, state.Object));
+        Commit(connection, x => x.SetJobState(jobId.ToString(CultureInfo.InvariantCulture), state.Object));
 
         IMonitoringApi monitoringApi = _fixture.Storage.GetMonitoringApi();
         JobList<SucceededJobDto> jobs = monitoringApi.SucceededJobs(0, 10);

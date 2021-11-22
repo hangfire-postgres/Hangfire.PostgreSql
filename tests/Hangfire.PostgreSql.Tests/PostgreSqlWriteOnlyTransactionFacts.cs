@@ -48,22 +48,23 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void ExpireJob_SetsJobExpirationData()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job""(""invocationdata"", ""arguments"", ""createdat"")
-VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
 
-      UseConnection(sql => {
-        dynamic jobId = sql.Query(arrangeSql).Single().id.ToString();
-        dynamic anotherJobId = sql.Query(arrangeSql).Single().id.ToString();
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
+        VALUES ('', '', @When) RETURNING ""id""
+      ";
 
-        Commit(sql, x => x.ExpireJob(jobId, TimeSpan.FromDays(1)));
+      UseConnection(connection => {
+        DateTime utcNow = DateTime.UtcNow;
+        string jobId = connection.QuerySingle<long>(arrangeSql, new { When = utcNow }).ToString(CultureInfo.InvariantCulture);
+        string anotherJobId = connection.QuerySingle<long>(arrangeSql, new { When = utcNow }).ToString(CultureInfo.InvariantCulture);
 
-        dynamic job = GetTestJob(sql, jobId);
-        Assert.True(DateTime.UtcNow.AddMinutes(-1) < job.expireat && job.expireat <= DateTime.UtcNow.AddDays(1));
+        Commit(connection, x => x.ExpireJob(jobId, TimeSpan.FromDays(1)));
 
-        dynamic anotherJob = GetTestJob(sql, anotherJobId);
+        dynamic job = GetTestJob(connection, jobId);
+        Assert.True(utcNow.AddMinutes(-1) < job.expireat && job.expireat <= utcNow.AddDays(1).AddSeconds(5));
+
+        dynamic anotherJob = GetTestJob(connection, anotherJobId);
         Assert.Null(anotherJob.expireat);
       });
     }
@@ -73,8 +74,9 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
     public void PersistJob_ClearsTheJobExpirationData()
     {
       string arrangeSql = $@"
-INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+      ";
 
       UseConnection(sql => {
         dynamic jobId = sql.Query(arrangeSql).Single().id.ToString();
@@ -262,7 +264,7 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""
     private static dynamic GetTestJob(IDbConnection connection, string jobId)
     {
       return connection
-        .Query($@"SELECT * FROM ""{GetSchemaName()}"".""job"" where ""id"" = @Id",
+        .Query($@"SELECT * FROM ""{GetSchemaName()}"".""job"" WHERE ""id"" = @Id",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
         .Single();
     }
@@ -312,7 +314,7 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""
           x.IncrementCounter("my-key");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""counter""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter""");
 
         Assert.Equal(2, recordCount);
       });
@@ -363,7 +365,7 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""
           x.DecrementCounter("my-key");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""counter""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter""");
 
         Assert.Equal(2, recordCount);
       });
@@ -394,7 +396,7 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""
           x.AddToSet("my-key", "another-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""set""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
 
         Assert.Equal(2, recordCount);
       });
@@ -410,7 +412,7 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""
           x.AddToSet("my-key", "my-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""set""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
 
         Assert.Equal(1, recordCount);
       });
@@ -515,7 +517,7 @@ where value ~ '^\d+$'").Single();
           x.RemoveFromSet("my-key", "my-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""set""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
 
         Assert.Equal(0, recordCount);
       });
@@ -531,7 +533,7 @@ where value ~ '^\d+$'").Single();
           x.RemoveFromSet("my-key", "different-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""set""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
 
         Assert.Equal(1, recordCount);
       });
@@ -547,7 +549,7 @@ where value ~ '^\d+$'").Single();
           x.RemoveFromSet("different-key", "my-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""set""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
 
         Assert.Equal(1, recordCount);
       });
@@ -577,8 +579,7 @@ where value ~ '^\d+$'").Single();
           x.InsertToList("my-key", "my-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
-
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
         Assert.Equal(2, recordCount);
       });
     }
@@ -594,7 +595,7 @@ where value ~ '^\d+$'").Single();
           x.RemoveFromList("my-key", "my-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(0, recordCount);
       });
@@ -610,7 +611,7 @@ where value ~ '^\d+$'").Single();
           x.RemoveFromList("my-key", "different-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(1, recordCount);
       });
@@ -626,7 +627,7 @@ where value ~ '^\d+$'").Single();
           x.RemoveFromList("different-key", "my-value");
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(1, recordCount);
       });
@@ -665,7 +666,7 @@ where value ~ '^\d+$'").Single();
           x.TrimList("my-key", 1, 100);
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(2, recordCount);
       });
@@ -681,7 +682,7 @@ where value ~ '^\d+$'").Single();
           x.TrimList("my-key", 1, 100);
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(0, recordCount);
       });
@@ -697,7 +698,7 @@ where value ~ '^\d+$'").Single();
           x.TrimList("my-key", 1, 0);
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(0, recordCount);
       });
@@ -713,7 +714,7 @@ where value ~ '^\d+$'").Single();
           x.TrimList("another-key", 1, 0);
         });
 
-        long recordCount = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""list""").Single();
+        long recordCount = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
 
         Assert.Equal(1, recordCount);
       });
@@ -783,7 +784,7 @@ where value ~ '^\d+$'").Single();
         Commit(sql, x => x.RemoveHash("some-hash"));
 
         // Assert
-        long count = sql.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""hash""").Single();
+        long count = sql.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""hash""");
         Assert.Equal(0, count);
       });
     }
@@ -819,7 +820,7 @@ where value ~ '^\d+$'").Single();
 
         Commit(connection, x => x.AddRangeToSet("my-set", items));
 
-        IEnumerable<string> records = connection.Query<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""set"" where ""key"" = 'my-set'");
+        IEnumerable<string> records = connection.Query<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""set"" WHERE ""key"" = 'my-set'");
         Assert.Equal(items, records);
       });
     }
@@ -855,8 +856,9 @@ where value ~ '^\d+$'").Single();
     public void ExpireHash_ThrowsAnException_WhenKeyIsNull()
     {
       UseConnection(sql => {
-        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => Commit(sql, x => x.ExpireHash(null, TimeSpan.FromMinutes(5))));
-
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => 
+          Commit(sql, x => x.ExpireHash(null, TimeSpan.FromMinutes(5)))
+            );
         Assert.Equal("key", exception.ParamName);
       });
     }
@@ -891,7 +893,9 @@ where value ~ '^\d+$'").Single();
     public void ExpireSet_ThrowsAnException_WhenKeyIsNull()
     {
       UseConnection(sql => {
-        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => Commit(sql, x => x.ExpireSet(null, TimeSpan.FromSeconds(45))));
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => 
+          Commit(sql, x => x.ExpireSet(null, TimeSpan.FromSeconds(45)))
+            );
 
         Assert.Equal("key", exception.ParamName);
       });
@@ -927,7 +931,9 @@ where value ~ '^\d+$'").Single();
     public void ExpireList_ThrowsAnException_WhenKeyIsNull()
     {
       UseConnection(sql => {
-        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => Commit(sql, x => x.ExpireList(null, TimeSpan.FromSeconds(45))));
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => 
+          Commit(sql, x => x.ExpireList(null, TimeSpan.FromSeconds(45)))
+            );
 
         Assert.Equal("key", exception.ParamName);
       });

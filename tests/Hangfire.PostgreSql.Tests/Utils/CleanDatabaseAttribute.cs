@@ -37,38 +37,31 @@ namespace Hangfire.PostgreSql.Tests.Utils
 
     private static void RecreateSchemaAndInstallObjects()
     {
-      using (NpgsqlConnection connection = ConnectionUtils.CreateMasterConnection())
-      {
-        bool databaseExists = connection.Query<bool?>($@"SELECT true :: boolean FROM pg_database WHERE datname = @DatabaseName;",
-            new {
-              DatabaseName = ConnectionUtils.GetDatabaseName(),
-            }).SingleOrDefault()
-          ?? false;
+      using NpgsqlConnection masterConnection = ConnectionUtils.CreateMasterConnection();
+      bool databaseExists = masterConnection.QuerySingleOrDefault<bool?>($@"SELECT true :: boolean FROM pg_database WHERE datname = @DatabaseName;",
+        new {
+          DatabaseName = ConnectionUtils.GetDatabaseName(),
+        }) ?? false;
 
-        if (!databaseExists)
-        {
-          connection.Execute($@"CREATE DATABASE ""{ConnectionUtils.GetDatabaseName()}""");
-        }
+      if (!databaseExists)
+      {
+        masterConnection.Execute($@"CREATE DATABASE ""{ConnectionUtils.GetDatabaseName()}""");
       }
 
-      using (NpgsqlConnection connection = ConnectionUtils.CreateConnection())
+      using NpgsqlConnection connection = ConnectionUtils.CreateConnection();
+      if (connection.State == ConnectionState.Closed)
       {
-        if (connection.State == ConnectionState.Closed)
-        {
-          connection.Open();
-        }
-
-        PostgreSqlObjectsInstaller.Install(connection);
-        PostgreSqlTestObjectsInitializer.CleanTables(connection);
+        connection.Open();
       }
+
+      PostgreSqlObjectsInstaller.Install(connection);
+      PostgreSqlTestObjectsInitializer.CleanTables(connection);
     }
 
     private static void CleanTables()
     {
-      using (NpgsqlConnection connection = ConnectionUtils.CreateConnection())
-      {
-        PostgreSqlTestObjectsInitializer.CleanTables(connection);
-      }
+      using NpgsqlConnection connection = ConnectionUtils.CreateConnection();
+      PostgreSqlTestObjectsInitializer.CleanTables(connection);
     }
   }
 }

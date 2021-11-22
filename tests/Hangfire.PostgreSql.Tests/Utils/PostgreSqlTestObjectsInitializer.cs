@@ -34,20 +34,14 @@ namespace Hangfire.PostgreSql.Tests.Utils
       if (connection == null) throw new ArgumentNullException(nameof(connection));
 
       string script = null;
-
-
       script = GetStringResource(typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
         "Hangfire.PostgreSql.Tests.Scripts.Clean.sql").Replace("'hangfire'", $"'{ConnectionUtils.GetSchemaName()}'");
 
-      //connection.Execute(script);
-
-      using (NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable))
-      using (NpgsqlCommand command = new NpgsqlCommand(script, connection, transaction))
-      {
-        command.CommandTimeout = 120;
-        command.ExecuteNonQuery();
-        transaction.Commit();
-      }
+      using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+      using NpgsqlCommand command = new(script, connection, transaction);
+      command.CommandTimeout = 120;
+      command.ExecuteNonQuery();
+      transaction.Commit();
     }
 
     private static string GetStringResource(Assembly assembly, string resourceName)

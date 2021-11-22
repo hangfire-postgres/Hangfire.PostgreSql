@@ -17,7 +17,7 @@ namespace Hangfire.PostgreSql.Tests
 
     public ExpirationManagerFacts(PostgreSqlStorageFixture fixture)
     {
-      CancellationTokenSource cts = new CancellationTokenSource();
+      CancellationTokenSource cts = new();
       _token = cts.Token;
       _fixture = fixture;
       _fixture.SetupOptions(o => o.DeleteExpiredBatchSize = 2);
@@ -125,7 +125,7 @@ namespace Hangfire.PostgreSql.Tests
         // Arrange
         string createSql = $@"
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"") 
-          VALUES ('', '', NOW() AT TIME ZONE 'UTC', EexpireAt)
+          VALUES ('', '', NOW() AT TIME ZONE 'UTC', @ExpireAt)
         ";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
 

@@ -308,7 +308,8 @@ namespace Hangfire.PostgreSql
         StatisticsDto stats = new StatisticsDto();
         using (SqlMapper.GridReader multi = connection.QueryMultiple(sql))
         {
-          Dictionary<dynamic, dynamic> countByStates = multi.Read().ToDictionary(x => x.State, x => x.Count);
+          Dictionary<string, long> countByStates = multi.Read<(string StateName, long Count)>()
+            .ToDictionary(x => x.StateName, x => x.Count);
 
           long GetCountIfExists(string name)
           {
@@ -320,12 +321,12 @@ namespace Hangfire.PostgreSql
           stats.Processing = GetCountIfExists(ProcessingState.StateName);
           stats.Scheduled = GetCountIfExists(ScheduledState.StateName);
 
-          stats.Servers = multi.Read<long>().Single();
+          stats.Servers = multi.ReadSingle<long>();
 
-          stats.Succeeded = multi.Read<long?>().SingleOrDefault() ?? 0;
-          stats.Deleted = multi.Read<long?>().SingleOrDefault() ?? 0;
+          stats.Succeeded = multi.ReadSingleOrDefault<long?>() ?? 0;
+          stats.Deleted = multi.ReadSingleOrDefault<long?>() ?? 0;
 
-          stats.Recurring = multi.Read<long>().Single();
+          stats.Recurring = multi.ReadSingle<long>();
         }
 
         stats.Queues = _queueProviders
@@ -376,10 +377,10 @@ namespace Hangfire.PostgreSql
         GROUP BY ""key"";
       ";
 
-      Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query(query,
+      Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<(string Key, long Count)>(query,
           new { Keys = keyMaps.Keys.ToList() })
         .ToList()
-        .ToDictionary(x => (string)x.key, x => (long)x.count));
+        .ToDictionary(x => x.Key, x => x.Count));
 
       foreach (string key in keyMaps.Keys)
       {
@@ -407,13 +408,13 @@ namespace Hangfire.PostgreSql
     private JobList<EnqueuedJobDto> EnqueuedJobs(IEnumerable<long> jobIds)
     {
       string enqueuedJobsSql = $@"
-        SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 
-          j.""expireat"" ""ExpireAt"", s.""name"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-        FROM ""{_storage.Options.SchemaName}"".""job"" j
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" s ON s.""id"" = j.""stateid""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" jq ON jq.""jobid"" = j.""id""
-        WHERE j.""id"" = ANY (@JobIds)
-        AND jq.""fetchedat"" IS NULL;
+        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
+          ""j"".""expireat"" ""ExpireAt"", ""s"".""name"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
+        FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""s"".""id"" = ""j"".""stateid""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
+        WHERE ""j"".""id"" = ANY (@JobIds)
+        AND ""jq"".""fetchedat"" IS NULL;
       ";
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(enqueuedJobsSql,
@@ -456,12 +457,12 @@ namespace Hangfire.PostgreSql
     private JobList<TDto> GetJobs<TDto>(int from, int count, string stateName, Func<SqlJob, Job, Dictionary<string, string>, TDto> selector)
     {
       string jobsSql = $@"
-        SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", j.""createdat"" ""CreatedAt"", 
-          j.""expireat"" ""ExpireAt"", NULL ""FetchedAt"", j.""statename"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-        FROM ""{_storage.Options.SchemaName}"".""job"" j
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" s ON j.""stateid"" = s.""id""
-        WHERE j.""statename"" = @StateName 
-        ORDER BY j.""id"" DESC
+        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
+          ""j"".""expireat"" ""ExpireAt"", NULL ""FetchedAt"", ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
+        FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
+        WHERE ""j"".""statename"" = @StateName 
+        ORDER BY ""j"".""id"" DESC
         LIMIT @Limit OFFSET @Offset;
       ";
 
@@ -502,13 +503,13 @@ namespace Hangfire.PostgreSql
       IEnumerable<long> jobIds)
     {
       string fetchedJobsSql = $@"
-        SELECT j.""id"" ""Id"", j.""invocationdata"" ""InvocationData"", j.""arguments"" ""Arguments"", 
-          j.""createdat"" ""CreatedAt"", j.""expireat"" ""ExpireAt"", jq.""fetchedat"" ""FetchedAt"", 
-          j.""statename"" ""StateName"", s.""reason"" ""StateReason"", s.""data"" ""StateData""
-        FROM ""{_storage.Options.SchemaName}"".""job"" j
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" s ON j.""stateid"" = s.""id""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" jq ON jq.""jobid"" = j.""id""
-        WHERE j.""id"" = ANY (@JobIds)
+        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", 
+          ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"", 
+          ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
+        FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
+        WHERE ""j"".""id"" = ANY (@JobIds)
         AND ""jq"".""fetchedat"" IS NOT NULL;
       ";
 

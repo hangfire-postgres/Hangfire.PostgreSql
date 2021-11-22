@@ -50,8 +50,8 @@ namespace Hangfire.PostgreSql.Tests
     public void FetchNextJob_DelegatesItsExecution_ToTheQueue()
     {
       UseConnection(connection => {
-        CancellationToken token = new CancellationToken();
-        string[] queues = new[] { "default" };
+        CancellationToken token = new();
+        string[] queues = { "default" };
 
         connection.FetchNextJob(queues, token);
 
@@ -237,32 +237,25 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetStateData_ReturnsCorrectData()
     {
-      string createJobSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-    VALUES ('', '', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id"";
-            ";
+      string createJobSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+        VALUES ('', '', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id"";
+      ";
 
-      string createStateSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""state"" (""jobid"", ""name"", ""createdat"")
-VALUES(@JobId, 'old-state', NOW() AT TIME ZONE 'UTC');
+      string createStateSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""createdat"")
+        VALUES(@JobId, 'old-state', NOW() AT TIME ZONE 'UTC');
 
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
-VALUES(@JobId, @Name, @Reason, @Data, NOW() AT TIME ZONE 'UTC')
-RETURNING ""id"";";
+        INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
+        VALUES(@JobId, @Name, @Reason, @Data, NOW() AT TIME ZONE 'UTC')
+        RETURNING ""id"";
+      ";
 
-      string updateJobStateSql = @"
-    update """
-        + GetSchemaName()
-        + @""".""job""
-    set ""stateid"" = @StateId
-    where ""id"" = @JobId;
-";
+      string updateJobStateSql = $@"
+        UPDATE ""{GetSchemaName()}"".""job""
+        SET ""stateid"" = @StateId
+        WHERE ""id"" = @JobId;
+      ";
 
       UseConnections((sql, connection) => {
         Dictionary<string, string> data = new() {
@@ -274,7 +267,7 @@ RETURNING ""id"";";
         long stateId = sql.QuerySingle<long>(createStateSql,
           new { JobId = jobId, Name = "Name", Reason = "Reason", Data = SerializationHelper.Serialize(data) });
 
-        sql.Execute(updateJobStateSql, new { jobId, stateId });
+        sql.Execute(updateJobStateSql, new { JobId = jobId, StateId = stateId });
 
         StateData result = connection.GetStateData(jobId.ToString(CultureInfo.InvariantCulture));
         Assert.NotNull(result);
@@ -289,11 +282,10 @@ RETURNING ""id"";";
     [CleanDatabase]
     public void GetJobData_ReturnsJobLoadException_IfThereWasADeserializationException()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+      ";
 
       UseConnections((sql, connection) => {
         long jobId = sql.QuerySingle<long>(arrangeSql,
@@ -335,11 +327,10 @@ VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETUR
     [CleanDatabase]
     public void SetParameters_CreatesNewParameter_WhenParameterWithTheGivenNameDoesNotExists()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+      ";
 
       UseConnections((sql, connection) => {
         dynamic job = sql.Query(arrangeSql).Single();
@@ -347,10 +338,10 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
 
         connection.SetJobParameter(jobId, "Name", "Value");
 
-        dynamic parameter = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobparameter"" where ""jobid"" = @Id and ""name"" = @Name",
-          new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" }).Single();
+        string parameterValue = sql.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+          new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
-        Assert.Equal("Value", parameter.value);
+        Assert.Equal("Value", parameterValue);
       });
     }
 
@@ -358,23 +349,21 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
     [CleanDatabase]
     public void SetParameter_UpdatesValue_WhenParameterWithTheGivenName_AlreadyExists()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+      ";
 
       UseConnections((sql, connection) => {
-        dynamic job = sql.Query(arrangeSql).Single();
-        string jobId = job.id.ToString();
+        string jobId = sql.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
 
         connection.SetJobParameter(jobId, "Name", "Value");
         connection.SetJobParameter(jobId, "Name", "AnotherValue");
 
-        dynamic parameter = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobparameter"" where ""jobid"" = @Id and ""name"" = @Name",
-          new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" }).Single();
+        string parameterValue = sql.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+          new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
-        Assert.Equal("AnotherValue", parameter.value);
+        Assert.Equal("AnotherValue", parameterValue);
       });
     }
 
@@ -382,22 +371,20 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
     [CleanDatabase]
     public void SetParameter_CanAcceptNulls_AsValues()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+      ";
 
       UseConnections((sql, connection) => {
-        dynamic job = sql.Query(arrangeSql).Single();
-        string jobId = job.id.ToString();
+        string jobId = sql.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
 
         connection.SetJobParameter(jobId, "Name", null);
 
-        dynamic parameter = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobparameter"" where ""jobid"" = @Id and ""name"" = @Name",
-          new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" }).Single();
+        string parameterValue = sql.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+          new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
-        Assert.Equal((string)null, parameter.value);
+        Assert.Equal((string)null, parameterValue);
       });
     }
 
@@ -437,23 +424,19 @@ VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
     [CleanDatabase]
     public void GetParameter_ReturnsParameterValue_WhenJobExists()
     {
-      string arrangeSql = @"
-WITH ""insertedjob"" AS (
-    INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-    VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
-)
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""jobparameter"" (""jobid"", ""name"", ""value"")
-SELECT ""insertedjob"".""id"", @Name, @Value
-FROM ""insertedjob""
-RETURNING ""jobid"";
-";
+      string arrangeSql = $@"
+        WITH ""insertedjob"" AS (
+          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        )
+        INSERT INTO ""{GetSchemaName()}"".""jobparameter"" (""jobid"", ""name"", ""value"")
+        SELECT ""insertedjob"".""id"", @Name, @Value
+        FROM ""insertedjob""
+        RETURNING ""jobid"";
+      ";
       UseConnections((sql, connection) => {
-        long id = sql.Query<long>(arrangeSql,
-          new { Name = "name", Value = "value" }).Single();
+        long id = sql.QuerySingle<long>(arrangeSql,
+          new { Name = "name", Value = "value" });
 
         string value = connection.GetJobParameter(Convert.ToString(id, CultureInfo.InvariantCulture), "name");
 
@@ -494,15 +477,14 @@ RETURNING ""jobid"";
     [CleanDatabase]
     public void GetFirstByLowestScoreFromSet_ReturnsTheValueWithTheLowestScore()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""set"" (""key"", ""score"", ""value"")
-values 
-('key', 1.0, '1.0'),
-('key', -1.0, '-1.0'),
-('key', -5.0, '-5.0'),
-('another-key', -2.0, '-2.0')";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        VALUES 
+        ('key', 1.0, '1.0'),
+        ('key', -1.0, '-1.0'),
+        ('key', -5.0, '-5.0'),
+        ('another-key', -2.0, '-2.0')
+      ";
 
       UseConnections((sql, connection) => {
         sql.Execute(arrangeSql);
@@ -574,12 +556,11 @@ values
     [CleanDatabase]
     public void RemoveServer_RemovesAServerRecord()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""server"" (""id"", ""data"", ""lastheartbeat"")
-VALUES ('Server1', '', NOW() AT TIME ZONE 'UTC'),
-('Server2', '', NOW() AT TIME ZONE 'UTC')";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
+        VALUES ('Server1', '', NOW() AT TIME ZONE 'UTC'),
+        ('Server2', '', NOW() AT TIME ZONE 'UTC')
+      ";
 
       UseConnections((sql, connection) => {
         sql.Execute(arrangeSql);
@@ -611,13 +592,10 @@ VALUES ('Server1', '', NOW() AT TIME ZONE 'UTC'),
     [CleanDatabase]
     public void Heartbeat_UpdatesLastHeartbeat_OfTheServerWithGivenId()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""server"" (""id"", ""data"", ""lastheartbeat"")
-values
-('server1', '', '2012-12-12 12:12:12'),
-('server2', '', '2012-12-12 12:12:12')";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
+        VALUES ('server1', '', '2012-12-12 12:12:12'), ('server2', '', '2012-12-12 12:12:12')
+      ";
 
       UseConnections((sql, connection) => {
         sql.Execute(arrangeSql);
@@ -643,11 +621,10 @@ values
     [CleanDatabase]
     public void RemoveTimedOutServers_DoItsWorkPerfectly()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""server"" (""id"", ""data"", ""lastheartbeat"")
-VALUES (@Id, '', @Heartbeat)";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
+        VALUES (@Id, '', @Heartbeat)
+      ";
 
       UseConnections((sql, connection) => {
         sql.Execute(arrangeSql,
@@ -687,11 +664,10 @@ VALUES (@Id, '', @Heartbeat)";
     [CleanDatabase]
     public void GetAllItemsFromSet_ReturnsAllItems()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""set"" (""key"", ""score"", ""value"")
-VALUES (@Key, 0.0, @Value)";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        VALUES (@Key, 0.0, @Value)
+      ";
 
       UseConnections((sql, connection) => {
         // Arrange
@@ -743,7 +719,7 @@ VALUES (@Key, 0.0, @Value)";
           { "Key2", "Value2" },
         });
 
-        Dictionary<string, string> result = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""hash"" where ""key"" = @Key",
+        Dictionary<string, string> result = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""hash"" WHERE ""key"" = @Key",
             new { Key = "some-hash" })
           .ToDictionary(x => (string)x.field, x => (string)x.value);
 
@@ -788,11 +764,10 @@ VALUES (@Key, 0.0, @Value)";
     [CleanDatabase]
     public void GetAllEntriesFromHash_ReturnsAllKeysAndTheirValues()
     {
-      string arrangeSql = @"
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""hash"" (""key"", ""field"", ""value"")
-VALUES (@Key, @Field, @Value)";
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""hash"" (""key"", ""field"", ""value"")
+        VALUES (@Key, @Field, @Value)
+      ";
 
       UseConnections((sql, connection) => {
         // Arrange

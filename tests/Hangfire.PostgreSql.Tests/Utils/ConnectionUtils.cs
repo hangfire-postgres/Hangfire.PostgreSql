@@ -45,8 +45,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
 
     public static NpgsqlConnection CreateConnection()
     {
-      NpgsqlConnectionStringBuilder csb = new NpgsqlConnectionStringBuilder(GetConnectionString());
-      NpgsqlConnection connection = new NpgsqlConnection {
+      NpgsqlConnectionStringBuilder csb = new(GetConnectionString());
+      NpgsqlConnection connection = new() {
         ConnectionString = csb.ToString(),
       };
       connection.Open();
@@ -56,8 +56,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
 
     public static NpgsqlConnection CreateMasterConnection()
     {
-      NpgsqlConnectionStringBuilder csb = new NpgsqlConnectionStringBuilder(GetMasterConnectionString());
-      NpgsqlConnection connection = new NpgsqlConnection {
+      NpgsqlConnectionStringBuilder csb = new(GetMasterConnectionString());
+      NpgsqlConnection connection = new() {
         ConnectionString = csb.ToString(),
       };
       connection.Open();

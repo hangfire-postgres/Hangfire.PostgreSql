@@ -86,13 +86,13 @@ namespace Hangfire.PostgreSql
         UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
         SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
         WHERE ""id"" = (
-            SELECT ""id"" 
-            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-            WHERE ""queue"" = ANY (@Queues)
-            AND ""fetchedat"" {0}
-            ORDER BY ""queue"", ""fetchedat"", ""jobid""
-            FOR UPDATE SKIP LOCKED
-            LIMIT 1
+          SELECT ""id"" 
+          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          WHERE ""queue"" = ANY (@Queues)
+          AND ""fetchedat"" {{0}}
+          ORDER BY ""queue"", ""fetchedat"", ""jobid""
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
         )
         RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
       ";

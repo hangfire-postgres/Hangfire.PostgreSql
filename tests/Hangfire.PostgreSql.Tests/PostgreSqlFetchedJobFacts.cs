@@ -46,7 +46,7 @@ namespace Hangfire.PostgreSql.Tests
     [Fact]
     public void Ctor_CorrectlySets_AllInstanceProperties()
     {
-      PostgreSqlFetchedJob fetchedJob = new PostgreSqlFetchedJob(_storage, 1, JobId, Queue);
+      PostgreSqlFetchedJob fetchedJob = new(_storage, 1, JobId, Queue);
 
       Assert.Equal(1, fetchedJob.Id);
       Assert.Equal(JobId, fetchedJob.JobId);
@@ -59,14 +59,14 @@ namespace Hangfire.PostgreSql.Tests
     {
       // Arrange
       long id = CreateJobQueueRecord(_storage, "1", "default");
-      PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default");
+      PostgreSqlFetchedJob processingJob = new(_storage, id, "1", "default");
 
       // Act
       processingJob.RemoveFromQueue();
 
       // Assert
       long count = _storage.UseConnection(null, connection =>
-        connection.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""jobqueue""").Single());
+        connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""jobqueue"""));
       Assert.Equal(0, count);
     }
 
@@ -86,7 +86,7 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       long count = _storage.UseConnection(null, connection =>
-        connection.Query<long>(@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""jobqueue""").Single());
+        connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""jobqueue"""));
       Assert.Equal(3, count);
     }
 
@@ -96,7 +96,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       // Arrange
       long id = CreateJobQueueRecord(_storage, "1", "default");
-      PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default");
+      PostgreSqlFetchedJob processingJob = new(_storage, id, "1", "default");
 
       // Act
       processingJob.Requeue();
@@ -113,7 +113,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       // Arrange
       long id = CreateJobQueueRecord(_storage, "1", "default");
-      PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default");
+      PostgreSqlFetchedJob processingJob = new(_storage, id, "1", "default");
 
       // Act
       processingJob.Dispose();

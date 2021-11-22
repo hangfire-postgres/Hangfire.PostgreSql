@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Data;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Dapper;
@@ -67,7 +66,7 @@ namespace Hangfire.PostgreSql.Tests
         // ReSharper disable once UnusedVariable
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
 
-        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" where ""resource"" = @Resource",
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
           new { Resource = "hello" });
 
         Assert.Equal(1, lockCount);
@@ -106,15 +105,13 @@ namespace Hangfire.PostgreSql.Tests
       };
 
       UseConnection(connection => {
-        // ReSharper disable UnusedVariable
-
         // Acquire locks on two different resources to make sure they don't conflict.
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
         PostgreSqlDistributedLock.Acquire(connection, "hello2", _timeout, options);
 
         // ReSharper restore UnusedVariable
 
-        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM """ + GetSchemaName() + @""".""lock"" WHERE ""resource"" = @Resource",
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
           new { Resource = "hello" });
 
         Assert.Equal(1, lockCount);

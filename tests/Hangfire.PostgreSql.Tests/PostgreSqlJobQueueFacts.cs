@@ -213,7 +213,7 @@ namespace Hangfire.PostgreSql.Tests
         // Assert
         Assert.NotNull(payload);
 
-        DateTime? fetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""fetchedat"" FROM ""{GetSchemaName()}"".""jobqueue"" where ""jobid"" = @Id",
+        DateTime? fetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""fetchedat"" FROM ""{GetSchemaName()}"".""jobqueue"" WHERE ""jobid"" = @Id",
           new { Id = Convert.ToInt64(payload.JobId, CultureInfo.InvariantCulture) });
 
         Assert.NotNull(fetchedAt);
@@ -284,18 +284,15 @@ namespace Hangfire.PostgreSql.Tests
 
     private void Dequeue_ShouldSetFetchedAt_OnlyForTheFetchedJob(bool useNativeDatabaseTransactions)
     {
-      string arrangeSql = @"
-WITH i AS (
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-RETURNING ""id"")
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""jobqueue"" (""jobid"", ""queue"")
-select i.""id"", @Queue from i;
-";
+      string arrangeSql = $@"
+        WITH i AS (
+          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          RETURNING ""id""
+        )
+        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
+        SELECT i.""id"", @Queue FROM i;
+      ";
 
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
@@ -310,7 +307,7 @@ select i.""id"", @Queue from i;
           CreateTimingOutCancellationToken());
 
         // Assert
-        DateTime? otherJobFetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""fetchedat"" FROM ""{GetSchemaName()}"".""jobqueue"" where ""jobid"" <> @Id",
+        DateTime? otherJobFetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""fetchedat"" FROM ""{GetSchemaName()}"".""jobqueue"" WHERE ""jobid"" <> @Id",
           new { Id = Convert.ToInt64(payload.JobId, CultureInfo.InvariantCulture) });
 
         Assert.Null(otherJobFetchedAt);
@@ -334,18 +331,15 @@ select i.""id"", @Queue from i;
 
     private void Dequeue_ShouldFetchJobs_OnlyFromSpecifiedQueues(bool useNativeDatabaseTransactions)
     {
-      string arrangeSql = @"
-WITH i AS (
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-RETURNING ""id"")
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""jobqueue"" (""jobid"", ""queue"")
-select i.""id"", @Queue from i;
-";
+      string arrangeSql = $@"
+        WITH i AS (
+          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          RETURNING ""id""
+        )
+        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
+        SELECT i.""id"", @Queue FROM i;
+      ";
       UseConnection((connection, storage) => {
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
@@ -373,18 +367,15 @@ select i.""id"", @Queue from i;
 
     private void Dequeue_ShouldFetchJobs_FromMultipleQueues(bool useNativeDatabaseTransactions)
     {
-      string arrangeSql = @"
-WITH i AS (
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-RETURNING ""id"")
-INSERT INTO """
-        + GetSchemaName()
-        + @""".""jobqueue"" (""jobid"", ""queue"")
-select i.""id"", @Queue from i;
-";
+      string arrangeSql = $@"
+        WITH i AS (
+          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          RETURNING ""id""
+        )
+        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
+        SELECT i.""id"", @Queue FROM i;
+      ";
 
       string[] queueNames = { "default", "critical" };
 
@@ -438,8 +429,8 @@ select i.""id"", @Queue from i;
 
         queue.Enqueue(connection, name, "1");
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
-        Assert.Equal(name, record.queue.ToString());
+        string retrievedName = connection.QuerySingle<string>($@"SELECT ""queue"" FROM ""{GetSchemaName()}"".""jobqueue""");
+        Assert.Equal(name, retrievedName);
       });
     }
 

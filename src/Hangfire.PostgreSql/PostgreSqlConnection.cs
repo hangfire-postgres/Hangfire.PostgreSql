@@ -130,7 +130,7 @@ namespace Hangfire.PostgreSql
             parameterArray[parameterIndex++] = new {
               JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
               Name = parameter.Key,
-              Value = parameter.Value,
+              parameter.Value,
             };
           }
 
@@ -319,7 +319,7 @@ namespace Hangfire.PostgreSql
           _storage.UseTransaction(_dedicatedConnection, (connection, transaction) => {
             foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
             {
-              connection.Execute(sql, new { Key = key, Field = keyValuePair.Key, Value = keyValuePair.Value }, transaction);
+              connection.Execute(sql, new { Key = key, Field = keyValuePair.Key, keyValuePair.Value }, transaction);
             }
           }, IsolationLevel.Serializable);
        
@@ -431,7 +431,7 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT count(""key"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
+      string query = $@"SELECT COUNT(""key"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<long>(query, new { Key = key }));
@@ -441,7 +441,7 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""list"" where ""key"" = @Key ORDER BY ""id"" DESC";
+      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key ORDER BY ""id"" DESC";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key })
@@ -462,7 +462,7 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT count(""id"") FROM ""{_options.SchemaName}"".""list"" where ""key"" = @Key";
+      string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<long>(query, new { Key = key }));
@@ -473,7 +473,7 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""list"" where ""key"" = @Key";
+      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -488,22 +488,26 @@ namespace Hangfire.PostgreSql
       if (key == null) throw new ArgumentNullException(nameof(key));
 
       string query = $@"
-        SELECT ""value"" FROM (
-					SELECT ""value"", ROW_NUMBER() OVER (ORDER BY ""id"" DESC) AS ""row_num"" 
+					SELECT ""value"" 
 					FROM ""{_options.SchemaName}"".""list""
-					WHERE ""key"" = @Key 
-				) AS ""s"" WHERE ""s"".""row_num"" BETWEEN @StartingFrom AND @EndingAt";
+					WHERE ""key"" = @Key
+          ORDER BY ""id"" DESC
+          LIMIT @Limit OFFSET @Offset
+        ";
+ 
 
-      return _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Query<string>(query, new { Key = key, StartingFrom = startingFrom + 1, EndingAt = endingAt + 1 })
-        .ToList());
+      return _storage.UseConnection(_dedicatedConnection, connection => 
+        connection
+        .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
+        .ToList()
+          );
     }
 
     public override long GetHashCount(string key)
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT count(""id"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
+      string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingle<long>(query, new { Key = key }));
@@ -528,15 +532,15 @@ namespace Hangfire.PostgreSql
       if (key == null) throw new ArgumentNullException(nameof(key));
 
       string query = $@"
-        SELECT ""value"" FROM (
-					SELECT ""value"", ROW_NUMBER() OVER (ORDER BY ""id"" ASC) AS ""row_num"" 
+					SELECT ""value"" 
 					FROM ""{_options.SchemaName}"".""set""
-					WHERE ""key"" = @Key 
-				) AS ""s"" 
-        WHERE ""s"".""row_num"" BETWEEN @StartingFrom AND @EndingAt";
-
+					WHERE ""key"" = @Key
+          ORDER BY ""id"" 
+          LIMIT @Limit OFFSET @Offset
+        ";
+ 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Query<string>(query, new { Key = key, StartingFrom = startingFrom + 1, EndingAt = endingAt + 1 })
+        .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
         .ToList());
     }
 
@@ -544,7 +548,7 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""set"" where ""key"" = @Key";
+      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -559,7 +563,7 @@ namespace Hangfire.PostgreSql
       if (key == null) throw new ArgumentNullException(nameof(key));
       if (name == null) throw new ArgumentNullException(nameof(name));
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" where ""key"" = @Key and ""field"" = @Field";
+      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key AND ""field"" = @Field";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Field = name })

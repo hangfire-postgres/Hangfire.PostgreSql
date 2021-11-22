@@ -285,7 +285,7 @@ namespace Hangfire.PostgreSql
       foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
       {
         KeyValuePair<string, string> pair = keyValuePair;
-        QueueCommand(con => con.Execute(sql, new { Key = key, Field = pair.Key, Value = pair.Value }));
+        QueueCommand(con => con.Execute(sql, new { Key = key, Field = pair.Key, pair.Value }));
       }
     }
 
