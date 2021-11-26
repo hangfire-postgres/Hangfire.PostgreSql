@@ -59,6 +59,7 @@ Task("Test")
     var files = GetFiles("tests/**/*.csproj");
     foreach(var file in files)
     {
+        Information("Testing: {0}", file)
         DotNetCoreTest(file.ToString());
     }
 });
