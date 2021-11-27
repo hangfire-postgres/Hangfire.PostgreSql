@@ -56,7 +56,7 @@ namespace Hangfire.PostgreSql
       string sqlQuery = $@"
         SELECT (
             SELECT COUNT(*) 
-            FROM ""{_storage.Options.SchemaName} "".""jobqueue"" 
+            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
             WHERE ""fetchedat"" IS NULL 
             AND ""queue"" = @Queue
         ) ""EnqueuedCount"", 
