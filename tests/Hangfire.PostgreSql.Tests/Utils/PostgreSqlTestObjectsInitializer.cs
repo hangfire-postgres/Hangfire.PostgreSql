@@ -20,64 +20,40 @@
 //    Special thanks goes to him.
 
 using System;
-using System.Diagnostics.CodeAnalysis;
+using System.Data;
 using System.IO;
 using System.Reflection;
-using Dapper;
 using Npgsql;
-using System.Data;
 
-namespace Hangfire.PostgreSql.Tests
+namespace Hangfire.PostgreSql.Tests.Utils
 {
-    internal static class PostgreSqlTestObjectsInitializer
+  internal static class PostgreSqlTestObjectsInitializer
+  {
+    public static void CleanTables(NpgsqlConnection connection)
     {
-        public static void CleanTables(NpgsqlConnection connection)
-        {
-            if (connection == null) throw new ArgumentNullException(nameof(connection));
+      if (connection == null) throw new ArgumentNullException(nameof(connection));
 
-			string script = null;
+      string script = null;
+      script = GetStringResource(typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
+        "Hangfire.PostgreSql.Tests.Scripts.Clean.sql").Replace("'hangfire'", $"'{ConnectionUtils.GetSchemaName()}'");
 
-
-               script = GetStringResource(
-              typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
-                "Hangfire.PostgreSql.Tests.Scripts.Clean.sql").Replace("'hangfire'", string.Format("'{0}'", ConnectionUtils.GetSchemaName()));
-
-			//connection.Execute(script);
-
-			using (var transaction = connection.BeginTransaction(IsolationLevel.Serializable))
-			using (var command = new NpgsqlCommand(script, connection, transaction))
-			{
-				command.CommandTimeout = 120;
-				try
-				{
-					command.ExecuteNonQuery();
-					transaction.Commit();
-				}
-				catch (NpgsqlException)
-				{
-					throw;
-				}
-			}
-		}
-
-        private static string GetStringResource(Assembly assembly, string resourceName)
-        {
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
-            {
-                if (stream == null) 
-                {
-                    throw new InvalidOperationException(String.Format(
-                        "Requested resource `{0}` was not found in the assembly `{1}`.",
-                        resourceName,
-                        assembly));
-                }
-
-                using (var reader = new StreamReader(stream))
-                {
-                    return reader.ReadToEnd();
-                }
-            }
-        }
-
+      using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+      using NpgsqlCommand command = new(script, connection, transaction);
+      command.CommandTimeout = 120;
+      command.ExecuteNonQuery();
+      transaction.Commit();
     }
+
+    private static string GetStringResource(Assembly assembly, string resourceName)
+    {
+      using Stream stream = assembly.GetManifestResourceStream(resourceName);
+      if (stream == null)
+      {
+        throw new InvalidOperationException($"Requested resource '{resourceName}' was not found in the assembly '{assembly}'.");
+      }
+
+      using StreamReader reader = new(stream);
+      return reader.ReadToEnd();
+    }
+  }
 }

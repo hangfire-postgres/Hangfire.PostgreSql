@@ -22,6 +22,7 @@
     <RepositoryUrl>https://github.com/frankhommers/Hangfire.PostgreSql</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Company>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask), Vincent Vrijburg, David Roth (davidroth).</Company>
+    <LangVersion>default</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
