@@ -1,4 +1,4 @@
-version: 1.9.0.{build}
+version: {build}
 image: Visual Studio 2022
 platform: Any CPU
 init:
