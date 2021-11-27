@@ -132,9 +132,9 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void CreateExpiredJob_CreatesAJobInTheStorage_AndSetsItsParameters()
     {
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         DateTime createdAt = new DateTime(2012, 12, 12);
-        string jobId = connection.CreateExpiredJob(Job.FromExpression(() => SampleMethod("Hello")),
+        string jobId = jobStorageConnection.CreateExpiredJob(Job.FromExpression(() => SampleMethod("Hello")),
           new Dictionary<string, string> { { "Key1", "Value1" }, { "Key2", "Value2" } },
           createdAt,
           TimeSpan.FromDays(1));
@@ -142,24 +142,24 @@ namespace Hangfire.PostgreSql.Tests
         Assert.NotNull(jobId);
         Assert.NotEmpty(jobId);
 
-        dynamic sqlJob = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").Single();
-        Assert.Equal(jobId, sqlJob.id.ToString());
-        Assert.Equal(createdAt, sqlJob.createdat);
-        Assert.Null((long?)sqlJob.stateid);
-        Assert.Null((string)sqlJob.statename);
+        TestJob testJob = Helper.GetTestJob(connection, GetSchemaName(), "-1");
+        Assert.Equal(jobId, testJob.Id.ToString());
+        Assert.Equal(createdAt, testJob.CreatedAt);
+        Assert.Null((long?)testJob.StateId);
+        Assert.Null((string)testJob.StateName);
 
-        InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>((string)sqlJob.invocationdata);
-        invocationData.Arguments = sqlJob.arguments;
+        InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>((string)testJob.InvocationData);
+        invocationData.Arguments = testJob.Arguments;
 
         Job job = invocationData.DeserializeJob();
         Assert.Equal(typeof(PostgreSqlConnectionFacts), job.Type);
         Assert.Equal("SampleMethod", job.Method.Name);
         Assert.Equal("Hello", job.Args[0]);
 
-        Assert.True(createdAt.AddDays(1).AddMinutes(-1) < sqlJob.expireat);
-        Assert.True(sqlJob.expireat < createdAt.AddDays(1).AddMinutes(1));
+        Assert.True(createdAt.AddDays(1).AddMinutes(-1) < testJob.ExpireAt);
+        Assert.True(testJob.ExpireAt < createdAt.AddDays(1).AddMinutes(1));
 
-        Dictionary<string, string> parameters = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id",
+        Dictionary<string, string> parameters = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id",
             new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
           .ToDictionary(x => (string)x.name, x => (string)x.value);
 
@@ -194,17 +194,17 @@ namespace Hangfire.PostgreSql.Tests
         VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
       ";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         Job job = Job.FromExpression(() => SampleMethod("wrong"));
 
-        long jobId = sql.QuerySingle<long>(arrangeSql,
+        long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
             InvocationData = SerializationHelper.Serialize(InvocationData.SerializeJob(job)),
             StateName = "Succeeded",
             Arguments = "[\"\\\"Arguments\\\"\"]",
           });
 
-        JobData result = connection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
+        JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
 
         Assert.NotNull(result);
         Assert.NotNull(result.Job);
@@ -257,19 +257,19 @@ namespace Hangfire.PostgreSql.Tests
         WHERE ""id"" = @JobId;
       ";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         Dictionary<string, string> data = new() {
           { "Key", "Value" },
         };
 
-        long jobId = sql.QuerySingle<long>(createJobSql);
+        long jobId = connection.QuerySingle<long>(createJobSql);
 
-        long stateId = sql.QuerySingle<long>(createStateSql,
+        long stateId = connection.QuerySingle<long>(createStateSql,
           new { JobId = jobId, Name = "Name", Reason = "Reason", Data = SerializationHelper.Serialize(data) });
 
-        sql.Execute(updateJobStateSql, new { JobId = jobId, StateId = stateId });
+        connection.Execute(updateJobStateSql, new { JobId = jobId, StateId = stateId });
 
-        StateData result = connection.GetStateData(jobId.ToString(CultureInfo.InvariantCulture));
+        StateData result = jobStorageConnection.GetStateData(jobId.ToString(CultureInfo.InvariantCulture));
         Assert.NotNull(result);
 
         Assert.Equal("Name", result.Name);
@@ -287,15 +287,15 @@ namespace Hangfire.PostgreSql.Tests
         VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
       ";
 
-      UseConnections((sql, connection) => {
-        long jobId = sql.QuerySingle<long>(arrangeSql,
+      UseConnections((connection, jobStorageConnection) => {
+        long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
             InvocationData = SerializationHelper.Serialize(new InvocationData(null, null, null, null)),
             StateName = "Succeeded",
             Arguments = "['Arguments']",
           });
 
-        JobData result = connection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
+        JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
 
         Assert.NotNull(result.LoadException);
       });
@@ -332,13 +332,12 @@ namespace Hangfire.PostgreSql.Tests
         VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
       ";
 
-      UseConnections((sql, connection) => {
-        dynamic job = sql.Query(arrangeSql).Single();
-        string jobId = job.id.ToString();
+      UseConnections((connection, jobStorageConnection) => {
+        string jobId = connection.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
 
-        connection.SetJobParameter(jobId, "Name", "Value");
+        jobStorageConnection.SetJobParameter(jobId, "Name", "Value");
 
-        string parameterValue = sql.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+        string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
         Assert.Equal("Value", parameterValue);
@@ -354,13 +353,13 @@ namespace Hangfire.PostgreSql.Tests
         VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
       ";
 
-      UseConnections((sql, connection) => {
-        string jobId = sql.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
+      UseConnections((connection, jobStorageConnection) => {
+        string jobId = connection.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
 
-        connection.SetJobParameter(jobId, "Name", "Value");
-        connection.SetJobParameter(jobId, "Name", "AnotherValue");
+        jobStorageConnection.SetJobParameter(jobId, "Name", "Value");
+        jobStorageConnection.SetJobParameter(jobId, "Name", "AnotherValue");
 
-        string parameterValue = sql.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+        string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
         Assert.Equal("AnotherValue", parameterValue);
@@ -376,12 +375,12 @@ namespace Hangfire.PostgreSql.Tests
         VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
       ";
 
-      UseConnections((sql, connection) => {
-        string jobId = sql.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
+      UseConnections((connection, jobStorageConnection) => {
+        string jobId = connection.QuerySingle<long>(arrangeSql).ToString(CultureInfo.InvariantCulture);
 
-        connection.SetJobParameter(jobId, "Name", null);
+        jobStorageConnection.SetJobParameter(jobId, "Name", null);
 
-        string parameterValue = sql.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+        string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
         Assert.Equal((string)null, parameterValue);
@@ -434,11 +433,11 @@ namespace Hangfire.PostgreSql.Tests
         FROM ""insertedjob""
         RETURNING ""jobid"";
       ";
-      UseConnections((sql, connection) => {
-        long id = sql.QuerySingle<long>(arrangeSql,
+      UseConnections((connection, jobStorageConnection) => {
+        long id = connection.QuerySingle<long>(arrangeSql,
           new { Name = "name", Value = "value" });
 
-        string value = connection.GetJobParameter(Convert.ToString(id, CultureInfo.InvariantCulture), "name");
+        string value = jobStorageConnection.GetJobParameter(Convert.ToString(id, CultureInfo.InvariantCulture), "name");
 
         Assert.Equal("value", value);
       });
@@ -486,10 +485,10 @@ namespace Hangfire.PostgreSql.Tests
         ('another-key', -2.0, '-2.0')
       ";
 
-      UseConnections((sql, connection) => {
-        sql.Execute(arrangeSql);
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql);
 
-        string result = connection.GetFirstByLowestScoreFromSet("key", -1.0, 3.0);
+        string result = jobStorageConnection.GetFirstByLowestScoreFromSet("key", -1.0, 3.0);
 
         Assert.Equal("-1.0", result);
       });
@@ -521,14 +520,14 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void AnnounceServer_CreatesOrUpdatesARecord()
     {
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         ServerContext context1 = new ServerContext {
           Queues = new[] { "critical", "default" },
           WorkerCount = 4,
         };
-        connection.AnnounceServer("server", context1);
+        jobStorageConnection.AnnounceServer("server", context1);
 
-        dynamic server = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
         Assert.Equal("server", server.id);
         Assert.True(((string)server.data).StartsWith("{\"WorkerCount\":4,\"Queues\":[\"critical\",\"default\"],\"StartedAt\":"),
           server.data);
@@ -538,8 +537,8 @@ namespace Hangfire.PostgreSql.Tests
           Queues = new[] { "default" },
           WorkerCount = 1000,
         };
-        connection.AnnounceServer("server", context2);
-        dynamic sameServer = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        jobStorageConnection.AnnounceServer("server", context2);
+        dynamic sameServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
         Assert.Equal("server", sameServer.id);
         Assert.Contains("1000", sameServer.data);
       });
@@ -562,12 +561,12 @@ namespace Hangfire.PostgreSql.Tests
         ('Server2', '', NOW() AT TIME ZONE 'UTC')
       ";
 
-      UseConnections((sql, connection) => {
-        sql.Execute(arrangeSql);
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql);
 
-        connection.RemoveServer("Server1");
+        jobStorageConnection.RemoveServer("Server1");
 
-        dynamic server = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
         Assert.NotEqual("Server1", server.Id, StringComparer.OrdinalIgnoreCase);
       });
     }
@@ -597,12 +596,12 @@ namespace Hangfire.PostgreSql.Tests
         VALUES ('server1', '', '2012-12-12 12:12:12'), ('server2', '', '2012-12-12 12:12:12')
       ";
 
-      UseConnections((sql, connection) => {
-        sql.Execute(arrangeSql);
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql);
 
-        connection.Heartbeat("server1");
+        jobStorageConnection.Heartbeat("server1");
 
-        Dictionary<string, DateTime> servers = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""")
+        Dictionary<string, DateTime> servers = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""")
           .ToDictionary(x => (string)x.id, x => (DateTime)x.lastheartbeat);
 
         Assert.NotEqual(2012, servers["server1"].Year);
@@ -626,16 +625,16 @@ namespace Hangfire.PostgreSql.Tests
         VALUES (@Id, '', @Heartbeat)
       ";
 
-      UseConnections((sql, connection) => {
-        sql.Execute(arrangeSql,
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql,
           new[] {
             new { Id = "server1", Heartbeat = DateTime.UtcNow.AddDays(-1) },
             new { Id = "server2", Heartbeat = DateTime.UtcNow.AddHours(-12) },
           });
 
-        connection.RemoveTimedOutServers(TimeSpan.FromHours(15));
+        jobStorageConnection.RemoveTimedOutServers(TimeSpan.FromHours(15));
 
-        dynamic liveServer = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic liveServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
         Assert.Equal("server2", liveServer.id);
       });
     }
@@ -669,16 +668,16 @@ namespace Hangfire.PostgreSql.Tests
         VALUES (@Key, 0.0, @Value)
       ";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "some-set", Value = "1" },
           new { Key = "some-set", Value = "2" },
           new { Key = "another-set", Value = "3" },
         });
 
         // Act
-        HashSet<string> result = connection.GetAllItemsFromSet("some-set");
+        HashSet<string> result = jobStorageConnection.GetAllItemsFromSet("some-set");
 
         // Assert
         Assert.Equal(2, result.Count);
@@ -713,13 +712,13 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void SetRangeInHash_MergesAllRecords()
     {
-      UseConnections((sql, connection) => {
-        connection.SetRangeInHash("some-hash", new Dictionary<string, string> {
+      UseConnections((connection, jobStorageConnection) => {
+        jobStorageConnection.SetRangeInHash("some-hash", new Dictionary<string, string> {
           { "Key1", "Value1" },
           { "Key2", "Value2" },
         });
 
-        Dictionary<string, string> result = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""hash"" WHERE ""key"" = @Key",
+        Dictionary<string, string> result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""hash"" WHERE ""key"" = @Key",
             new { Key = "some-hash" })
           .ToDictionary(x => (string)x.field, x => (string)x.value);
 
@@ -769,16 +768,16 @@ namespace Hangfire.PostgreSql.Tests
         VALUES (@Key, @Field, @Value)
       ";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "some-hash", Field = "Key1", Value = "Value1" },
           new { Key = "some-hash", Field = "Key2", Value = "Value2" },
           new { Key = "another-hash", Field = "Key3", Value = "Value3" },
         });
 
         // Act
-        Dictionary<string, string> result = connection.GetAllEntriesFromHash("some-hash");
+        Dictionary<string, string> result = jobStorageConnection.GetAllEntriesFromHash("some-hash");
 
         // Assert
         Assert.NotNull(result);
@@ -811,14 +810,14 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, score) VALUES (@Key, @Value, 0.0)";
 
-      UseConnections((sql, connection) => {
-        sql.Execute(arrangeSql, new List<dynamic> {
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql, new [] {
           new { Key = "set-1", Value = "value-1" },
           new { Key = "set-2", Value = "value-1" },
           new { Key = "set-1", Value = "value-2" },
         });
 
-        long result = connection.GetSetCount("set-1");
+        long result = jobStorageConnection.GetSetCount("set-1");
 
         Assert.Equal(2, result);
       });
@@ -847,16 +846,16 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".list (key, value) VALUES (@Key, @Value)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "list-1", Value = "1" },
           new { Key = "list-2", Value = "2" },
           new { Key = "list-1", Value = "3" },
         });
 
         // Act
-        List<string> result = connection.GetAllItemsFromList("list-1");
+        List<string> result = jobStorageConnection.GetAllItemsFromList("list-1");
 
         // Assert
         Assert.Equal(new[] { "3", "1" }, result);
@@ -886,16 +885,16 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".counter (key, value) VALUES (@Key, @Value)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "counter-1", Value = 1 },
           new { Key = "counter-2", Value = 1 },
           new { Key = "counter-1", Value = 1 },
         });
 
         // Act
-        long result = connection.GetCounter("counter-1");
+        long result = jobStorageConnection.GetCounter("counter-1");
 
         // Assert
         Assert.Equal(2, result);
@@ -925,16 +924,16 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""list""(""key"") VALUES (@Key)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "list-1" },
           new { Key = "list-1" },
           new { Key = "list-2" },
         });
 
         // Act
-        long result = connection.GetListCount("list-1");
+        long result = jobStorageConnection.GetListCount("list-1");
 
         // Assert
         Assert.Equal(2, result);
@@ -964,15 +963,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".list (key, expireat) VALUES (@Key, @ExpireAt)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "list-1", ExpireAt = (DateTime?)DateTime.UtcNow.AddHours(1) },
           new { Key = "list-2", ExpireAt = (DateTime?)null },
         });
 
         // Act
-        TimeSpan result = connection.GetListTtl("list-1");
+        TimeSpan result = jobStorageConnection.GetListTtl("list-1");
 
         // Assert
         Assert.True(TimeSpan.FromMinutes(59) < result);
@@ -1007,9 +1006,9 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".list (key, value) VALUES (@Key, @Value)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "list-1", Value = "1" },
           new { Key = "list-2", Value = "2" },
           new { Key = "list-1", Value = "3" },
@@ -1018,7 +1017,7 @@ namespace Hangfire.PostgreSql.Tests
         });
 
         // Act
-        List<string> result = connection.GetRangeFromList("list-1", 1, 2);
+        List<string> result = jobStorageConnection.GetRangeFromList("list-1", 1, 2);
 
         // Assert
         Assert.Equal(new[] { "4", "3" }, result);
@@ -1048,16 +1047,16 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (key, field) VALUES (@Key, @Field)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "hash-1", Field = "field-1" },
           new { Key = "hash-1", Field = "field-2" },
           new { Key = "hash-2", Field = "field-1" },
         });
 
         // Act
-        long result = connection.GetHashCount("hash-1");
+        long result = jobStorageConnection.GetHashCount("hash-1");
 
         // Assert
         Assert.Equal(2, result);
@@ -1087,15 +1086,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (key, field, expireat) VALUES (@Key, @Field, @ExpireAt)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "hash-1", Field = "field", ExpireAt = (DateTime?)DateTime.UtcNow.AddHours(1) },
           new { Key = "hash-2", Field = "field", ExpireAt = (DateTime?)null },
         });
 
         // Act
-        TimeSpan result = connection.GetHashTtl("hash-1");
+        TimeSpan result = jobStorageConnection.GetHashTtl("hash-1");
 
         // Assert
         Assert.True(TimeSpan.FromMinutes(59) < result);
@@ -1116,8 +1115,8 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, score) VALUES (@Key, @Value, 0.0)";
 
-      UseConnections((sql, connection) => {
-        sql.Execute(arrangeSql, new List<dynamic> {
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql, new [] {
           new { Key = "set-1", Value = "1" },
           new { Key = "set-1", Value = "2" },
           new { Key = "set-1", Value = "3" },
@@ -1126,7 +1125,7 @@ namespace Hangfire.PostgreSql.Tests
           new { Key = "set-1", Value = "5" },
         });
 
-        List<string> result = connection.GetRangeFromSet("set-1", 2, 3);
+        List<string> result = jobStorageConnection.GetRangeFromSet("set-1", 2, 3);
 
         Assert.Equal(new[] { "3", "4" }, result);
       });
@@ -1155,15 +1154,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, expireat, score) VALUES (@Key, @Value, @ExpireAt, 0.0)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "set-1", Value = "1", ExpireAt = (DateTime?)DateTime.UtcNow.AddMinutes(60) },
           new { Key = "set-2", Value = "2", ExpireAt = (DateTime?)null },
         });
 
         // Act
-        TimeSpan result = connection.GetSetTtl("set-1");
+        TimeSpan result = jobStorageConnection.GetSetTtl("set-1");
 
         // Assert
         Assert.True(TimeSpan.FromMinutes(59) < result);
@@ -1209,16 +1208,16 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (key, field, value) VALUES (@Key, @Field, @Value)";
 
-      UseConnections((sql, connection) => {
+      UseConnections((connection, jobStorageConnection) => {
         // Arrange
-        sql.Execute(arrangeSql, new[] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "hash-1", Field = "field-1", Value = "1" },
           new { Key = "hash-1", Field = "field-2", Value = "2" },
           new { Key = "hash-2", Field = "field-1", Value = "3" },
         });
 
         // Act
-        string result = connection.GetValueFromHash("hash-1", "field-1");
+        string result = jobStorageConnection.GetValueFromHash("hash-1", "field-1");
 
         // Assert
         Assert.Equal("1", result);
@@ -1261,10 +1260,10 @@ namespace Hangfire.PostgreSql.Tests
         }
       }
 
-      UseConnections((sql, _) => {
+      UseConnections((connection, _) => {
         if (completeTransactionScope)
         {
-          dynamic sqlJob = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").Single();
+          dynamic sqlJob = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").Single();
           Assert.Equal(jobId, sqlJob.id.ToString());
           Assert.Equal(createdAt, sqlJob.createdat);
           Assert.Null((long?)sqlJob.stateid);
@@ -1272,7 +1271,7 @@ namespace Hangfire.PostgreSql.Tests
         }
         else
         {
-          dynamic job = sql.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").SingleOrDefault();
+          TestJob job = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").SingleOrDefault();
           Assert.Null(job);
         }
       });
