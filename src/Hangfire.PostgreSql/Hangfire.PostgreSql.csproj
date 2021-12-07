@@ -6,7 +6,7 @@
     <AssemblyTitle>Hangfire PostgreSql Storage</AssemblyTitle>
     <VersionPrefix>1.8.6</VersionPrefix>
     <Authors>Frank Hommers and others (Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), Vytautas Kasparavičius (vytautask), Vincent Vrijburg, David Roth (davidroth).</Authors>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>netstandard2.0;net5.0;net6.0</TargetFrameworks>
     <AssemblyName>Hangfire.PostgreSql</AssemblyName>
     <OutputType>Library</OutputType>
     <PackageId>Hangfire.PostgreSql</PackageId>
@@ -35,9 +35,17 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Hangfire.Core" Version="1.7.27" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' OR '$(TargetFramework)' == 'net6.0'">
+    <PackageReference Include="Hangfire.Core" Version="1.7.27" />
     <PackageReference Include="Npgsql" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net5.0'">
+    <PackageReference Include="Hangfire.Core" Version="1.7.18" />
+    <PackageReference Include="Npgsql" Version="5.0.7" />
   </ItemGroup>
 
   <ItemGroup>
