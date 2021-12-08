@@ -36,7 +36,6 @@ Task("Build")
 {
     var settings = new DotNetCoreBuildSettings
     {
-        
         ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}"),
         Configuration = "Release",
         NoRestore = true
