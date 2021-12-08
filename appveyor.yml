@@ -16,6 +16,7 @@ build_script:
     createdb hangfire_tests
 
     .\build.ps1 -t Pack
+    .\build.ps1 -t Pack -NpgsqlVersion 5
 cache:
 - tools -> build.cake
 - tools -> build.ps1
