@@ -23,7 +23,7 @@ IEnumerable<string> GetFrameworks(string path)
 Task("Restore")
   .Does(() =>
 {
-    var settings= new DotNetCoreRestoreSettings
+    var settings = new DotNetCoreRestoreSettings
     {
         ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}")
     };
@@ -64,10 +64,14 @@ Task("Test")
   .Does(() =>
 {
     var files = GetFiles("tests/**/*.csproj");
+    var settings = new DotNetCoreTestSettings
+    {
+        ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}")
+    };
     foreach(var file in files)
     {
         Information("Testing: {0}", file);
-        DotNetCoreTest(file.ToString());
+        DotNetCoreTest(file.ToString(), settings);
     }
 });
 
