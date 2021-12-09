@@ -20,11 +20,11 @@ app.UseHangfireDashboard();
 ```
 
 ### For ASP.NET Core
-First, additional NuGet packages needs installation: 
-* Hangfire
-* Hangfire.AspNetCore
-* Hangfire.PostgreSql
+First, NuGet package needs installation.
+* Hangfire.PostgreSql (Uses Npgsql 6)
+* Hangfire.PostgreSql.Npgsql5 (Uses Npgsql 5)
 
+Both packages are functionally the same, the only difference is the underlying Npgsql dependency version.
 
 In `Startup.cs` _ConfigureServices(IServiceCollection services)_ method add the following line:
 ```csharp
