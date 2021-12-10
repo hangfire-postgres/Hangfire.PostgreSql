@@ -1,4 +1,4 @@
-version: '0.0.0.{build}'
+﻿version: '0.0.0.{build}'
 image: Visual Studio 2022
 platform: Any CPU
 init:
@@ -16,6 +16,7 @@ build_script:
     createdb hangfire_tests
 
     .\build.ps1 -t Pack
+
     .\build.ps1 -t Pack -NpgsqlVersion 5
 cache:
 - tools -> build.cake
