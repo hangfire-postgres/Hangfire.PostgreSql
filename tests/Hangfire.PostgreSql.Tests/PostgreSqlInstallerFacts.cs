@@ -17,7 +17,7 @@ namespace Hangfire.PostgreSql.Tests
           string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
 
           PostgreSqlObjectsInstaller.Install(connection, schemaName);
-
+          
           int lastVersion = connection.Query<int>($@"SELECT version FROM ""{schemaName}"".""schema""").Single();
           Assert.Equal(15, lastVersion);
 

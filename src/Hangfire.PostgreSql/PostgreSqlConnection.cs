@@ -30,6 +30,7 @@ using System.Threading;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Entities;
+using Hangfire.PostgreSql.Extensions;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
@@ -105,9 +106,12 @@ namespace Hangfire.PostgreSql
       if (parameters == null) throw new ArgumentNullException(nameof(parameters));
 
       string createJobSql = $@"
-        INSERT INTO ""{_options.SchemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
+        INSERT INTO ""{_options.SchemaName.GetProperDbObjectName()}"".""{"job".GetProperDbObjectName()}"" (""{"invocationdata".GetProperDbObjectName()}"", 
+                                                                                                           ""{"arguments".GetProperDbObjectName()}"",
+                                                                                                           ""{"createdat".GetProperDbObjectName()}"", 
+                                                                                                           ""{"expireat".GetProperDbObjectName()}"")
         VALUES (@InvocationData, @Arguments, @CreatedAt, @ExpireAt) 
-        RETURNING ""id"";
+        RETURNING ""{"id".GetProperDbObjectName()}"";
       ";
 
       InvocationData invocationData = InvocationData.SerializeJob(job);
@@ -135,7 +139,8 @@ namespace Hangfire.PostgreSql
           }
 
           string insertParameterSql = $@"
-            INSERT INTO ""{_options.SchemaName}"".""jobparameter"" (""jobid"", ""name"", ""value"")
+            INSERT INTO ""{_options.SchemaName.GetProperDbObjectName()}"".""{"jobparameter".GetProperDbObjectName()}"" (""{"jobid".GetProperDbObjectName()}"", 
+                                                                             ""{"name".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
             VALUES (@JobId, @Name, @Value);
           ";
 
@@ -151,9 +156,12 @@ namespace Hangfire.PostgreSql
       if (id == null) throw new ArgumentNullException(nameof(id));
 
       string sql = $@"
-        SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
-        FROM ""{_options.SchemaName}"".""job"" 
-        WHERE ""id"" = @Id;
+        SELECT ""{"invocationdata".GetProperDbObjectName()}"" ""InvocationData"", 
+               ""{"statename".GetProperDbObjectName()}"" ""StateName"", 
+               ""{"arguments".GetProperDbObjectName()}"" ""Arguments"",
+               ""{"createdat".GetProperDbObjectName()}"" ""CreatedAt""
+        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"job".GetProperDbObjectName()}"" 
+        WHERE ""{"id".GetProperDbObjectName()}"" = @Id;
       ";
 
       SqlJob jobData = _storage.UseConnection(_dedicatedConnection,
@@ -192,10 +200,12 @@ namespace Hangfire.PostgreSql
       if (jobId == null) throw new ArgumentNullException(nameof(jobId));
 
       string sql = $@"
-        SELECT s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
-        FROM ""{_options.SchemaName}"".""state"" s
-        INNER JOIN ""{_options.SchemaName}"".""job"" j on j.""stateid"" = s.""id""
-        WHERE j.""id"" = @JobId;
+        SELECT s.""{"name".GetProperDbObjectName()}"" ""Name"", 
+               s.""{"reason".GetProperDbObjectName()}"" ""Reason"",
+               s.""{"data".GetProperDbObjectName()}"" ""Data""
+        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"state".GetProperDbObjectName()}"" s
+        INNER JOIN ""{_options.SchemaName.GetProperDbObjectName()}"".""{"job".GetProperDbObjectName()}"" j on j.""{"stateid".GetProperDbObjectName()}"" = s.""{"id".GetProperDbObjectName()}""
+        WHERE j.""{"id".GetProperDbObjectName()}"" = @JobId;
       ";
 
       SqlState sqlState = _storage.UseConnection(_dedicatedConnection,
@@ -221,23 +231,23 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @JobId ""jobid"", @Name ""name"", @Value ""value""
+	        SELECT @JobId ""{"jobid".GetProperDbObjectName()}"", @Name ""{"name".GetProperDbObjectName()}"", @Value ""{"value".GetProperDbObjectName()}""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_options.SchemaName}"".""jobparameter"" ""updatetarget""
-	        SET ""value"" = ""inputvalues"".""value""
+	        UPDATE ""{_options.SchemaName.GetProperDbObjectName()}"".""{"jobparameter".GetProperDbObjectName()}"" ""updatetarget""
+	        SET ""{"value".GetProperDbObjectName()}"" = ""inputvalues"".""{"value".GetProperDbObjectName()}""
 	        FROM ""inputvalues""
-	        WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
-	        AND ""updatetarget"".""name"" = ""inputvalues"".""name""
-	        RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
+	        WHERE ""updatetarget"".""{"jobid".GetProperDbObjectName()}"" = ""inputvalues"".""{"jobid".GetProperDbObjectName()}""
+	        AND ""updatetarget"".""{"name".GetProperDbObjectName()}"" = ""inputvalues"".""{"name".GetProperDbObjectName()}""
+	        RETURNING ""updatetarget"".""{"jobid".GetProperDbObjectName()}"", ""updatetarget"".""{"name".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{_options.SchemaName}"".""jobparameter""(""jobid"", ""name"", ""value"")
-        SELECT ""jobid"", ""name"", ""value"" 
+        INSERT INTO ""{_options.SchemaName.GetProperDbObjectName()}"".""{"jobparameter".GetProperDbObjectName()}""(""{"jobid".GetProperDbObjectName()}"", ""{"name".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
+        SELECT ""{"jobid".GetProperDbObjectName()}"", ""{"name".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"" 
         FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
 	        SELECT 1 
 	        FROM ""updatedrows"" 
-	        WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
-	        AND ""updatedrows"".""name"" = ""insertvalues"".""name""
+	        WHERE ""updatedrows"".""{"jobid".GetProperDbObjectName()}"" = ""insertvalues"".""{"jobid".GetProperDbObjectName()}"" 
+	        AND ""updatedrows"".""{"name".GetProperDbObjectName()}"" = ""insertvalues"".""{"name".GetProperDbObjectName()}""
         );
       ";
 
@@ -250,7 +260,9 @@ namespace Hangfire.PostgreSql
       if (id == null) throw new ArgumentNullException(nameof(id));
       if (name == null) throw new ArgumentNullException(nameof(name));
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name;";
+      string query = $@"SELECT ""{"value".GetProperDbObjectName()}"" 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"jobparameter".GetProperDbObjectName()}""
+                        WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id AND ""{"name".GetProperDbObjectName()}"" = @Name;";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<string>(query, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture), Name = name }));
@@ -260,7 +272,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key;";
+      string query = $@"SELECT ""{"value".GetProperDbObjectName()}""    
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"set".GetProperDbObjectName()}""
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key;";
 
       return _storage.UseConnection(_dedicatedConnection, connection => {
         IEnumerable<string> result = connection.Query<string>(query, new { Key = key });
@@ -276,11 +290,11 @@ namespace Hangfire.PostgreSql
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<string>($@"
-          SELECT ""value"" 
-          FROM ""{_options.SchemaName}"".""set"" 
-          WHERE ""key"" = @Key 
-          AND ""score"" BETWEEN @FromScore AND @ToScore 
-          ORDER BY ""score"" LIMIT 1;
+          SELECT ""{"value".GetProperDbObjectName()}"" 
+          FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"set".GetProperDbObjectName()}"" 
+          WHERE ""{"key".GetProperDbObjectName()}"" = @Key 
+          AND ""{"score".GetProperDbObjectName()}"" BETWEEN @FromScore AND @ToScore 
+          ORDER BY ""{"score".GetProperDbObjectName()}"" LIMIT 1;
         ",
           new { Key = key, FromScore = fromScore, ToScore = toScore }));
     }
@@ -292,22 +306,25 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @Key ""key"", @Field ""field"", @Value ""value""
+	        SELECT @Key ""{"key".GetProperDbObjectName()}"", @Field ""{"field".GetProperDbObjectName()}"", @Value ""{"value".GetProperDbObjectName()}""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_options.SchemaName}"".""hash"" ""updatetarget""
-	        SET ""value"" = ""inputvalues"".""value""
+	        UPDATE ""{_options.SchemaName.GetProperDbObjectName()}"".""{"hash".GetProperDbObjectName()}"" ""updatetarget""
+	        SET ""{"value".GetProperDbObjectName()}"" = ""inputvalues"".""{"value".GetProperDbObjectName()}""
 	        FROM ""inputvalues""
-	        WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
-	        AND ""updatetarget"".""field"" = ""inputvalues"".""field""
-	        RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
+	        WHERE ""updatetarget"".""{"key".GetProperDbObjectName()}"" = ""inputvalues"".""{"key".GetProperDbObjectName()}""
+	        AND ""updatetarget"".""{"field".GetProperDbObjectName()}"" = ""inputvalues"".""{"field".GetProperDbObjectName()}""
+	        RETURNING ""updatetarget"".""{"key".GetProperDbObjectName()}"", ""updatetarget"".""{"field".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{_options.SchemaName}"".""hash""(""key"", ""field"", ""value"")
-        SELECT ""key"", ""field"", ""value"" FROM ""inputvalues"" ""insertvalues""
+        INSERT INTO ""{_options.SchemaName.GetProperDbObjectName()}"".""{"hash".GetProperDbObjectName()}""(""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
+        SELECT ""{"key".GetProperDbObjectName()}"", 
+               ""{"field".GetProperDbObjectName()}"", 
+               ""{"value".GetProperDbObjectName()}""
+        FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
 	        SELECT 1 
 	        FROM ""updatedrows"" 
-	        WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
-	        AND ""updatedrows"".""field"" = ""insertvalues"".""field""
+	        WHERE ""updatedrows"".""{"key".GetProperDbObjectName()}"" = ""insertvalues"".""{"key".GetProperDbObjectName()}"" 
+	        AND ""updatedrows"".""{"field".GetProperDbObjectName()}"" = ""insertvalues"".""{"field".GetProperDbObjectName()}""
         );
       ";
 
@@ -322,7 +339,7 @@ namespace Hangfire.PostgreSql
               connection.Execute(sql, new { Key = key, Field = keyValuePair.Key, keyValuePair.Value }, transaction);
             }
           }, IsolationLevel.Serializable);
-       
+
           return;
         }
         catch (PostgresException exception)
@@ -342,9 +359,9 @@ namespace Hangfire.PostgreSql
 
       Dictionary<string, string> result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<SqlHash>($@"
-          SELECT ""field"" ""Field"", ""value"" ""Value"" 
-          FROM ""{_options.SchemaName}"".""hash"" 
-          WHERE ""key"" = @Key;",
+          SELECT ""{"field".GetProperDbObjectName()}"" ""Field"", ""{"value".GetProperDbObjectName()}"" ""Value"" 
+          FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"hash".GetProperDbObjectName()}"" 
+          WHERE ""{"key".GetProperDbObjectName()}"" = @Key;",
           new { Key = key })
         .ToDictionary(x => x.Field, x => x.Value));
 
@@ -364,21 +381,21 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @Id ""id"", @Data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
+	        SELECT @Id ""{"id".GetProperDbObjectName()}"", @Data ""{"data".GetProperDbObjectName()}"", NOW() AT TIME ZONE 'UTC' ""{"lastheartbeat".GetProperDbObjectName()}""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_options.SchemaName}"".""server"" ""updatetarget""
-	        SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
+	        UPDATE ""{_options.SchemaName.GetProperDbObjectName()}"".""{"server".GetProperDbObjectName()}"" ""updatetarget""
+	        SET ""{"data".GetProperDbObjectName()}"" = ""inputvalues"".""{"data".GetProperDbObjectName()}"", ""{"lastheartbeat".GetProperDbObjectName()}"" = ""inputvalues"".""{"lastheartbeat".GetProperDbObjectName()}""
 	        FROM ""inputvalues""
-	        WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
-	        RETURNING ""updatetarget"".""id""
+	        WHERE ""updatetarget"".""{"id".GetProperDbObjectName()}"" = ""inputvalues"".""{"id".GetProperDbObjectName()}""
+	        RETURNING ""updatetarget"".""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{_options.SchemaName}"".""server""(""id"", ""data"", ""lastheartbeat"")
-        SELECT ""id"", ""data"", ""lastheartbeat"" 
+        INSERT INTO ""{_options.SchemaName.GetProperDbObjectName()}"".""{"server".GetProperDbObjectName()}""(""{"id".GetProperDbObjectName()}"", ""{"data".GetProperDbObjectName()}"", ""{"lastheartbeat".GetProperDbObjectName()}"")
+        SELECT ""{"id".GetProperDbObjectName()}"", ""{"data".GetProperDbObjectName()}"", ""{"lastheartbeat".GetProperDbObjectName()}""
         FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
 	        SELECT 1 
 	        FROM ""updatedrows"" 
-	        WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
+	        WHERE ""updatedrows"".""{"id".GetProperDbObjectName()}"" = ""insertvalues"".""{"id".GetProperDbObjectName()}"" 
         );
       ";
 
@@ -391,7 +408,7 @@ namespace Hangfire.PostgreSql
       if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute($@"DELETE FROM ""{_options.SchemaName}"".""server"" WHERE ""id"" = @Id;", new { Id = serverId }));
+        .Execute($@"DELETE FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"server".GetProperDbObjectName()}"" WHERE ""{"id".GetProperDbObjectName()}"" = @Id;", new { Id = serverId }));
     }
 
     public override void Heartbeat(string serverId)
@@ -399,9 +416,9 @@ namespace Hangfire.PostgreSql
       if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
       string query = $@"
-        UPDATE ""{_options.SchemaName}"".""server"" 
-				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
-				WHERE ""id"" = @Id;
+        UPDATE ""{_options.SchemaName.GetProperDbObjectName()}"".""{"server".GetProperDbObjectName()}"" 
+				SET ""{"lastheartbeat".GetProperDbObjectName()}"" = NOW() AT TIME ZONE 'UTC' 
+				WHERE ""{"id".GetProperDbObjectName()}"" = @Id;
       ";
 
       int affectedRows = _storage.UseConnection(_dedicatedConnection, connection => connection
@@ -421,8 +438,8 @@ namespace Hangfire.PostgreSql
       }
 
       string query = $@"
-        DELETE FROM ""{_options.SchemaName}"".""server"" 
-				WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
+        DELETE FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"server".GetProperDbObjectName()}"" 
+				WHERE ""{"lastheartbeat".GetProperDbObjectName()}"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection.Execute(query));
     }
@@ -431,7 +448,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT COUNT(""key"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
+      string query = $@"SELECT COUNT(""{"key".GetProperDbObjectName()}"") 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"set".GetProperDbObjectName()}"" 
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<long>(query, new { Key = key }));
@@ -441,7 +460,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key ORDER BY ""id"" DESC";
+      string query = $@"SELECT ""{"value".GetProperDbObjectName()}"" 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"list".GetProperDbObjectName()}"" 
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key ORDER BY ""{"id".GetProperDbObjectName()}"" DESC";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key })
@@ -452,7 +473,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT SUM(""value"") FROM ""{_options.SchemaName}"".""counter"" WHERE ""key"" = @Key";
+      string query = $@"SELECT SUM(""{"value".GetProperDbObjectName()}"") 
+                      FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"counter".GetProperDbObjectName()}"" 
+                      WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
           .QuerySingleOrDefault<long?>(query, new { Key = key }) ?? 0);
@@ -462,7 +485,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
+      string query = $@"SELECT COUNT(""{"id".GetProperDbObjectName()}"") 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"list".GetProperDbObjectName()}"" 
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<long>(query, new { Key = key }));
@@ -473,7 +498,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
+      string query = $@"SELECT min(""{"expireat".GetProperDbObjectName()}"") 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"list".GetProperDbObjectName()}"" 
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -488,15 +515,15 @@ namespace Hangfire.PostgreSql
       if (key == null) throw new ArgumentNullException(nameof(key));
 
       string query = $@"
-					SELECT ""value"" 
-					FROM ""{_options.SchemaName}"".""list""
-					WHERE ""key"" = @Key
-          ORDER BY ""id"" DESC
+					SELECT ""{"value".GetProperDbObjectName()}"" 
+					FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"list".GetProperDbObjectName()}""
+					WHERE ""{"key".GetProperDbObjectName()}"" = @Key
+          ORDER BY ""{"id".GetProperDbObjectName()}"" DESC
           LIMIT @Limit OFFSET @Offset
         ";
- 
 
-      return _storage.UseConnection(_dedicatedConnection, connection => 
+
+      return _storage.UseConnection(_dedicatedConnection, connection =>
         connection
         .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
         .ToList()
@@ -507,7 +534,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
+      string query = $@"SELECT COUNT(""{"id".GetProperDbObjectName()}"") 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"hash".GetProperDbObjectName()}""
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingle<long>(query, new { Key = key }));
@@ -517,7 +546,9 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT MIN(""expireat"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
+      string query = $@"SELECT MIN(""{"expireat".GetProperDbObjectName()}"") 
+                      FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"hash".GetProperDbObjectName()}"" 
+                      WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -532,13 +563,13 @@ namespace Hangfire.PostgreSql
       if (key == null) throw new ArgumentNullException(nameof(key));
 
       string query = $@"
-					SELECT ""value"" 
-					FROM ""{_options.SchemaName}"".""set""
-					WHERE ""key"" = @Key
-          ORDER BY ""id"" 
+					SELECT ""{"value".GetProperDbObjectName()}"" 
+					FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"set".GetProperDbObjectName()}""
+					WHERE ""{"key".GetProperDbObjectName()}"" = @Key
+          ORDER BY ""{"id".GetProperDbObjectName()}"" 
           LIMIT @Limit OFFSET @Offset
         ";
- 
+
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
         .ToList());
@@ -548,11 +579,13 @@ namespace Hangfire.PostgreSql
     {
       if (key == null) throw new ArgumentNullException(nameof(key));
 
-      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
+      string query = $@"SELECT min(""{"expireat".GetProperDbObjectName()}"") 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"set".GetProperDbObjectName()}"" 
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
-        
+
       if (!result.HasValue) return TimeSpan.FromSeconds(-1);
 
       return result.Value - DateTime.UtcNow;
@@ -563,7 +596,9 @@ namespace Hangfire.PostgreSql
       if (key == null) throw new ArgumentNullException(nameof(key));
       if (name == null) throw new ArgumentNullException(nameof(name));
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key AND ""field"" = @Field";
+      string query = $@"SELECT ""{"value".GetProperDbObjectName()}"" 
+                        FROM ""{_options.SchemaName.GetProperDbObjectName()}"".""{"hash".GetProperDbObjectName()}"" 
+                        WHERE ""{"key".GetProperDbObjectName()}"" = @Key AND ""{"field".GetProperDbObjectName()}"" = @Field";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Field = name })

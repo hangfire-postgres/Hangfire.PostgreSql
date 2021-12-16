@@ -3,6 +3,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using Dapper;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Moq;
 using Npgsql;
@@ -66,7 +67,8 @@ namespace Hangfire.PostgreSql.Tests
         // ReSharper disable once UnusedVariable
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
 
-        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"lock".GetProperDbObjectName()}"" 
+                                                       WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource",
           new { Resource = "hello" });
 
         Assert.Equal(1, lockCount);
@@ -88,7 +90,7 @@ namespace Hangfire.PostgreSql.Tests
         // Arrange
         TimeSpan timeout = TimeSpan.FromSeconds(15);
         string resourceName = "hello";
-        connection.Execute($@"INSERT INTO ""{GetSchemaName()}"".""lock"" VALUES (@ResourceName, 0, @Now)", new { ResourceName = resourceName, Now = DateTime.UtcNow });
+        connection.Execute($@"INSERT INTO ""{GetSchemaName()}"".""{"lock".GetProperDbObjectName()}"" VALUES (@ResourceName, 0, @Now)", new { ResourceName = resourceName, Now = DateTime.UtcNow });
 
         // Act && Assert (not throwing means it worked)
         PostgreSqlDistributedLock.Acquire(connection, resourceName, timeout, options);
@@ -111,7 +113,8 @@ namespace Hangfire.PostgreSql.Tests
 
         // ReSharper restore UnusedVariable
 
-        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"lock".GetProperDbObjectName()}"" 
+                                                         WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource",
           new { Resource = "hello" });
 
         Assert.Equal(1, lockCount);
@@ -191,7 +194,9 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
         PostgreSqlDistributedLock.Release(connection, "hello", options);
 
-        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) 
+                                                         FROM ""{GetSchemaName()}"".""{"lock".GetProperDbObjectName()}"" 
+                                                          WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource",
           new { Resource = "hello" });
 
         Assert.Equal(0, lockCount);
@@ -211,7 +216,9 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
         PostgreSqlDistributedLock.Release(connection, "hello", options);
 
-        long lockCount = connection.Query<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
+        long lockCount = connection.Query<long>($@"SELECT COUNT(*) 
+                                                   FROM ""{GetSchemaName()}"".""{"lock".GetProperDbObjectName()}"" 
+                                                   WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource",
           new { Resource = "hello" }).Single();
 
         Assert.Equal(0, lockCount);

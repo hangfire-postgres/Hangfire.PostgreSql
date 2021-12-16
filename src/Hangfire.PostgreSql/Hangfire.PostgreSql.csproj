@@ -29,6 +29,22 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Scripts\Install.v10_UpperCase.sql" />
+    <None Remove="Scripts\Install.v11_UpperCase.sql" />
+    <None Remove="Scripts\Install.v12_UpperCase.sql" />
+    <None Remove="Scripts\Install.v13_UpperCase.sql" />
+    <None Remove="Scripts\Install.v14_UpperCase.sql" />
+    <None Remove="Scripts\Install.v15_UpperCase.sql" />
+    <None Remove="Scripts\Install.v3_UpperCase.sql" />
+    <None Remove="Scripts\Install.v4_UpperCase.sql" />
+    <None Remove="Scripts\Install.v5_UpperCase.sql" />
+    <None Remove="Scripts\Install.v6_UpperCase.sql" />
+    <None Remove="Scripts\Install.v7_UpperCase.sql" />
+    <None Remove="Scripts\Install.v8_UpperCase.sql" />
+    <None Remove="Scripts\Install.v9_UpperCase.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Dapper" Version="2.0.123" />
     <PackageReference Include="GitVersion.MsBuild" Version="5.8.1">
       <PrivateAssets>all</PrivateAssets>

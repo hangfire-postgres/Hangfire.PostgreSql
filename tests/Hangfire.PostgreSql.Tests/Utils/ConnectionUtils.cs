@@ -24,7 +24,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
 
     public static string GetSchemaName()
     {
-      return Environment.GetEnvironmentVariable(SchemaVariable) ?? DefaultSchemaName;
+      var schemaName = Environment.GetEnvironmentVariable(SchemaVariable) ?? DefaultSchemaName;
+      return DbQueryHelper.IsUpperCase ? schemaName.ToUpperInvariant() : schemaName;
     }
 
     public static string GetMasterConnectionString()
@@ -46,7 +47,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static NpgsqlConnection CreateConnection()
     {
       NpgsqlConnectionStringBuilder csb = new(GetConnectionString());
-      NpgsqlConnection connection = new() {
+      NpgsqlConnection connection = new()
+      {
         ConnectionString = csb.ToString(),
       };
       connection.Open();
@@ -57,7 +59,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static NpgsqlConnection CreateMasterConnection()
     {
       NpgsqlConnectionStringBuilder csb = new(GetMasterConnectionString());
-      NpgsqlConnection connection = new() {
+      NpgsqlConnection connection = new()
+      {
         ConnectionString = csb.ToString(),
       };
       connection.Open();

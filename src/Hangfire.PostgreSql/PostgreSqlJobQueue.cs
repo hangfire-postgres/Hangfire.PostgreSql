@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Dapper;
+using Hangfire.PostgreSql.Extensions;
 using Hangfire.PostgreSql.Properties;
 using Hangfire.Storage;
 using Npgsql;
@@ -56,7 +57,8 @@ namespace Hangfire.PostgreSql
     public void Enqueue(IDbConnection connection, string queue, string jobId)
     {
       string enqueueJobSql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""jobqueue"" (""jobid"", ""queue"") 
+        INSERT INTO ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"") 
         VALUES (@JobId, @Queue);
       ";
 
@@ -83,18 +85,21 @@ namespace Hangfire.PostgreSql
       FetchedJob fetchedJob;
 
       string fetchJobSqlTemplate = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
-        WHERE ""id"" = (
-          SELECT ""id"" 
-          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-          WHERE ""queue"" = ANY (@Queues)
-          AND ""fetchedat"" {{0}}
-          ORDER BY ""queue"", ""fetchedat"", ""jobid""
+        UPDATE ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        SET ""{"fetchedat".GetProperDbObjectName()}"" = NOW() AT TIME ZONE 'UTC'
+        WHERE ""{"id".GetProperDbObjectName()}"" = (
+          SELECT ""{"id".GetProperDbObjectName()}"" 
+          FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+          WHERE ""{"queue".GetProperDbObjectName()}"" = ANY (@Queues)
+          AND ""{"fetchedat".GetProperDbObjectName()}"" {{0}}
+          ORDER BY ""{"queue".GetProperDbObjectName()}"", ""{"fetchedat".GetProperDbObjectName()}"", ""{"jobid".GetProperDbObjectName()}""
           FOR UPDATE SKIP LOCKED
           LIMIT 1
         )
-        RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
+        RETURNING ""{"id".GetProperDbObjectName()}"" AS ""Id"", 
+                  ""{"jobid".GetProperDbObjectName()}"" AS ""JobId"", 
+                  ""{"queue".GetProperDbObjectName()}"" AS ""Queue"", 
+                  ""{"fetchedat".GetProperDbObjectName()}"" AS ""FetchedAt"";
       ";
 
       string[] fetchConditions = {
@@ -174,21 +179,28 @@ namespace Hangfire.PostgreSql
 
 
       string jobToFetchSqlTemplate = $@"
-        SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
-        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        WHERE ""queue"" = ANY (@Queues)
-        AND ""fetchedat"" {{0}} 
-        ORDER BY ""queue"", ""fetchedat"", ""jobid"" 
+        SELECT  ""{"id".GetProperDbObjectName()}"" AS ""Id"", 
+                ""{"jobid".GetProperDbObjectName()}"" AS ""JobId"",
+                ""{"queue".GetProperDbObjectName()}"" AS ""Queue"",
+                ""{"fetchedat".GetProperDbObjectName()}"" AS ""FetchedAt"",
+                ""{"updatecount".GetProperDbObjectName()}"" AS ""UpdateCount""
+        FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        WHERE ""{"queue".GetProperDbObjectName()}"" = ANY (@Queues)
+        AND ""{"fetchedat".GetProperDbObjectName()}"" {{0}} 
+        ORDER BY ""{"queue".GetProperDbObjectName()}"", ""{"fetchedat".GetProperDbObjectName()}"", ""{"jobid".GetProperDbObjectName()}"" 
         LIMIT 1;
         ";
 
       string markJobAsFetchedSql = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC', 
-            ""updatecount"" = (""updatecount"" + 1) % 2000000000
-        WHERE ""id"" = @Id 
-        AND ""updatecount"" = @UpdateCount
-        RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
+        UPDATE ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        SET ""{"fetchedat".GetProperDbObjectName()}"" = NOW() AT TIME ZONE 'UTC', 
+            ""{"updatecount".GetProperDbObjectName()}"" = (""{"updatecount".GetProperDbObjectName()}"" + 1) % 2000000000
+        WHERE ""{"id".GetProperDbObjectName()}"" = @Id 
+        AND ""{"updatecount".GetProperDbObjectName()}"" = @UpdateCount
+        RETURNING ""{"id".GetProperDbObjectName()}"" AS ""Id"",
+                  ""{"jobid".GetProperDbObjectName()}"" AS ""JobId"", 
+                  ""{"queue".GetProperDbObjectName()}"" AS ""Queue"", 
+                  ""{"fetchedat".GetProperDbObjectName()}"" AS ""FetchedAt"";
       ";
 
       string[] fetchConditions = {

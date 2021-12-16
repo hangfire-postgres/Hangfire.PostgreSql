@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ using System.Diagnostics;
 using System.Threading;
 using Dapper;
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Extensions;
 
 namespace Hangfire.PostgreSql
 {
@@ -91,7 +92,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(options));
       }
 
-      int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource;",
+      int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}""
+                                               WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource;",
         new { Resource = resource });
 
       if (rowsAffected <= 0)
@@ -123,11 +125,12 @@ namespace Hangfire.PostgreSql
             using (IDbTransaction trx = connection.BeginTransaction(IsolationLevel.RepeatableRead))
             {
               rowsAffected = connection.Execute($@"
-                INSERT INTO ""{options.SchemaName}"".""lock""(""resource"", ""acquired"") 
+                INSERT INTO ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}""
+                (""{"resource".GetProperDbObjectName()}"", ""{"acquired".GetProperDbObjectName()}"") 
                 SELECT @Resource, @Acquired
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM ""{options.SchemaName}"".""lock"" 
-                    WHERE ""resource"" = @Resource
+                    SELECT 1 FROM ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}"" 
+                    WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource
                 )
                 ON CONFLICT DO NOTHING;
               ",
@@ -173,7 +176,8 @@ namespace Hangfire.PostgreSql
         {
           using (IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.RepeatableRead))
           {
-            connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
+            connection.Execute($@"DELETE FROM ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}"" 
+                                WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource AND ""{"acquired".GetProperDbObjectName()}"" < @Timeout",
               new {
                 Resource = resource,
                 Timeout = DateTime.UtcNow - options.DistributedLockTimeout,
@@ -202,11 +206,12 @@ namespace Hangfire.PostgreSql
           try
           {
             connection.Execute($@"
-              INSERT INTO ""{options.SchemaName}"".""lock""(""resource"", ""updatecount"", ""acquired"") 
+              INSERT INTO ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}""
+              (""{"resource".GetProperDbObjectName()}"", ""{"updatecount".GetProperDbObjectName()}"", ""{"acquired".GetProperDbObjectName()}"") 
               SELECT @Resource, 0, @Acquired
               WHERE NOT EXISTS (
-                  SELECT 1 FROM ""{options.SchemaName}"".""lock"" 
-                  WHERE ""resource"" = @Resource
+                  SELECT 1 FROM ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}"" 
+                  WHERE ""{"resource".GetProperDbObjectName()}"" = @Resource
               )
               ON CONFLICT DO NOTHING;
             ", new {
@@ -220,7 +225,9 @@ namespace Hangfire.PostgreSql
           }
 
           int rowsAffected = connection.Execute(
-            $@"UPDATE ""{options.SchemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @Resource",
+            $@"UPDATE ""{options.SchemaName.GetProperDbObjectName()}"".""{"lock".GetProperDbObjectName()}"" 
+               SET ""{"updatecount".GetProperDbObjectName()}"" = 1 
+               WHERE ""{"updatecount".GetProperDbObjectName()}"" = 0 AND ""{"resource".GetProperDbObjectName()}"" = @Resource",
             new { Resource = resource });
 
           if (rowsAffected > 0) return;

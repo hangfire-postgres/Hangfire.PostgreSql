@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
 using Hangfire.Common;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.States;
 using Hangfire.Storage;
@@ -50,8 +51,9 @@ namespace Hangfire.PostgreSql.Tests
     {
 
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', @When) RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES ('', '', @When) RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnection(connection => {
@@ -61,10 +63,10 @@ namespace Hangfire.PostgreSql.Tests
 
         Commit(connection, x => x.ExpireJob(jobId, TimeSpan.FromDays(1)));
 
-        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId);
+        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId, DbQueryHelper.IsUpperCase);
         Assert.True(utcNow.AddMinutes(-1) < job.ExpireAt && job.ExpireAt <= utcNow.AddDays(1).AddSeconds(5));
 
-        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId);
+        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId, DbQueryHelper.IsUpperCase);
         Assert.Null(anotherJob.ExpireAt);
       });
     }
@@ -74,8 +76,9 @@ namespace Hangfire.PostgreSql.Tests
     public void PersistJob_ClearsTheJobExpirationData()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnection(connection => {
@@ -84,10 +87,10 @@ namespace Hangfire.PostgreSql.Tests
 
         Commit(connection, x => x.PersistJob(jobId));
 
-        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId);
+        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId, DbQueryHelper.IsUpperCase);
         Assert.Null(job.ExpireAt);
 
-        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId);
+        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId, DbQueryHelper.IsUpperCase);
         Assert.NotNull(anotherJob.ExpireAt);
       });
     }
@@ -97,8 +100,9 @@ namespace Hangfire.PostgreSql.Tests
     public void SetJobState_AppendsAStateAndSetItToTheJob()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""";
 
       UseConnection(connection => {
         dynamic jobId = connection.Query(arrangeSql).Single().id.ToString();
@@ -121,7 +125,7 @@ namespace Hangfire.PostgreSql.Tests
         Assert.Null(anotherJob.StateName);
         Assert.Null(anotherJob.StateId);
 
-        dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""state""").Single();
+        dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").Single();
         Assert.Equal((string)jobId, jobState.jobid.ToString());
         Assert.Equal("State", jobState.name);
         Assert.Equal("Reason", jobState.reason);
@@ -147,8 +151,9 @@ namespace Hangfire.PostgreSql.Tests
       }
 
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""";
 
 
       string jobId = null;
@@ -182,7 +187,7 @@ namespace Hangfire.PostgreSql.Tests
           Assert.Equal("State", job.StateName);
           Assert.NotNull(job.StateId);
 
-          dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""state""").Single();
+          dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").Single();
           Assert.Equal(jobId, jobState.jobid.ToString());
           Assert.Equal("State", jobState.name);
           Assert.Equal("Reason", jobState.reason);
@@ -194,7 +199,7 @@ namespace Hangfire.PostgreSql.Tests
           Assert.Null(job.StateName);
           Assert.Null(job.StateId);
 
-          Assert.Null(connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""state""").SingleOrDefault());
+          Assert.Null(connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").SingleOrDefault());
         }
 
         TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId);
@@ -208,13 +213,24 @@ namespace Hangfire.PostgreSql.Tests
     public void AddJobState_JustAddsANewRecordInATable()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
         VALUES ('', '', NOW() AT TIME ZONE 'UTC')
-        RETURNING ""id""
+        RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnection(connection => {
-        dynamic jobId = connection.Query(arrangeSql).Single().id.ToString(CultureInfo.InvariantCulture);
+        dynamic query = connection.Query(arrangeSql).Single();
+
+        string jobId = "";
+        if (DbQueryHelper.IsUpperCase)
+        {
+          jobId = query.ID.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+          jobId = query.id.ToString(CultureInfo.InvariantCulture);
+        }
 
         Mock<IState> state = new Mock<IState>();
         state.Setup(x => x.Name).Returns("State");
@@ -224,16 +240,17 @@ namespace Hangfire.PostgreSql.Tests
 
         Commit(connection, x => x.AddJobState(jobId, state.Object));
 
-        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId);
+        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId, DbQueryHelper.IsUpperCase);
         Assert.Null(job.StateName);
         Assert.Null(job.StateId);
 
-        dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""state""").Single();
-        Assert.Equal((string)jobId, jobState.jobid.ToString(CultureInfo.InvariantCulture));
-        Assert.Equal("State", jobState.name);
-        Assert.Equal("Reason", jobState.reason);
-        Assert.NotNull(jobState.createdat);
-        Assert.Equal("{\"Name\":\"Value\"}", jobState.data);
+        dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").Single();
+
+        Assert.Equal((string)jobId, DbQueryHelper.IsUpperCase ? jobState.JOBID.ToString(CultureInfo.InvariantCulture) : jobState.jobid.ToString(CultureInfo.InvariantCulture));
+        Assert.Equal("State", DbQueryHelper.IsUpperCase ? jobState.NAME : jobState.name);
+        Assert.Equal("Reason", DbQueryHelper.IsUpperCase ? jobState.REASON : jobState.reason);
+        Assert.NotNull(DbQueryHelper.IsUpperCase ? jobState.CREATEDAT : jobState.createdat);
+        Assert.Equal("{\"Name\":\"Value\"}", DbQueryHelper.IsUpperCase ? jobState.DATA : jobState.data);
       });
     }
 
@@ -270,7 +287,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.IncrementCounter("my-key"));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""counter""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
         Assert.Equal("my-key", record.key);
         Assert.Equal(1, record.value);
@@ -285,7 +302,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.IncrementCounter("my-key", TimeSpan.FromDays(1)));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""counter""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
         Assert.Equal("my-key", record.key);
         Assert.Equal(1, record.value);
@@ -308,7 +325,7 @@ namespace Hangfire.PostgreSql.Tests
           x.IncrementCounter("my-key");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""");
 
         Assert.Equal(2, recordCount);
       });
@@ -321,7 +338,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.DecrementCounter("my-key"));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""counter""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
         Assert.Equal("my-key", record.key);
         Assert.Equal(-1, record.value);
@@ -336,7 +353,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.DecrementCounter("my-key", TimeSpan.FromDays(1)));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""counter""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
         Assert.Equal("my-key", record.key);
         Assert.Equal(-1, record.value);
@@ -359,7 +376,7 @@ namespace Hangfire.PostgreSql.Tests
           x.DecrementCounter("my-key");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""");
 
         Assert.Equal(2, recordCount);
       });
@@ -372,7 +389,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.AddToSet("my-key", "my-value"));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""set""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single();
 
         Assert.Equal("my-key", record.key);
         Assert.Equal("my-value", record.value);
@@ -390,7 +407,7 @@ namespace Hangfire.PostgreSql.Tests
           x.AddToSet("my-key", "another-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""");
 
         Assert.Equal(2, recordCount);
       });
@@ -406,7 +423,7 @@ namespace Hangfire.PostgreSql.Tests
           x.AddToSet("my-key", "my-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""");
 
         Assert.Equal(1, recordCount);
       });
@@ -419,7 +436,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.AddToSet("my-key", "my-value", 3.2));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""set""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single();
 
         Assert.Equal("my-key", record.key);
         Assert.Equal("my-value", record.value);
@@ -437,9 +454,9 @@ namespace Hangfire.PostgreSql.Tests
           x.AddToSet("my-key", "my-value", 3.2);
         });
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""set""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal(3.2, record.score, 3);
+        Assert.Equal(3.2, DbQueryHelper.IsUpperCase ? record.SCORE : record.score, 3);
       });
     }
 
@@ -483,22 +500,22 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         int jobsCountUnderMySharedTag = connection.Query<int>($@"
           SELECT COUNT(*) 
-          FROM ""{GetSchemaName()}"".set
-          WHERE key LIKE 'tags:my-shared-tag'").Single();
+          FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""
+          WHERE ""{"key".GetProperDbObjectName()}"" LIKE 'tags:my-shared-tag'").Single();
         Assert.Equal(loopIterations, jobsCountUnderMySharedTag);
 
 
         int[] jobsCountsUnderJobTypeTags = connection.Query<int>($@"
           SELECT COUNT(*)
-          FROM ""{GetSchemaName()}"".set
-          where key like 'tags:job-type-%'
-          group by key;").ToArray();
+          FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""
+          where ""{"key".GetProperDbObjectName()}"" like 'tags:job-type-%'
+          group by ""{"key".GetProperDbObjectName()}"";").ToArray();
 
         Assert.All(jobsCountsUnderJobTypeTags, count => Assert.Equal(loopIterations / jobGroups, count));
 
         int jobLinkTagsCount = connection.Query<int>($@"
-          SELECT COUNT(*) FROM ""{GetSchemaName()}"".set
-          where value ~ '^\d+$'
+          SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""
+          where ""{"value".GetProperDbObjectName()}"" ~ '^\d+$'
         ").Single();
 
         Assert.Equal(loopIterations * totalTagsCount, jobLinkTagsCount);
@@ -515,7 +532,7 @@ namespace Hangfire.PostgreSql.Tests
           x.RemoveFromSet("my-key", "my-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""");
 
         Assert.Equal(0, recordCount);
       });
@@ -531,7 +548,7 @@ namespace Hangfire.PostgreSql.Tests
           x.RemoveFromSet("my-key", "different-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""");
 
         Assert.Equal(1, recordCount);
       });
@@ -547,7 +564,7 @@ namespace Hangfire.PostgreSql.Tests
           x.RemoveFromSet("different-key", "my-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""");
 
         Assert.Equal(1, recordCount);
       });
@@ -560,10 +577,10 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         Commit(connection, x => x.InsertToList("my-key", "my-value"));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""list""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal("my-value", record.value);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal("my-value", DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
       });
     }
 
@@ -577,7 +594,7 @@ namespace Hangfire.PostgreSql.Tests
           x.InsertToList("my-key", "my-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
         Assert.Equal(2, recordCount);
       });
     }
@@ -593,7 +610,7 @@ namespace Hangfire.PostgreSql.Tests
           x.RemoveFromList("my-key", "my-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(0, recordCount);
       });
@@ -609,7 +626,7 @@ namespace Hangfire.PostgreSql.Tests
           x.RemoveFromList("my-key", "different-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(1, recordCount);
       });
@@ -625,7 +642,7 @@ namespace Hangfire.PostgreSql.Tests
           x.RemoveFromList("different-key", "my-value");
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(1, recordCount);
       });
@@ -644,11 +661,19 @@ namespace Hangfire.PostgreSql.Tests
           x.TrimList("my-key", 1, 2);
         });
 
-        dynamic[] records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""list""").ToArray();
-
-        Assert.Equal(2, records.Length);
-        Assert.Equal("1", records[0].value);
-        Assert.Equal("2", records[1].value);
+        dynamic[] records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""").ToArray();
+        if (DbQueryHelper.IsUpperCase)
+        {
+          Assert.Equal(2, records.Length);
+          Assert.Equal("1", records[0].VALUE);
+          Assert.Equal("2", records[1].VALUE);
+        }
+        else
+        {
+          Assert.Equal(2, records.Length);
+          Assert.Equal("1", records[0].value);
+          Assert.Equal("2", records[1].value);
+        }
       });
     }
 
@@ -664,7 +689,7 @@ namespace Hangfire.PostgreSql.Tests
           x.TrimList("my-key", 1, 100);
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(2, recordCount);
       });
@@ -680,7 +705,7 @@ namespace Hangfire.PostgreSql.Tests
           x.TrimList("my-key", 1, 100);
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(0, recordCount);
       });
@@ -696,7 +721,7 @@ namespace Hangfire.PostgreSql.Tests
           x.TrimList("my-key", 1, 0);
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(0, recordCount);
       });
@@ -712,7 +737,7 @@ namespace Hangfire.PostgreSql.Tests
           x.TrimList("another-key", 1, 0);
         });
 
-        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list""");
+        long recordCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""");
 
         Assert.Equal(1, recordCount);
       });
@@ -751,7 +776,8 @@ namespace Hangfire.PostgreSql.Tests
           { "Key2", "Value2" },
         }));
 
-        Dictionary<string, string> result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""hash"" WHERE ""key"" = @Key",
+        Dictionary<string, string> result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                                                                WHERE ""{"key".GetProperDbObjectName()}"" = @Key",
             new { Key = "some-hash" })
           .ToDictionary(x => (string)x.field, x => (string)x.value);
 
@@ -782,7 +808,8 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.RemoveHash("some-hash"));
 
         // Assert
-        long count = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""hash""");
+        long count = connection.QuerySingle<long>($@"SELECT COUNT(*) 
+                                                     FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""");
         Assert.Equal(0, count);
       });
     }
@@ -818,7 +845,9 @@ namespace Hangfire.PostgreSql.Tests
 
         Commit(connection, x => x.AddRangeToSet("my-set", items));
 
-        IEnumerable<string> records = connection.Query<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""set"" WHERE ""key"" = 'my-set'");
+        IEnumerable<string> records = connection.Query<string>($@"SELECT ""{"value".GetProperDbObjectName()}"" 
+                                                                  FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+                                                                  WHERE ""{"key".GetProperDbObjectName()}"" = 'my-set'");
         Assert.Equal(items, records);
       });
     }
@@ -834,7 +863,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void RemoveSet_RemovesASet_WithAGivenKey()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+                             (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"") VALUES (@Key, @Value, 0.0)";
 
       UseConnection(connection => {
         connection.Execute(arrangeSql, new[] {
@@ -844,8 +874,8 @@ namespace Hangfire.PostgreSql.Tests
 
         Commit(connection, x => x.RemoveSet("set-1"));
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""set""").Single();
-        Assert.Equal("set-2", record.key);
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single();
+        Assert.Equal("set-2", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
       });
     }
 
@@ -854,7 +884,7 @@ namespace Hangfire.PostgreSql.Tests
     public void ExpireHash_ThrowsAnException_WhenKeyIsNull()
     {
       UseConnection(connection => {
-        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => 
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
           Commit(connection, x => x.ExpireHash(null, TimeSpan.FromMinutes(5)))
             );
         Assert.Equal("key", exception.ParamName);
@@ -865,7 +895,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void ExpireHash_SetsExpirationTimeOnAHash_WithGivenKey()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (""key"", ""field"") VALUES (@Key, @Field)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                          (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"") VALUES (@Key, @Field)";
 
       UseConnection(connection => {
         // Arrange
@@ -878,8 +909,8 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.ExpireHash("hash-1", TimeSpan.FromMinutes(60)));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".hash")
-          .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""")
+                                                           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
         Assert.True(DateTime.UtcNow.AddMinutes(59) < records["hash-1"]);
         Assert.True(records["hash-1"] < DateTime.UtcNow.AddMinutes(61));
         Assert.Null(records["hash-2"]);
@@ -891,7 +922,7 @@ namespace Hangfire.PostgreSql.Tests
     public void ExpireSet_ThrowsAnException_WhenKeyIsNull()
     {
       UseConnection(connection => {
-        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => 
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
           Commit(connection, x => x.ExpireSet(null, TimeSpan.FromSeconds(45)))
             );
 
@@ -903,7 +934,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void ExpireSet_SetsExpirationTime_OnASet_WithGivenKey()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+                          (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"") VALUES (@Key, @Value, 0.0)";
 
       UseConnection(connection => {
         // Arrange
@@ -916,7 +948,7 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.ExpireSet("set-1", TimeSpan.FromMinutes(60)));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""set""")
+        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
         Assert.True(DateTime.UtcNow.AddMinutes(59) < records["set-1"]);
         Assert.True(records["set-1"] < DateTime.UtcNow.AddMinutes(61));
@@ -929,7 +961,7 @@ namespace Hangfire.PostgreSql.Tests
     public void ExpireList_ThrowsAnException_WhenKeyIsNull()
     {
       UseConnection(connection => {
-        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => 
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
           Commit(connection, x => x.ExpireList(null, TimeSpan.FromSeconds(45)))
             );
 
@@ -941,7 +973,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void ExpireList_SetsExpirationTime_OnAList_WithGivenKey()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""list"" (""key"") VALUES (@Key)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}"" (""{"key".GetProperDbObjectName()}"") VALUES (@Key)";
 
       UseConnection(connection => {
         // Arrange
@@ -954,7 +986,7 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.ExpireList("list-1", TimeSpan.FromMinutes(60)));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""list""")
+        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
         Assert.True(DateTime.UtcNow.AddMinutes(59) < records["list-1"]);
         Assert.True(records["list-1"] < DateTime.UtcNow.AddMinutes(61));
@@ -977,7 +1009,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void PersistHash_ClearsExpirationTime_OnAGivenHash()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (""key"", ""field"", ""expireat"") VALUES (@Key, @Field, @ExpireAt)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".{"hash".GetProperDbObjectName()} 
+                          (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") VALUES (@Key, @Field, @ExpireAt)";
 
       UseConnection(connection => {
         // Arrange
@@ -990,7 +1023,7 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.PersistHash("hash-1"));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".hash")
+        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".{"hash".GetProperDbObjectName()}")
           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
         Assert.Null(records["hash-1"]);
         Assert.NotNull(records["hash-2"]);
@@ -1012,7 +1045,9 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void PersistSet_ClearsExpirationTime_OnAGivenHash()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""value"", ""expireat"", ""score"") VALUES (@Key, @Value, @ExpireAt, 0.0)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+                          (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"") 
+                            VALUES (@Key, @Value, @ExpireAt, 0.0)";
 
       UseConnection(connection => {
         // Arrange
@@ -1025,7 +1060,7 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.PersistSet("set-1"));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""set""")
+        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
         Assert.Null(records["set-1"]);
         Assert.NotNull(records["set-2"]);
@@ -1047,7 +1082,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void PersistList_ClearsExpirationTime_OnAGivenHash()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""list"" (""key"", ""expireat"") VALUES (@Key, @ExpireAt)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}"" 
+                          (""{"key".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") VALUES (@Key, @ExpireAt)";
 
       UseConnection(connection => {
         // Arrange
@@ -1060,7 +1096,7 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.PersistList("list-1"));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""list""")
+        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
         Assert.Null(records["list-1"]);
         Assert.NotNull(records["list-2"]);
@@ -1091,7 +1127,7 @@ namespace Hangfire.PostgreSql.Tests
       }
 
       UseConnection(connection => {
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""").Single();
         Assert.Equal(jobId, record.jobid.ToString());
         Assert.Equal("default", record.queue);
         Assert.Null(record.FetchedAt);

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Dapper;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Npgsql;
 using Xunit;
@@ -21,6 +22,8 @@ namespace Hangfire.PostgreSql.Tests
       _token = cts.Token;
       _fixture = fixture;
       _fixture.SetupOptions(o => o.DeleteExpiredBatchSize = 2);
+      DbQueryHelper.IsUpperCase = true;
+      PostgreSql.Utils.DbQueryHelper.IsUpperCase = DbQueryHelper.IsUpperCase;
     }
 
     [Fact]
@@ -80,7 +83,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, manager) => {
         // Arrange
         string createSql = $@"
-          INSERT INTO ""{GetSchemaName()}"".""counter"" (""key"", ""value"", ""expireat"") 
+          INSERT INTO ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""
+          (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") 
           VALUES ('key', 1, @ExpireAt)
         ";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
@@ -89,7 +93,7 @@ namespace Hangfire.PostgreSql.Tests
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter"""));
+        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}"""));
       });
     }
 
@@ -100,7 +104,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, manager) => {
         // Arrange
         string createSql = $@"
-          INSERT INTO ""{GetSchemaName()}"".""counter"" (""key"", ""value"") 
+          INSERT INTO ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}"" (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"") 
           VALUES ('stats:succeeded', 1)
         ";
         for (int i = 0; i < 5; i++)
@@ -112,8 +116,8 @@ namespace Hangfire.PostgreSql.Tests
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(1, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter"""));
-        Assert.Equal(5, connection.QuerySingle<long>($@"SELECT SUM(""value"") FROM ""{GetSchemaName()}"".""counter"""));
+        Assert.Equal(5, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}"""));
+        Assert.Equal(5, connection.QuerySingle<long>($@"SELECT SUM(""{"value".GetProperDbObjectName()}"") FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}"""));
       });
     }
 
@@ -124,7 +128,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, manager) => {
         // Arrange
         string createSql = $@"
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"") 
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") 
           VALUES ('', '', NOW() AT TIME ZONE 'UTC', @ExpireAt)
         ";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
@@ -133,7 +138,7 @@ namespace Hangfire.PostgreSql.Tests
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""job"""));
+        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"""));
       });
     }
 
@@ -143,14 +148,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       UseConnection((connection, manager) => {
         // Arrange
-        string createSql = $@"INSERT INTO ""{GetSchemaName()}"".""list"" (""key"", ""expireat"") VALUES ('key', @ExpireAt)";
+        string createSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}"" (""{"key".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") 
+                           VALUES ('key', @ExpireAt)";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
 
         // Act
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""list"""));
+        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}"""));
       });
     }
 
@@ -160,14 +166,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       UseConnection((connection, manager) => {
         // Arrange
-        string createSql = $@"INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"", ""expireat"") VALUES ('key', 0, '', @ExpireAt)";
+        string createSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+        (""{"key".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") VALUES ('key', 0, '', @ExpireAt)";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
 
         // Act
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(0, connection.Query<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""").Single());
+        Assert.Equal(0, connection.Query<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single());
       });
     }
 
@@ -178,7 +185,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, manager) => {
         // Arrange
         string createSql = $@"
-          INSERT INTO ""{GetSchemaName()}"".""hash"" (""key"", ""field"", ""value"", ""expireat"") 
+          INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+          (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") 
           VALUES ('key', 'field', '', @ExpireAt)";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -186,20 +194,20 @@ namespace Hangfire.PostgreSql.Tests
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""hash"""));
+        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"""));
       });
     }
 
     private static long CreateExpirationEntry(NpgsqlConnection connection, DateTime? expireAt, string key = "key")
     {
       string insertSqlNull = $@"
-        INSERT INTO ""{GetSchemaName()}"".""counter""(""key"", ""value"", ""expireat"")
-        VALUES (@Key, 1, null) RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""(""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"")
+        VALUES (@Key, 1, null) RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       string insertSqlValue = $@"
-        INSERT INTO ""{GetSchemaName()}"".""counter""(""key"", ""value"", ""expireat"")
-        VALUES (@Key, 1, NOW() AT TIME ZONE 'UTC' - interval '{{0}} seconds') RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""(""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"")
+        VALUES (@Key, 1, NOW() AT TIME ZONE 'UTC' - interval '{{0}} seconds') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       string insertSql = expireAt == null
@@ -212,7 +220,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private static bool IsEntryExpired(NpgsqlConnection connection, long entryId)
     {
-      return connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""counter"" WHERE ""id"" = @Id", new { Id = entryId }) == 0;
+      return connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}"" WHERE ""{"id".GetProperDbObjectName()}"" = @Id", new { Id = entryId }) == 0;
     }
 
     private void UseConnection(Action<NpgsqlConnection, ExpirationManager> action)

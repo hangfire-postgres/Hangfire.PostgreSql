@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Storage;
 using Xunit;
@@ -153,8 +154,9 @@ namespace Hangfire.PostgreSql.Tests
     private void Dequeue_ShouldFetchAJob_FromTheSpecifiedQueue(bool useNativeDatabaseTransactions)
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
-        VALUES (@JobId, @Queue) RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"")
+        VALUES (@JobId, @Queue) RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       // Arrange
@@ -192,12 +194,14 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         WITH i AS (
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
           VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-          RETURNING ""id""
+          RETURNING ""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
-        SELECT i.""id"", @Queue FROM i;
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""
+        (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"")
+        SELECT i.""{"id".GetProperDbObjectName()}"", @Queue FROM i;
       ";
 
       // Arrange
@@ -213,7 +217,9 @@ namespace Hangfire.PostgreSql.Tests
         // Assert
         Assert.NotNull(payload);
 
-        DateTime? fetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""fetchedat"" FROM ""{GetSchemaName()}"".""jobqueue"" WHERE ""jobid"" = @Id",
+        DateTime? fetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""{"fetchedat".GetProperDbObjectName()}"" 
+                                                                FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+                                                                WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id",
           new { Id = Convert.ToInt64(payload.JobId, CultureInfo.InvariantCulture) });
 
         Assert.NotNull(fetchedAt);
@@ -239,12 +245,14 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         WITH i AS (
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
           VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-          RETURNING ""id""
+          RETURNING ""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
-        SELECT i.""id"", @Queue, @FetchedAt 
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"", ""{"fetchedat".GetProperDbObjectName()}"")
+        SELECT i.""{"id".GetProperDbObjectName()}"", @Queue, @FetchedAt 
         FROM i;
       ";
 
@@ -286,12 +294,13 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         WITH i AS (
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
           VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-          RETURNING ""id""
+          RETURNING ""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
-        SELECT i.""id"", @Queue FROM i;
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"")
+        SELECT i.""{"id".GetProperDbObjectName()}"", @Queue FROM i;
       ";
 
       UseConnection((connection, storage) => {
@@ -307,7 +316,9 @@ namespace Hangfire.PostgreSql.Tests
           CreateTimingOutCancellationToken());
 
         // Assert
-        DateTime? otherJobFetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""fetchedat"" FROM ""{GetSchemaName()}"".""jobqueue"" WHERE ""jobid"" <> @Id",
+        DateTime? otherJobFetchedAt = connection.QuerySingle<DateTime?>($@"SELECT ""{"fetchedat".GetProperDbObjectName()}"" 
+                                                                        FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+                                                                        WHERE ""{"jobid".GetProperDbObjectName()}"" <> @Id",
           new { Id = Convert.ToInt64(payload.JobId, CultureInfo.InvariantCulture) });
 
         Assert.Null(otherJobFetchedAt);
@@ -333,12 +344,13 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         WITH i AS (
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
           VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-          RETURNING ""id""
+          RETURNING ""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
-        SELECT i.""id"", @Queue FROM i;
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"")
+        SELECT i.""{"id".GetProperDbObjectName()}"", @Queue FROM i;
       ";
       UseConnection((connection, storage) => {
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
@@ -369,12 +381,13 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         WITH i AS (
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
           VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
-          RETURNING ""id""
+          RETURNING ""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
-        SELECT i.""id"", @Queue FROM i;
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"" (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"")
+        SELECT i.""{"id".GetProperDbObjectName()}"", @Queue FROM i;
       ";
 
       string[] queueNames = { "default", "critical" };
@@ -429,7 +442,7 @@ namespace Hangfire.PostgreSql.Tests
 
         queue.Enqueue(connection, name, "1");
 
-        string retrievedName = connection.QuerySingle<string>($@"SELECT ""queue"" FROM ""{GetSchemaName()}"".""jobqueue""");
+        string retrievedName = connection.QuerySingle<string>($@"SELECT ""{"queue".GetProperDbObjectName()}"" FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""");
         Assert.Equal(name, retrievedName);
       });
     }
@@ -471,10 +484,10 @@ namespace Hangfire.PostgreSql.Tests
 
         queue.Enqueue(connection, "default", "1");
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
-        Assert.Equal("1", record.jobid.ToString());
-        Assert.Equal("default", record.queue);
-        Assert.Null(record.FetchedAt);
+        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""").Single();
+        Assert.Equal("1", DbQueryHelper.IsUpperCase ? record.JOBID.ToString() : record.jobid.ToString());
+        Assert.Equal("default", DbQueryHelper.IsUpperCase ? record.QUEUE : record.queue);
+        Assert.Null(DbQueryHelper.IsUpperCase ? record.FETCHEDAT : record.FetchedAt);
       });
     }
 

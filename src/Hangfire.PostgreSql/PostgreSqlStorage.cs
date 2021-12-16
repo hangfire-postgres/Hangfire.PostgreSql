@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ using System.Text;
 using System.Transactions;
 using Hangfire.Annotations;
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
@@ -84,10 +85,9 @@ namespace Hangfire.PostgreSql
 
       if (options.PrepareSchemaIfNecessary)
       {
-        using (NpgsqlConnection connection = CreateAndOpenConnection())
-        {
-          PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
-        }
+        DbQueryHelper.IsUpperCase = options.IsUpperCaseDatabaseObject;
+        using NpgsqlConnection connection = CreateAndOpenConnection();
+        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
       }
 
       InitializeQueueProviders();

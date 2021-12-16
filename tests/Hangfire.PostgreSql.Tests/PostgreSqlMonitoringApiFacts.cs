@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using Dapper;
 using Hangfire.Common;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.States;
 using Hangfire.Storage;
@@ -28,8 +29,9 @@ namespace Hangfire.PostgreSql.Tests
     public void GetJobs_MixedCasing_ReturnsJob()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{ConnectionUtils.GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        INSERT INTO ""{ConnectionUtils.GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""";
 
       Job job = Job.FromExpression(() => SampleMethod("Hello"));
       InvocationData invocationData = InvocationData.SerializeJob(job);

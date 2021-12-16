@@ -23,7 +23,7 @@ using System;
 
 namespace Hangfire.PostgreSql.Utils
 {
-  public static class Utils
+  public static partial class Utils
   {
     public static bool TryExecute<T>(
       Func<T> func,

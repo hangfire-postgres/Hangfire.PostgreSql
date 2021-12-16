@@ -23,6 +23,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
+using Hangfire.PostgreSql.Extensions;
 
 namespace Hangfire.PostgreSql
 {
@@ -37,7 +38,8 @@ namespace Hangfire.PostgreSql
 
     public IEnumerable<string> GetQueues()
     {
-      string sqlQuery = $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""jobqueue""";
+      string sqlQuery = $@"SELECT DISTINCT ""{"queue".GetProperDbObjectName()}"" 
+                           FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}""";
       return _storage.UseConnection(null, connection => connection.Query<string>(sqlQuery).ToList());
     }
 
@@ -56,15 +58,15 @@ namespace Hangfire.PostgreSql
       string sqlQuery = $@"
         SELECT (
             SELECT COUNT(*) 
-            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-            WHERE ""fetchedat"" IS NULL 
-            AND ""queue"" = @Queue
+            FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+            WHERE ""{"fetchedat".GetProperDbObjectName()}"" IS NULL 
+            AND ""{"queue".GetProperDbObjectName()}"" = @Queue
         ) ""EnqueuedCount"", 
         (
           SELECT COUNT(*) 
-          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-          WHERE ""fetchedat"" IS NOT NULL 
-          AND ""queue"" = @Queue
+          FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+          WHERE ""{"fetchedat".GetProperDbObjectName()}"" IS NOT NULL 
+          AND ""{"queue".GetProperDbObjectName()}"" = @Queue
         ) ""FetchedCount"";
       ";
 
@@ -80,12 +82,13 @@ namespace Hangfire.PostgreSql
     private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
     {
       string sqlQuery = $@"
-        SELECT j.""id"" 
-        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" jq
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""job"" j ON jq.""jobid"" = j.""id""
-        WHERE jq.""queue"" = @Queue 
-        AND jq.""fetchedat"" {(fetched ? "IS NOT NULL" : "IS NULL")}
-        AND j.""id"" IS NOT NULL
+        SELECT j.""{"id".GetProperDbObjectName()}"" 
+        FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" jq
+        LEFT JOIN ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"job".GetProperDbObjectName()}"" j 
+        ON jq.""{"jobid".GetProperDbObjectName()}"" = j.""{"id".GetProperDbObjectName()}""
+        WHERE jq.""{"queue".GetProperDbObjectName()}"" = @Queue 
+        AND jq.""{"fetchedat".GetProperDbObjectName()}"" {(fetched ? "IS NOT NULL" : "IS NULL")}
+        AND j.""{"id".GetProperDbObjectName()}"" IS NOT NULL
         LIMIT @Limit OFFSET @Offset;
       ";
 

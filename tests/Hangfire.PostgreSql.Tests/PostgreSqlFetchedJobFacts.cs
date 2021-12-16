@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Linq;
 using Dapper;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Xunit;
 
@@ -66,7 +67,7 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       long count = _storage.UseConnection(null, connection =>
-        connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""jobqueue"""));
+        connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"""));
       Assert.Equal(0, count);
     }
 
@@ -86,7 +87,7 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       long count = _storage.UseConnection(null, connection =>
-        connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""jobqueue"""));
+        connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}"""));
       Assert.Equal(3, count);
     }
 
@@ -103,7 +104,7 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       dynamic record = _storage.UseConnection(null, connection =>
-        connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single());
+        connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""").Single());
       Assert.Null(record.FetchedAt);
     }
 
@@ -120,15 +121,16 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       dynamic record = _storage.UseConnection(null, connection =>
-        connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single());
+        connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""").Single());
       Assert.Null(record.fetchedat);
     }
 
     private static long CreateJobQueueRecord(PostgreSqlStorage storage, string jobId, string queue)
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
-        VALUES (@Id, @Queue, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""
+        (""{"jobid".GetProperDbObjectName()}"", ""{"queue".GetProperDbObjectName()}"", ""{"fetchedat".GetProperDbObjectName()}"")
+        VALUES (@Id, @Queue, NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       return

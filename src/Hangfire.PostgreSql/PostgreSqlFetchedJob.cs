@@ -21,6 +21,7 @@
 
 using System;
 using Dapper;
+using Hangfire.PostgreSql.Extensions;
 using Hangfire.Storage;
 
 namespace Hangfire.PostgreSql
@@ -52,7 +53,8 @@ namespace Hangfire.PostgreSql
     public void RemoveFromQueue()
     {
       _storage.UseConnection(null, connection => connection.Execute($@"
-        DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id;
+        DELETE FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        WHERE ""{"id".GetProperDbObjectName()}"" = @Id;
       ",
         new { Id }));
 
@@ -62,9 +64,9 @@ namespace Hangfire.PostgreSql
     public void Requeue()
     {
       _storage.UseConnection(null, connection => connection.Execute($@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NULL 
-        WHERE ""id"" = @Id;
+        UPDATE ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"jobqueue".GetProperDbObjectName()}"" 
+        SET ""{"fetchedat".GetProperDbObjectName()}"" = NULL 
+        WHERE ""{"id".GetProperDbObjectName()}"" = @Id;
       ",
       new { Id }));
 

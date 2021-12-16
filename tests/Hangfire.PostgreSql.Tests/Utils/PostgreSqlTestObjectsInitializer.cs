@@ -29,13 +29,17 @@ namespace Hangfire.PostgreSql.Tests.Utils
 {
   internal static class PostgreSqlTestObjectsInitializer
   {
-    public static void CleanTables(NpgsqlConnection connection)
+    public static void CleanTables(NpgsqlConnection connection, bool isUpperCase = false)
     {
       if (connection == null) throw new ArgumentNullException(nameof(connection));
 
+      string scriptFileName = $"Hangfire.PostgreSql.Tests.Scripts.Clean";
+      if (isUpperCase) scriptFileName += "_UpperCase";
+      scriptFileName += ".sql";
+
       string script = null;
-      script = GetStringResource(typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
-        "Hangfire.PostgreSql.Tests.Scripts.Clean.sql").Replace("'hangfire'", $"'{ConnectionUtils.GetSchemaName()}'");
+      script = GetStringResource(typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly, scriptFileName)
+               .Replace("'hangfire'", $"'{ConnectionUtils.GetSchemaName()}'");
 
       using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
       using NpgsqlCommand command = new(script, connection, transaction);

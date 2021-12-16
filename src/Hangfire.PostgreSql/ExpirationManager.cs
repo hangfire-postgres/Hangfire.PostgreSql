@@ -25,6 +25,7 @@ using System.Globalization;
 using System.Threading;
 using Dapper;
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Extensions;
 using Hangfire.Server;
 using Hangfire.Storage;
 
@@ -40,8 +41,8 @@ namespace Hangfire.PostgreSql
     private static readonly ILog _logger = LogProvider.GetLogger(typeof(ExpirationManager));
 
     private static readonly string[] _processedCounters = {
-      "stats:succeeded",
-      "stats:deleted",
+      "stats:succeeded".GetProperDbObjectName(),
+      "stats:deleted".GetProperDbObjectName(),
     };
 
     private static readonly string[] _processedTables = {
@@ -83,11 +84,11 @@ namespace Hangfire.PostgreSql
             do
             {
               removedCount = connection.Execute($@"
-                DELETE FROM ""{_storage.Options.SchemaName}"".""{table}"" 
-                WHERE ""id"" IN (
-                    SELECT ""id"" 
-                    FROM ""{_storage.Options.SchemaName}"".""{table}"" 
-                    WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
+                DELETE FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{table.GetProperDbObjectName()}"" 
+                WHERE ""{"id".GetProperDbObjectName()}"" IN (
+                    SELECT ""{"id".GetProperDbObjectName()}"" 
+                    FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{table.GetProperDbObjectName()}"" 
+                    WHERE ""{"expireat".GetProperDbObjectName()}"" < NOW() AT TIME ZONE 'UTC' 
                     LIMIT {_storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)}
                 )", transaction: transaction);
 
@@ -130,13 +131,13 @@ namespace Hangfire.PostgreSql
         {
           string aggregateQuery = $@"
             WITH ""counters"" AS (
-              DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
-              WHERE ""key"" = @Key
-              AND ""expireat"" IS NULL
+              DELETE FROM ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"counter".GetProperDbObjectName()}""
+              WHERE ""{"key".GetProperDbObjectName()}"" = @Key
+              AND ""{"expireat".GetProperDbObjectName()}"" IS NULL
               RETURNING *
             )
 
-            SELECT SUM(""value"") FROM ""counters"";
+            SELECT SUM(""{"value".GetProperDbObjectName()}"") FROM ""counters"";
           ";
 
           long aggregatedValue = connection.ExecuteScalar<long>(aggregateQuery, new { Key = counterName }, transaction);
@@ -144,7 +145,8 @@ namespace Hangfire.PostgreSql
 
           if (aggregatedValue > 0)
           {
-            string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@Key, @Value);";
+            string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName.GetProperDbObjectName()}"".""{"counter".GetProperDbObjectName()}""
+                                  (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"") VALUES (@Key, @Value);";
             connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
           }
         }

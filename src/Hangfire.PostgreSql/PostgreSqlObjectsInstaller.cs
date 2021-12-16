@@ -26,6 +26,8 @@ using System.IO;
 using System.Reflection;
 using System.Resources;
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Extensions;
+using Hangfire.PostgreSql.Utils;
 using Npgsql;
 
 namespace Hangfire.PostgreSql
@@ -39,6 +41,9 @@ namespace Hangfire.PostgreSql
       if (connection == null)
         throw new ArgumentNullException(nameof(connection));
 
+      if (DbQueryHelper.IsUpperCase)
+        schemaName = schemaName?.ToUpperInvariant();
+
       _logger.Info("Start installing Hangfire SQL objects...");
 
       // starts with version 3 to keep in check with Hangfire SqlServer, but I couldn't keep up with that idea after all;
@@ -51,8 +56,9 @@ namespace Hangfire.PostgreSql
           string script;
           try
           {
+            var scriptPostfix = DbQueryHelper.IsUpperCase ? "_UpperCase.sql" : ".sql";
             script = GetStringResource(typeof(PostgreSqlObjectsInstaller).GetTypeInfo().Assembly,
-              $"Hangfire.PostgreSql.Scripts.Install.v{version.ToString(CultureInfo.InvariantCulture)}.sql");
+              $"Hangfire.PostgreSql.Scripts.Install.v{version.ToString(CultureInfo.InvariantCulture)}{scriptPostfix}");
           }
           catch (MissingManifestResourceException)
           {
@@ -61,7 +67,7 @@ namespace Hangfire.PostgreSql
 
           if (schemaName != "hangfire")
           {
-            script = script.Replace("'hangfire'", $"'{schemaName}'").Replace(@"""hangfire""", $@"""{schemaName}""");
+            script = script.Replace("'hangfire'", $"'{schemaName.GetProperDbObjectName()}'").Replace(@"""hangfire""", $@"""{schemaName.GetProperDbObjectName()}""");
           }
 
           if (!VersionAlreadyApplied(connection, schemaName, version))
@@ -76,7 +82,7 @@ namespace Hangfire.PostgreSql
                 try
                 {
 #pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-                  command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
+                  command.CommandText += $@"; UPDATE ""{schemaName.GetProperDbObjectName()}"".""{"schema".GetProperDbObjectName()}"" SET ""{"version".GetProperDbObjectName()}"" = @Version WHERE ""{"version".GetProperDbObjectName()}"" = @PreviousVersion";
 #pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
                   command.Parameters.AddWithValue("Version", version);
                   command.Parameters.AddWithValue("PreviousVersion", previousVersion);
@@ -116,7 +122,7 @@ namespace Hangfire.PostgreSql
       try
       {
         using (NpgsqlCommand command =
-          new NpgsqlCommand($@"SELECT true :: boolean ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version""::integer >= @Version",
+          new NpgsqlCommand($@"SELECT true :: boolean ""VersionAlreadyApplied"" FROM ""{schemaName.GetProperDbObjectName()}"".""{"schema".GetProperDbObjectName()}"" WHERE ""{"version".GetProperDbObjectName()}""::integer >= @Version",
             connection))
         {
           command.Parameters.AddWithValue("Version", version);

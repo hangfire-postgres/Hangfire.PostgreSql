@@ -10,6 +10,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Scripts\Clean_UpperCase.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\Clean_UpperCase.sql" />
     <EmbeddedResource Include="Scripts\Clean.sql" />
   </ItemGroup>
 

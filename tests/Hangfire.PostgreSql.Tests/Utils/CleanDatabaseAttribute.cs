@@ -12,7 +12,10 @@ namespace Hangfire.PostgreSql.Tests.Utils
   {
     private static readonly object _globalLock = new();
     private static bool _sqlObjectInstalled;
-
+   
+    // Change here if you want to upper case object test !!!
+    public CleanDatabaseAttribute() => DbQueryHelper.IsUpperCase = true;
+   
     public override void Before(MethodInfo methodUnderTest)
     {
       Monitor.Enter(_globalLock);
@@ -39,7 +42,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
     {
       using NpgsqlConnection masterConnection = ConnectionUtils.CreateMasterConnection();
       bool databaseExists = masterConnection.QuerySingleOrDefault<bool?>($@"SELECT true :: boolean FROM pg_database WHERE datname = @DatabaseName;",
-        new {
+        new
+        {
           DatabaseName = ConnectionUtils.GetDatabaseName(),
         }) ?? false;
 
@@ -54,14 +58,15 @@ namespace Hangfire.PostgreSql.Tests.Utils
         connection.Open();
       }
 
+      PostgreSql.Utils.DbQueryHelper.IsUpperCase = DbQueryHelper.IsUpperCase;
       PostgreSqlObjectsInstaller.Install(connection);
-      PostgreSqlTestObjectsInitializer.CleanTables(connection);
+      PostgreSqlTestObjectsInitializer.CleanTables(connection, DbQueryHelper.IsUpperCase);
     }
 
     private static void CleanTables()
     {
       using NpgsqlConnection connection = ConnectionUtils.CreateConnection();
-      PostgreSqlTestObjectsInitializer.CleanTables(connection);
+      PostgreSqlTestObjectsInitializer.CleanTables(connection, DbQueryHelper.IsUpperCase);
     }
   }
 }

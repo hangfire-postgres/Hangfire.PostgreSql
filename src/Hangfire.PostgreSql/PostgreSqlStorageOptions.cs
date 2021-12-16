@@ -43,6 +43,7 @@ namespace Hangfire.PostgreSql
       UseNativeDatabaseTransactions = true;
       PrepareSchemaIfNecessary = true;
       DeleteExpiredBatchSize = 1000;
+      IsUpperCaseDatabaseObject = false;
     }
 
     public TimeSpan QueuePollInterval
@@ -106,6 +107,7 @@ namespace Hangfire.PostgreSql
     public bool PrepareSchemaIfNecessary { get; set; }
     public string SchemaName { get; set; }
     public bool EnableTransactionScopeEnlistment { get; set; }
+    public bool IsUpperCaseDatabaseObject { get; set; }
 
     private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
     {

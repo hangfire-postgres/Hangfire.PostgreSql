@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
 using Hangfire.Common;
+using Hangfire.PostgreSql.Tests.Extensions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -23,7 +24,8 @@ namespace Hangfire.PostgreSql.Tests
     public PostgreSqlConnectionFacts(PostgreSqlStorageFixture fixture)
     {
       _fixture = fixture;
-      _fixture.SetupOptions(o => o.TransactionSynchronisationTimeout = TimeSpan.FromSeconds(2));
+      _fixture.SetupOptions(o => o.TransactionSynchronisationTimeout = TimeSpan.FromSeconds(4));
+      PostgreSql.Utils.DbQueryHelper.IsUpperCase = DbQueryHelper.IsUpperCase;
     }
 
     [Fact]
@@ -142,7 +144,7 @@ namespace Hangfire.PostgreSql.Tests
         Assert.NotNull(jobId);
         Assert.NotEmpty(jobId);
 
-        TestJob testJob = Helper.GetTestJob(connection, GetSchemaName(), "-1");
+        TestJob testJob = Helper.GetTestJob(connection, GetSchemaName(), "-1", DbQueryHelper.IsUpperCase);
         Assert.Equal(jobId, testJob.Id.ToString());
         Assert.Equal(createdAt, testJob.CreatedAt);
         Assert.Null((long?)testJob.StateId);
@@ -159,9 +161,19 @@ namespace Hangfire.PostgreSql.Tests
         Assert.True(createdAt.AddDays(1).AddMinutes(-1) < testJob.ExpireAt);
         Assert.True(testJob.ExpireAt < createdAt.AddDays(1).AddMinutes(1));
 
-        Dictionary<string, string> parameters = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id",
+        Dictionary<string, string> parameters = null;
+        if (DbQueryHelper.IsUpperCase)
+        {
+          parameters = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobparameter".GetProperDbObjectName()}"" WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id",
             new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
-          .ToDictionary(x => (string)x.name, x => (string)x.value);
+            .ToDictionary(x => (string)x.NAME, x => (string)x.VALUE);
+        }
+        else
+        {
+          parameters = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobparameter".GetProperDbObjectName()}"" WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id",
+            new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
+            .ToDictionary(x => (string)x.name, x => (string)x.value);
+        }
 
         Assert.Equal("Value1", parameters["Key1"]);
         Assert.Equal("Value2", parameters["Key2"]);
@@ -190,8 +202,9 @@ namespace Hangfire.PostgreSql.Tests
     public void GetJobData_ReturnsResult_WhenJobExists()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"statename".GetProperDbObjectName()}"", ""{"createdAt".GetProperDbObjectName()}"")
+        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -238,27 +251,30 @@ namespace Hangfire.PostgreSql.Tests
     public void GetStateData_ReturnsCorrectData()
     {
       string createJobSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES ('', '', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id"";
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"statename".GetProperDbObjectName()}"", ""{"createdAt".GetProperDbObjectName()}"")
+        VALUES ('', '', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}"";
       ";
 
       string createStateSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""createdat"")
+        INSERT INTO ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}"" (""{"jobid".GetProperDbObjectName()}"", ""{"name".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
         VALUES(@JobId, 'old-state', NOW() AT TIME ZONE 'UTC');
 
-        INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
+        INSERT INTO ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}"" 
+        (""{"jobid".GetProperDbObjectName()}"", ""{"name".GetProperDbObjectName()}"", ""{"reason".GetProperDbObjectName()}"", ""{"data".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
         VALUES(@JobId, @Name, @Reason, @Data, NOW() AT TIME ZONE 'UTC')
-        RETURNING ""id"";
+        RETURNING ""{"id".GetProperDbObjectName()}"";
       ";
 
       string updateJobStateSql = $@"
-        UPDATE ""{GetSchemaName()}"".""job""
-        SET ""stateid"" = @StateId
-        WHERE ""id"" = @JobId;
+        UPDATE ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}""
+        SET ""{"stateid".GetProperDbObjectName()}"" = @StateId
+        WHERE ""{"id".GetProperDbObjectName()}"" = @JobId;
       ";
 
       UseConnections((connection, jobStorageConnection) => {
-        Dictionary<string, string> data = new() {
+        Dictionary<string, string> data = new()
+        {
           { "Key", "Value" },
         };
 
@@ -283,8 +299,9 @@ namespace Hangfire.PostgreSql.Tests
     public void GetJobData_ReturnsJobLoadException_IfThereWasADeserializationException()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"statename".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -328,8 +345,9 @@ namespace Hangfire.PostgreSql.Tests
     public void SetParameters_CreatesNewParameter_WhenParameterWithTheGivenNameDoesNotExists()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -337,7 +355,9 @@ namespace Hangfire.PostgreSql.Tests
 
         jobStorageConnection.SetJobParameter(jobId, "Name", "Value");
 
-        string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+        string parameterValue = connection.QuerySingle<string>($@"SELECT ""{"value".GetProperDbObjectName()}"" 
+                                                                  FROM ""{GetSchemaName()}"".""{"jobparameter".GetProperDbObjectName()}"" 
+                                                                  WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id AND ""{"name".GetProperDbObjectName()}"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
         Assert.Equal("Value", parameterValue);
@@ -349,8 +369,9 @@ namespace Hangfire.PostgreSql.Tests
     public void SetParameter_UpdatesValue_WhenParameterWithTheGivenName_AlreadyExists()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+         INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -359,7 +380,9 @@ namespace Hangfire.PostgreSql.Tests
         jobStorageConnection.SetJobParameter(jobId, "Name", "Value");
         jobStorageConnection.SetJobParameter(jobId, "Name", "AnotherValue");
 
-        string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+        string parameterValue = connection.QuerySingle<string>($@"SELECT ""{ "value".GetProperDbObjectName()}""
+                                                                  FROM ""{GetSchemaName()}"".""{"jobparameter".GetProperDbObjectName()}"" 
+                                                                  WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id AND ""{"name".GetProperDbObjectName()}"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
         Assert.Equal("AnotherValue", parameterValue);
@@ -370,9 +393,9 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void SetParameter_CanAcceptNulls_AsValues()
     {
-      string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+        (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -380,7 +403,9 @@ namespace Hangfire.PostgreSql.Tests
 
         jobStorageConnection.SetJobParameter(jobId, "Name", null);
 
-        string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
+        string parameterValue = connection.QuerySingle<string>($@"SELECT ""{"value".GetProperDbObjectName()}""
+                                                                  FROM ""{GetSchemaName()}"".""{"jobparameter".GetProperDbObjectName()}"" 
+                                                                  WHERE ""{"jobid".GetProperDbObjectName()}"" = @Id AND ""{"name".GetProperDbObjectName()}"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
         Assert.Equal((string)null, parameterValue);
@@ -425,13 +450,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         WITH ""insertedjob"" AS (
-          INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+          INSERT INTO ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}"" 
+          (""{"invocationdata".GetProperDbObjectName()}"", ""{"arguments".GetProperDbObjectName()}"", ""{"createdat".GetProperDbObjectName()}"")
+          VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""
         )
-        INSERT INTO ""{GetSchemaName()}"".""jobparameter"" (""jobid"", ""name"", ""value"")
-        SELECT ""insertedjob"".""id"", @Name, @Value
+        INSERT INTO ""{GetSchemaName()}"".""{"jobparameter".GetProperDbObjectName()}"" 
+        (""{"jobid".GetProperDbObjectName()}"", ""{"name".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
+        SELECT ""insertedjob"".""{"id".GetProperDbObjectName()}"", @Name, @Value
         FROM ""insertedjob""
-        RETURNING ""jobid"";
+        RETURNING ""{"jobid".GetProperDbObjectName()}"";
       ";
       UseConnections((connection, jobStorageConnection) => {
         long id = connection.QuerySingle<long>(arrangeSql,
@@ -477,7 +504,8 @@ namespace Hangfire.PostgreSql.Tests
     public void GetFirstByLowestScoreFromSet_ReturnsTheValueWithTheLowestScore()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+        (""{"key".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
         VALUES 
         ('key', 1.0, '1.0'),
         ('key', -1.0, '-1.0'),
@@ -525,22 +553,39 @@ namespace Hangfire.PostgreSql.Tests
           Queues = new[] { "critical", "default" },
           WorkerCount = 4,
         };
-        jobStorageConnection.AnnounceServer("server", context1);
+        jobStorageConnection.AnnounceServer($@"{"server".GetProperDbObjectName()}", context1);
 
-        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
-        Assert.Equal("server", server.id);
-        Assert.True(((string)server.data).StartsWith("{\"WorkerCount\":4,\"Queues\":[\"critical\",\"default\"],\"StartedAt\":"),
-          server.data);
-        Assert.NotNull(server.lastheartbeat);
+        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}""").Single();
+        if (!DbQueryHelper.IsUpperCase)
+        {
+          Assert.Equal("server", server.id);
+          Assert.True(((string)server.data).StartsWith("{\"WorkerCount\":4,\"Queues\":[\"critical\",\"default\"],\"StartedAt\":"), server.data);
+          Assert.NotNull(server.lastheartbeat);
+        }
+        else
+        {
+          Assert.Equal("server".ToUpperInvariant(), server.ID);
+          Assert.True(((string)server.DATA).StartsWith("{\"WorkerCount\":4,\"Queues\":[\"critical\",\"default\"],\"StartedAt\":"), server.DATA);
+          Assert.NotNull(server.LASTHEARTBEAT);
+        }
 
         ServerContext context2 = new ServerContext {
           Queues = new[] { "default" },
           WorkerCount = 1000,
         };
-        jobStorageConnection.AnnounceServer("server", context2);
-        dynamic sameServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
-        Assert.Equal("server", sameServer.id);
-        Assert.Contains("1000", sameServer.data);
+        jobStorageConnection.AnnounceServer($@"{"server".GetProperDbObjectName()}", context2);
+        dynamic sameServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}""").Single();
+
+        if (!DbQueryHelper.IsUpperCase)
+        {
+          Assert.Equal("server", server.id);
+          Assert.Contains("1000", sameServer.data);
+        }
+        else
+        {
+          Assert.Equal("server".ToUpperInvariant(), server.ID);
+          Assert.Contains("1000", sameServer.DATA);
+        }
       });
     }
 
@@ -556,7 +601,8 @@ namespace Hangfire.PostgreSql.Tests
     public void RemoveServer_RemovesAServerRecord()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
+        INSERT INTO ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}"" 
+        (""{"id".GetProperDbObjectName()}"", ""{"data".GetProperDbObjectName()}"", ""{"lastheartbeat".GetProperDbObjectName()}"")
         VALUES ('Server1', '', NOW() AT TIME ZONE 'UTC'),
         ('Server2', '', NOW() AT TIME ZONE 'UTC')
       ";
@@ -566,7 +612,7 @@ namespace Hangfire.PostgreSql.Tests
 
         jobStorageConnection.RemoveServer("Server1");
 
-        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}""").Single();
         Assert.NotEqual("Server1", server.Id, StringComparer.OrdinalIgnoreCase);
       });
     }
@@ -592,7 +638,8 @@ namespace Hangfire.PostgreSql.Tests
     public void Heartbeat_UpdatesLastHeartbeat_OfTheServerWithGivenId()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
+        INSERT INTO ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}"" 
+        (""{"id".GetProperDbObjectName()}"", ""{"data".GetProperDbObjectName()}"", ""{"lastheartbeat".GetProperDbObjectName()}"")
         VALUES ('server1', '', '2012-12-12 12:12:12'), ('server2', '', '2012-12-12 12:12:12')
       ";
 
@@ -600,9 +647,17 @@ namespace Hangfire.PostgreSql.Tests
         connection.Execute(arrangeSql);
 
         jobStorageConnection.Heartbeat("server1");
-
-        Dictionary<string, DateTime> servers = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""")
-          .ToDictionary(x => (string)x.id, x => (DateTime)x.lastheartbeat);
+        Dictionary<string, DateTime> servers = null;
+        if (DbQueryHelper.IsUpperCase)
+        {
+          servers = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.ID, x => (DateTime)x.LASTHEARTBEAT);
+        }
+        else
+        {
+          servers = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.id, x => (DateTime)x.lastheartbeart);
+        }
 
         Assert.NotEqual(2012, servers["server1"].Year);
         Assert.Equal(2012, servers["server2"].Year);
@@ -621,7 +676,8 @@ namespace Hangfire.PostgreSql.Tests
     public void RemoveTimedOutServers_DoItsWorkPerfectly()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
+       INSERT INTO ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}"" 
+        (""{"id".GetProperDbObjectName()}"", ""{"data".GetProperDbObjectName()}"", ""{"lastheartbeat".GetProperDbObjectName()}"")
         VALUES (@Id, '', @Heartbeat)
       ";
 
@@ -634,8 +690,8 @@ namespace Hangfire.PostgreSql.Tests
 
         jobStorageConnection.RemoveTimedOutServers(TimeSpan.FromHours(15));
 
-        dynamic liveServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
-        Assert.Equal("server2", liveServer.id);
+        dynamic liveServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"server".GetProperDbObjectName()}""").Single();
+        Assert.Equal("server2", DbQueryHelper.IsUpperCase ? liveServer.ID : liveServer.id);
       });
     }
 
@@ -664,7 +720,8 @@ namespace Hangfire.PostgreSql.Tests
     public void GetAllItemsFromSet_ReturnsAllItems()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+        (""{"key".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
         VALUES (@Key, 0.0, @Value)
       ";
 
@@ -718,10 +775,20 @@ namespace Hangfire.PostgreSql.Tests
           { "Key2", "Value2" },
         });
 
-        Dictionary<string, string> result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""hash"" WHERE ""key"" = @Key",
+        Dictionary<string, string> result = null;
+        if (DbQueryHelper.IsUpperCase)
+        {
+          result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" WHERE ""{"key".GetProperDbObjectName()}"" = @Key",
+            new { Key = "some-hash" })
+          .ToDictionary(x => (string)x.FIELD, x => (string)x.VALUE);
+        }
+        else
+        {
+          result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" WHERE ""{"key".GetProperDbObjectName()}"" = @Key",
             new { Key = "some-hash" })
           .ToDictionary(x => (string)x.field, x => (string)x.value);
-
+        }
+        
         Assert.Equal("Value1", result["Key1"]);
         Assert.Equal("Value2", result["Key2"]);
       });
@@ -764,7 +831,8 @@ namespace Hangfire.PostgreSql.Tests
     public void GetAllEntriesFromHash_ReturnsAllKeysAndTheirValues()
     {
       string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""hash"" (""key"", ""field"", ""value"")
+        INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+        (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"")
         VALUES (@Key, @Field, @Value)
       ";
 
@@ -808,10 +876,11 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetSetCount_ReturnsNumberOfElements_InASet()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, score) VALUES (@Key, @Value, 0.0)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""
+                          (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"") VALUES (@Key, @Value, 0.0)";
 
       UseConnections((connection, jobStorageConnection) => {
-        connection.Execute(arrangeSql, new [] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "set-1", Value = "value-1" },
           new { Key = "set-2", Value = "value-1" },
           new { Key = "set-1", Value = "value-2" },
@@ -844,7 +913,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetAllItemsFromList_ReturnsAllItems_FromAGivenList()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".list (key, value) VALUES (@Key, @Value)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""
+                          (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"") VALUES (@Key, @Value)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -883,7 +953,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetCounter_ReturnsSumOfValues_InCounterTable()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".counter (key, value) VALUES (@Key, @Value)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""
+                            (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"") VALUES (@Key, @Value)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -922,7 +993,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetListCount_ReturnsTheNumberOfListElements()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""list""(""key"") VALUES (@Key)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""(""{"key".GetProperDbObjectName()}"") VALUES (@Key)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -961,7 +1032,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetListTtl_ReturnsExpirationTimeForList()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".list (key, expireat) VALUES (@Key, @ExpireAt)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}"" 
+                            (""{"key".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") VALUES (@Key, @ExpireAt)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -1004,7 +1076,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetRangeFromList_ReturnsAllEntries_WithinGivenBounds()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".list (key, value) VALUES (@Key, @Value)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}"" 
+                             (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"") VALUES (@Key, @Value)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -1045,7 +1118,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetHashCount_ReturnsNumber_OfHashFields()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (key, field) VALUES (@Key, @Field)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                            (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"") VALUES (@Key, @Field)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -1084,7 +1158,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetHashTtl_ReturnsExpirationTimeForHash()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (key, field, expireat) VALUES (@Key, @Field, @ExpireAt)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                            (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") VALUES (@Key, @Field, @ExpireAt)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -1113,10 +1188,11 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetRangeFromSet_ReturnsPagedElements()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, score) VALUES (@Key, @Value, 0.0)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""
+                            (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"") VALUES (@Key, @Value, 0.0)";
 
       UseConnections((connection, jobStorageConnection) => {
-        connection.Execute(arrangeSql, new [] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "set-1", Value = "1" },
           new { Key = "set-1", Value = "2" },
           new { Key = "set-1", Value = "3" },
@@ -1152,7 +1228,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetSetTtl_ReturnsExpirationTime_OfAGivenSet()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, expireat, score) VALUES (@Key, @Value, @ExpireAt, 0.0)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}"" 
+                          (""{"key".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"", ""{"score".GetProperDbObjectName()}"") VALUES (@Key, @Value, @ExpireAt, 0.0)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -1206,7 +1283,8 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetValueFromHash_ReturnsValue_OfAGivenField()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".hash (key, field, value) VALUES (@Key, @Field, @Value)";
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                          (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"value".GetProperDbObjectName()}"") VALUES (@Key, @Field, @Value)";
 
       UseConnections((connection, jobStorageConnection) => {
         // Arrange
@@ -1263,15 +1341,15 @@ namespace Hangfire.PostgreSql.Tests
       UseConnections((connection, _) => {
         if (completeTransactionScope)
         {
-          dynamic sqlJob = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").Single();
-          Assert.Equal(jobId, sqlJob.id.ToString());
-          Assert.Equal(createdAt, sqlJob.createdat);
-          Assert.Null((long?)sqlJob.stateid);
-          Assert.Null((string)sqlJob.statename);
+          dynamic sqlJob = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}""").Single();
+          Assert.Equal(jobId, DbQueryHelper.IsUpperCase ? sqlJob.ID.ToString() : sqlJob.id.ToString());
+          Assert.Equal(createdAt, DbQueryHelper.IsUpperCase ? sqlJob.CREATEDAT : sqlJob.createdat);
+          Assert.Null(DbQueryHelper.IsUpperCase ? (long?)sqlJob.STATEID : (long?)sqlJob.stateid);
+          Assert.Null(DbQueryHelper.IsUpperCase ? (string)sqlJob.STATENAME : (string)sqlJob.statename);
         }
         else
         {
-          TestJob job = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").SingleOrDefault();
+          TestJob job = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"job".GetProperDbObjectName()}""").SingleOrDefault();
           Assert.Null(job);
         }
       });
