@@ -105,8 +105,20 @@ namespace Hangfire.PostgreSql.Tests
         VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""{"id".GetProperDbObjectName()}""";
 
       UseConnection(connection => {
-        dynamic jobId = connection.Query(arrangeSql).Single().id.ToString();
-        dynamic anotherJobId = connection.Query(arrangeSql).Single().id.ToString();
+        var query = connection.Query(arrangeSql).Single();
+        var anotherQuery = connection.Query(arrangeSql).Single();
+        var jobId = "";
+        var anotherJobId = "";
+        if (DbQueryHelper.IsUpperCase)
+        {
+          jobId = query.ID.ToString();
+          anotherJobId = anotherQuery.ID.ToString();
+        }
+        else
+        {
+          jobId = query.id.ToString();
+          anotherJobId = anotherQuery.id.ToString();
+        }
 
         Mock<IState> state = new Mock<IState>();
         state.Setup(x => x.Name).Returns("State");
@@ -116,21 +128,21 @@ namespace Hangfire.PostgreSql.Tests
 
         Commit(connection, x => x.SetJobState(jobId, state.Object));
 
-        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId);
+        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId, DbQueryHelper.IsUpperCase);
 
         Assert.Equal("State", job.StateName);
         Assert.NotNull(job.StateId);
 
-        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId);
+        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId, DbQueryHelper.IsUpperCase);
         Assert.Null(anotherJob.StateName);
         Assert.Null(anotherJob.StateId);
 
         dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").Single();
-        Assert.Equal((string)jobId, jobState.jobid.ToString());
-        Assert.Equal("State", jobState.name);
-        Assert.Equal("Reason", jobState.reason);
-        Assert.NotNull(jobState.createdat);
-        Assert.Equal("{\"Name\":\"Value\"}", jobState.data);
+        Assert.Equal((string)jobId, DbQueryHelper.IsUpperCase ? jobState.JOBID.ToString() : jobState.jobid.ToString());
+        Assert.Equal("State", DbQueryHelper.IsUpperCase ? jobState.NAME : jobState.name);
+        Assert.Equal("Reason", DbQueryHelper.IsUpperCase ? jobState.REASON : jobState.reason);
+        Assert.NotNull(DbQueryHelper.IsUpperCase ? jobState.CREATEDAT : jobState.createdat);
+        Assert.Equal("{\"Name\":\"Value\"}", DbQueryHelper.IsUpperCase ? jobState.DATA : jobState.data);
       });
     }
 
@@ -159,8 +171,18 @@ namespace Hangfire.PostgreSql.Tests
       string jobId = null;
       string anotherJobId = null;
       UseConnection(connection => {
-        jobId = connection.Query(arrangeSql).Single().id.ToString();
-        anotherJobId = connection.Query(arrangeSql).Single().id.ToString();
+        var query = connection.Query(arrangeSql).Single();
+        var anotherQuery = connection.Query(arrangeSql).Single();
+        if (DbQueryHelper.IsUpperCase)
+        {
+          jobId = query.ID.ToString();
+          anotherJobId = anotherQuery.ID.ToString();
+        }
+        else
+        {
+          jobId = query.id.ToString();
+          anotherJobId = anotherQuery.id.ToString();
+        }
       });
 
       using (TransactionScope scope = CreateTransactionScope())
@@ -181,18 +203,18 @@ namespace Hangfire.PostgreSql.Tests
       }
 
       UseConnection(connection => {
-        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId);
+        TestJob job = Helper.GetTestJob(connection, GetSchemaName(), jobId, DbQueryHelper.IsUpperCase);
         if (completeTransactionScope)
         {
           Assert.Equal("State", job.StateName);
           Assert.NotNull(job.StateId);
 
-          dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").Single();
-          Assert.Equal(jobId, jobState.jobid.ToString());
-          Assert.Equal("State", jobState.name);
-          Assert.Equal("Reason", jobState.reason);
-          Assert.NotNull(jobState.createdat);
-          Assert.Equal("{\"Name\":\"Value\"}", jobState.data);
+          dynamic jobState = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").Single();         
+          Assert.Equal(jobId, DbQueryHelper.IsUpperCase ? jobState.JOBID.ToString() : jobState.jobid.ToString());
+          Assert.Equal("State", DbQueryHelper.IsUpperCase ? jobState.NAME : jobState.name);
+          Assert.Equal("Reason", DbQueryHelper.IsUpperCase ? jobState.REASON : jobState.reason);
+          Assert.NotNull(DbQueryHelper.IsUpperCase ? jobState.CREATEDAT : jobState.createdat);
+          Assert.Equal("{\"Name\":\"Value\"}", DbQueryHelper.IsUpperCase ? jobState.DATA : jobState.data);
         }
         else
         {
@@ -202,7 +224,7 @@ namespace Hangfire.PostgreSql.Tests
           Assert.Null(connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"state".GetProperDbObjectName()}""").SingleOrDefault());
         }
 
-        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId);
+        TestJob anotherJob = Helper.GetTestJob(connection, GetSchemaName(), anotherJobId, DbQueryHelper.IsUpperCase);
         Assert.Null(anotherJob.StateName);
         Assert.Null(anotherJob.StateId);
       });
@@ -289,9 +311,9 @@ namespace Hangfire.PostgreSql.Tests
 
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal(1, record.value);
-        Assert.Equal((DateTime?)null, record.expireat);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal(1, DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
+        Assert.Equal((DateTime?)null, DbQueryHelper.IsUpperCase ? record.EXPIREAT : record.expireat);
       });
     }
 
@@ -304,11 +326,11 @@ namespace Hangfire.PostgreSql.Tests
 
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal(1, record.value);
-        Assert.NotNull(record.expireat);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal(1, DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
+        Assert.NotNull(DbQueryHelper.IsUpperCase ? record.EXPIREAT : record.expireat);
 
-        DateTime expireAt = (DateTime)record.expireat;
+        DateTime expireAt = DbQueryHelper.IsUpperCase ? (DateTime)record.EXPIREAT : (DateTime)record.expireat;
 
         Assert.True(DateTime.UtcNow.AddHours(23) < expireAt);
         Assert.True(expireAt < DateTime.UtcNow.AddHours(25));
@@ -340,9 +362,9 @@ namespace Hangfire.PostgreSql.Tests
 
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal(-1, record.value);
-        Assert.Equal((DateTime?)null, record.expireat);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal(-1, DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
+        Assert.Equal((DateTime?)null, DbQueryHelper.IsUpperCase ? record.EXPIREAT : record.expireat);
       });
     }
 
@@ -355,11 +377,11 @@ namespace Hangfire.PostgreSql.Tests
 
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"counter".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal(-1, record.value);
-        Assert.NotNull(record.expireat);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal(-1, DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
+        Assert.NotNull(DbQueryHelper.IsUpperCase ? record.EXPIREAT : record.expireat);
 
-        DateTime expireAt = (DateTime)record.expireat;
+        DateTime expireAt = DbQueryHelper.IsUpperCase ? (DateTime)record.EXPIREAT : (DateTime)record.expireat;
 
         Assert.True(DateTime.UtcNow.AddHours(23) < expireAt);
         Assert.True(expireAt < DateTime.UtcNow.AddHours(25));
@@ -391,9 +413,9 @@ namespace Hangfire.PostgreSql.Tests
 
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal("my-value", record.value);
-        Assert.Equal(0.0, record.score, 2);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal("my-value", DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
+        Assert.Equal(0.0, DbQueryHelper.IsUpperCase ? record.SCORE : record.score, 2);
       });
     }
 
@@ -438,9 +460,9 @@ namespace Hangfire.PostgreSql.Tests
 
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""").Single();
 
-        Assert.Equal("my-key", record.key);
-        Assert.Equal("my-value", record.value);
-        Assert.Equal(3.2, record.score, 3);
+        Assert.Equal("my-key", DbQueryHelper.IsUpperCase ? record.KEY : record.key);
+        Assert.Equal("my-value", DbQueryHelper.IsUpperCase ? record.VALUE : record.value);
+        Assert.Equal(3.2, DbQueryHelper.IsUpperCase ? record.SCORE : record.score, 3);
       });
     }
 
@@ -776,10 +798,20 @@ namespace Hangfire.PostgreSql.Tests
           { "Key2", "Value2" },
         }));
 
-        Dictionary<string, string> result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
-                                                                WHERE ""{"key".GetProperDbObjectName()}"" = @Key",
-            new { Key = "some-hash" })
-          .ToDictionary(x => (string)x.field, x => (string)x.value);
+        Dictionary<string, string> result = null;
+        if (DbQueryHelper.IsUpperCase)
+        {
+          result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                                                                WHERE ""{"key".GetProperDbObjectName()}"" = @Key", new { Key = "some-hash" })
+                             .ToDictionary(x => (string)x.FIELD, x => (string)x.VALUE);
+        }
+        else
+        {
+          result = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}"" 
+                                                                WHERE ""{"key".GetProperDbObjectName()}"" = @Key", new { Key = "some-hash" })
+                              .ToDictionary(x => (string)x.field, x => (string)x.value);
+        }
+
 
         Assert.Equal("Value1", result["Key1"]);
         Assert.Equal("Value2", result["Key2"]);
@@ -909,8 +941,17 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.ExpireHash("hash-1", TimeSpan.FromMinutes(60)));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""")
-                                                           .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        Dictionary<string, DateTime?> records = null;
+        if (!DbQueryHelper.IsUpperCase)
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        }
+        else
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.KEY, x => (DateTime?)x.EXPIREAT);
+        }
         Assert.True(DateTime.UtcNow.AddMinutes(59) < records["hash-1"]);
         Assert.True(records["hash-1"] < DateTime.UtcNow.AddMinutes(61));
         Assert.Null(records["hash-2"]);
@@ -947,9 +988,19 @@ namespace Hangfire.PostgreSql.Tests
         // Act
         Commit(connection, x => x.ExpireSet("set-1", TimeSpan.FromMinutes(60)));
 
-        // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
-          .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        // Assert      
+        Dictionary<string, DateTime?> records = null;
+        if (!DbQueryHelper.IsUpperCase)
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        }
+        else
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.KEY, x => (DateTime?)x.EXPIREAT);
+        }
+
         Assert.True(DateTime.UtcNow.AddMinutes(59) < records["set-1"]);
         Assert.True(records["set-1"] < DateTime.UtcNow.AddMinutes(61));
         Assert.Null(records["set-2"]);
@@ -985,9 +1036,19 @@ namespace Hangfire.PostgreSql.Tests
         // Act
         Commit(connection, x => x.ExpireList("list-1", TimeSpan.FromMinutes(60)));
 
-        // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
-          .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        // Assert        
+        Dictionary<string, DateTime?> records = null;
+        if (!DbQueryHelper.IsUpperCase)
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        }
+        else
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.KEY, x => (DateTime?)x.EXPIREAT);
+        }
+
         Assert.True(DateTime.UtcNow.AddMinutes(59) < records["list-1"]);
         Assert.True(records["list-1"] < DateTime.UtcNow.AddMinutes(61));
         Assert.Null(records["list-2"]);
@@ -1009,7 +1070,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void PersistHash_ClearsExpirationTime_OnAGivenHash()
     {
-      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".{"hash".GetProperDbObjectName()} 
+      string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""
                           (""{"key".GetProperDbObjectName()}"", ""{"field".GetProperDbObjectName()}"", ""{"expireat".GetProperDbObjectName()}"") VALUES (@Key, @Field, @ExpireAt)";
 
       UseConnection(connection => {
@@ -1023,8 +1084,19 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.PersistHash("hash-1"));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".{"hash".GetProperDbObjectName()}")
-          .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        Dictionary<string, DateTime?> records = null;
+
+        if (DbQueryHelper.IsUpperCase)
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.KEY, x => (DateTime?)x.EXPIREAT);
+        }
+        else
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"hash".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        }
+
         Assert.Null(records["hash-1"]);
         Assert.NotNull(records["hash-2"]);
       });
@@ -1060,8 +1132,20 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.PersistSet("set-1"));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
-          .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        Dictionary<string, DateTime?> records = null;
+
+        if (DbQueryHelper.IsUpperCase)
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.KEY, x => (DateTime?)x.EXPIREAT);
+        }
+        else
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"set".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        }
+
+
         Assert.Null(records["set-1"]);
         Assert.NotNull(records["set-2"]);
       });
@@ -1096,8 +1180,20 @@ namespace Hangfire.PostgreSql.Tests
         Commit(connection, x => x.PersistList("list-1"));
 
         // Assert
-        Dictionary<string, DateTime?> records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
-          .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        Dictionary<string, DateTime?> records = null;
+
+        if (DbQueryHelper.IsUpperCase)
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.KEY, x => (DateTime?)x.EXPIREAT);
+        }
+        else
+        {
+          records = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"list".GetProperDbObjectName()}""")
+                              .ToDictionary(x => (string)x.key, x => (DateTime?)x.expireat);
+        }
+
+
         Assert.Null(records["list-1"]);
         Assert.NotNull(records["list-2"]);
       });
@@ -1128,9 +1224,9 @@ namespace Hangfire.PostgreSql.Tests
 
       UseConnection(connection => {
         dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""{"jobqueue".GetProperDbObjectName()}""").Single();
-        Assert.Equal(jobId, record.jobid.ToString());
-        Assert.Equal("default", record.queue);
-        Assert.Null(record.FetchedAt);
+        Assert.Equal(jobId, DbQueryHelper.IsUpperCase ? record.JOBID?.ToString() : record.jobid.ToString());
+        Assert.Equal("default", DbQueryHelper.IsUpperCase ? record.QUEUE : record.queue);
+        Assert.Null(DbQueryHelper.IsUpperCase ? record.FETCHEDAT : record.FetchedAt);
       });
     }
 
