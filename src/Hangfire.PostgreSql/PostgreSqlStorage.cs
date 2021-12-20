@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -237,7 +237,7 @@ namespace Hangfire.PostgreSql
     {
       isolationLevel = isolationLevel ?? IsolationLevel.ReadCommitted;
 
-      if (IsRunningOnWindows())
+      if (IsRunningOnWindows() || Options.EnableTransactionScopeEnlistment)
       {
         using (TransactionScope transaction = CreateTransaction(isolationLevel))
         {
