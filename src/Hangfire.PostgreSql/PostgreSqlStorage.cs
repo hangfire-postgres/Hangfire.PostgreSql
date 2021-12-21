@@ -237,7 +237,7 @@ namespace Hangfire.PostgreSql
     {
       isolationLevel = isolationLevel ?? IsolationLevel.ReadCommitted;
 
-      if (!IsRunningOnMono())
+      if (!EnvironmentHelpers.IsMono())
       {
         using (TransactionScope transaction = CreateTransaction(isolationLevel))
         {
@@ -317,12 +317,6 @@ namespace Hangfire.PostgreSql
       {
         PostgreSqlJobQueue._newItemInQueueEvent.Set();
       }
-    }
-
-    private static bool? _isRunningOnMono;
-    private static bool IsRunningOnMono()
-    {
-      return _isRunningOnMono ??= Type.GetType("Mono.Runtime") != null;
     }
 
     private static TransactionScope CreateTransaction(IsolationLevel? isolationLevel)
