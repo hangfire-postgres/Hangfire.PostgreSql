@@ -237,7 +237,7 @@ namespace Hangfire.PostgreSql
     {
       isolationLevel = isolationLevel ?? IsolationLevel.ReadCommitted;
 
-      if (IsRunningOnWindows() || Options.EnableTransactionScopeEnlistment)
+      if (!IsRunningOnMono())
       {
         using (TransactionScope transaction = CreateTransaction(isolationLevel))
         {
@@ -319,13 +319,10 @@ namespace Hangfire.PostgreSql
       }
     }
 
-    private static bool IsRunningOnWindows()
+    private static bool? _isRunningOnMono;
+    private static bool IsRunningOnMono()
     {
-#if !NETSTANDARD1_3
-      return Environment.OSVersion.Platform == PlatformID.Win32NT;
-#else
-            return System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
-#endif
+      return _isRunningOnMono ??= Type.GetType("Mono.Runtime") != null;
     }
 
     private static TransactionScope CreateTransaction(IsolationLevel? isolationLevel)
