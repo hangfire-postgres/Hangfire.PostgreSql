@@ -191,7 +191,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES (@InvocationData, @Arguments, @StateName, NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -239,15 +239,15 @@ namespace Hangfire.PostgreSql.Tests
     {
       string createJobSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES ('', '', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id"";
+        VALUES ('', '', '', NOW()) RETURNING ""id"";
       ";
 
       string createStateSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""createdat"")
-        VALUES(@JobId, 'old-state', NOW() AT TIME ZONE 'UTC');
+        VALUES(@JobId, 'old-state', NOW());
 
         INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
-        VALUES(@JobId, @Name, @Reason, @Data, NOW() AT TIME ZONE 'UTC')
+        VALUES(@JobId, @Name, @Reason, @Data, NOW())
         RETURNING ""id"";
       ";
 
@@ -284,7 +284,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, @StateName, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES (@InvocationData, @Arguments, @StateName, NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -329,7 +329,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES ('', '', NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -350,7 +350,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES ('', '', NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -372,7 +372,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES ('', '', NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -426,7 +426,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH ""insertedjob"" AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+          VALUES ('', '', NOW()) RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobparameter"" (""jobid"", ""name"", ""value"")
         SELECT ""insertedjob"".""id"", @Name, @Value
@@ -557,8 +557,8 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
-        VALUES ('Server1', '', NOW() AT TIME ZONE 'UTC'),
-        ('Server2', '', NOW() AT TIME ZONE 'UTC')
+        VALUES ('Server1', '', NOW()),
+        ('Server2', '', NOW())
       ";
 
       UseConnections((connection, jobStorageConnection) => {

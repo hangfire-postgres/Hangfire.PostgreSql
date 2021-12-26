@@ -84,7 +84,7 @@ namespace Hangfire.PostgreSql
 
       string fetchJobSqlTemplate = $@"
         UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC'
+        SET ""fetchedat"" = NOW()
         WHERE ""id"" = (
           SELECT ""id"" 
           FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
@@ -99,7 +99,7 @@ namespace Hangfire.PostgreSql
 
       string[] fetchConditions = {
         "IS NULL",
-        $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
+        $"< NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
       };
       
       int fetchConditionsIndex = 0;
@@ -184,7 +184,7 @@ namespace Hangfire.PostgreSql
 
       string markJobAsFetchedSql = $@"
         UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NOW() AT TIME ZONE 'UTC', 
+        SET ""fetchedat"" = NOW(), 
             ""updatecount"" = (""updatecount"" + 1) % 2000000000
         WHERE ""id"" = @Id 
         AND ""updatecount"" = @UpdateCount
@@ -193,7 +193,7 @@ namespace Hangfire.PostgreSql
 
       string[] fetchConditions = {
         "IS NULL",
-        $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
+        $"< NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
       };
 
       int fetchConditionsIndex = 0;

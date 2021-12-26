@@ -364,7 +364,7 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @Id ""id"", @Data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
+	        SELECT @Id ""id"", @Data ""data"", NOW() ""lastheartbeat""
         ), ""updatedrows"" AS ( 
 	        UPDATE ""{_options.SchemaName}"".""server"" ""updatetarget""
 	        SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
@@ -400,7 +400,7 @@ namespace Hangfire.PostgreSql
 
       string query = $@"
         UPDATE ""{_options.SchemaName}"".""server"" 
-				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
+				SET ""lastheartbeat"" = NOW() 
 				WHERE ""id"" = @Id;
       ";
 
@@ -422,7 +422,7 @@ namespace Hangfire.PostgreSql
 
       string query = $@"
         DELETE FROM ""{_options.SchemaName}"".""server"" 
-				WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
+				WHERE ""lastheartbeat"" < (NOW() - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection.Execute(query));
     }

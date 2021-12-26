@@ -125,7 +125,7 @@ namespace Hangfire.PostgreSql.Tests
         // Arrange
         string createSql = $@"
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"") 
-          VALUES ('', '', NOW() AT TIME ZONE 'UTC', @ExpireAt)
+          VALUES ('', '', NOW(), @ExpireAt)
         ";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
 
@@ -199,7 +199,7 @@ namespace Hangfire.PostgreSql.Tests
 
       string insertSqlValue = $@"
         INSERT INTO ""{GetSchemaName()}"".""counter""(""key"", ""value"", ""expireat"")
-        VALUES (@Key, 1, NOW() AT TIME ZONE 'UTC' - interval '{{0}} seconds') RETURNING ""id""
+        VALUES (@Key, 1, NOW() - interval '{{0}} seconds') RETURNING ""id""
       ";
 
       string insertSql = expireAt == null

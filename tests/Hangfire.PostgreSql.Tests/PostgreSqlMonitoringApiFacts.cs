@@ -29,7 +29,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{ConnectionUtils.GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        VALUES (@InvocationData, @Arguments, NOW()) RETURNING ""id""";
 
       Job job = Job.FromExpression(() => SampleMethod("Hello"));
       InvocationData invocationData = InvocationData.SerializeJob(job);
