@@ -10,12 +10,27 @@ $$
 $$;
 
 -- Note: job_id_seq is already bigint as per migration script v14
-ALTER SEQUENCE counter_id_seq AS bigint;
-ALTER SEQUENCE hash_id_seq AS bigint;
-ALTER SEQUENCE jobparameter_id_seq AS bigint;
-ALTER SEQUENCE jobqueue_id_seq AS bigint;
-ALTER SEQUENCE list_id_seq AS bigint;
-ALTER SEQUENCE set_id_seq AS bigint;
-ALTER SEQUENCE state_id_seq AS bigint;
+DO
+$$
+    DECLARE
+    BEGIN
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".counter_id_seq AS bigint MAXVALUE 9223372036854775807');
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".hash_id_seq AS bigint MAXVALUE 9223372036854775807');
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".jobparameter_id_seq AS bigint MAXVALUE 9223372036854775807');
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".jobqueue_id_seq AS bigint MAXVALUE 9223372036854775807');
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".list_id_seq AS bigint MAXVALUE 9223372036854775807');
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".set_id_seq AS bigint MAXVALUE 9223372036854775807');
+        EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".state_id_seq AS bigint MAXVALUE 9223372036854775807');
+    EXCEPTION
+        WHEN syntax_error THEN
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".counter_id_seq MAXVALUE 9223372036854775807');
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".hash_id_seq MAXVALUE 9223372036854775807');
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".jobparameter_id_seq MAXVALUE 9223372036854775807');
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".jobqueue_id_seq MAXVALUE 9223372036854775807');
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".list_id_seq MAXVALUE 9223372036854775807');
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".set_id_seq MAXVALUE 9223372036854775807');
+            EXECUTE ('ALTER SEQUENCE "' || 'hangfire' || '".state_id_seq MAXVALUE 9223372036854775807');
+    END
+$$;
 
 RESET search_path;
