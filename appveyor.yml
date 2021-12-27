@@ -3,6 +3,12 @@ image: Visual Studio 2022
 platform: Any CPU
 init:
 - ps: >-
+    # Change default database session timezone from UTC to catch potential DateTime/timestamp
+    # column conversion issues during unit test runs under CI
+    # See https://github.com/frankhommers/Hangfire.PostgreSql/issues/221#issuecomment-1001277778
+
+    Add-Content "c:\program files\postgresql\9.6\data\postgresql.conf" "timezone = 'UTC+13'"
+
     Set-Content "c:\program files\postgresql\9.6\data\pg_hba.conf" "host    all             all             ::1/128            trust"
 
     Add-Content "c:\program files\postgresql\9.6\data\pg_hba.conf" "host    all             all             127.0.0.1/32            trust"
@@ -12,6 +18,8 @@ services: postgresql
 build_script:
 - ps: >-
     psql -U postgres -c "CREATE ROLE appveyor LOGIN SUPERUSER CREATEDB CREATEROLE;"
+
+    psql -U postgres -c "SHOW TIME ZONE;"
 
     createdb hangfire_tests
 
