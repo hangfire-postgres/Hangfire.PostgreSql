@@ -1,6 +1,12 @@
 ﻿version: '0.0.0.{build}'
 image: Visual Studio 2022
 platform: Any CPU
+
+environment:
+  matrix:
+    - BUILD_NPGSQL_VERSION: 5
+    - BUILD_NPGSQL_VERSION: 6
+
 init:
 - ps: >-
     # Change default database session timezone from UTC to catch potential DateTime/timestamp
@@ -23,9 +29,7 @@ build_script:
 
     createdb hangfire_tests
 
-    .\build.ps1 -t Pack
-
-    .\build.ps1 -t Pack -NpgsqlVersion 5
+    .\build.ps1 -t Pack -NpgsqlVersion $env:BUILD_NPGSQL_VERSION
 cache:
 - tools -> build.cake
 - tools -> build.ps1
