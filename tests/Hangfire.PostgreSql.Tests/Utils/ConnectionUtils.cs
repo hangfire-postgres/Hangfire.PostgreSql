@@ -46,6 +46,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static NpgsqlConnection CreateConnection()
     {
       NpgsqlConnectionStringBuilder csb = new(GetConnectionString());
+      PostgreSqlStorage.SetTimezoneToUtcForNpgsqlCompatibility(csb);
+
       NpgsqlConnection connection = new() {
         ConnectionString = csb.ToString(),
       };
@@ -57,6 +59,8 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static NpgsqlConnection CreateMasterConnection()
     {
       NpgsqlConnectionStringBuilder csb = new(GetMasterConnectionString());
+      PostgreSqlStorage.SetTimezoneToUtcForNpgsqlCompatibility(csb);
+
       NpgsqlConnection connection = new() {
         ConnectionString = csb.ToString(),
       };
