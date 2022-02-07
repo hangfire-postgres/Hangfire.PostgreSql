@@ -73,7 +73,10 @@ namespace Hangfire.PostgreSql
 
     public void Dispose()
     {
-      if (_disposed) return;
+      if (_disposed)
+      {
+        return;
+      }
 
       if (!_removedFromQueue && !_requeued)
       {

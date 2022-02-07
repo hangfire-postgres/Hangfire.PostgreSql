@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlJobQueue : IPersistentJobQueue
   {
-    internal static readonly AutoResetEvent _newItemInQueueEvent = new AutoResetEvent(true);
+    internal static readonly AutoResetEvent _newItemInQueueEvent = new(true);
     private readonly PostgreSqlStorage _storage;
 
     public PostgreSqlJobQueue(PostgreSqlStorage storage)
@@ -47,10 +47,9 @@ namespace Hangfire.PostgreSql
     [NotNull]
     public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
     {
-      if (_storage.Options.UseNativeDatabaseTransactions)
-        return Dequeue_Transaction(queues, cancellationToken);
-
-      return Dequeue_UpdateCount(queues, cancellationToken);
+      return _storage.Options.UseNativeDatabaseTransactions
+        ? Dequeue_Transaction(queues, cancellationToken)
+        : Dequeue_UpdateCount(queues, cancellationToken);
     }
 
     public void Enqueue(IDbConnection connection, string queue, string jobId)
@@ -61,7 +60,7 @@ namespace Hangfire.PostgreSql
       ";
 
       connection.Execute(enqueueJobSql,
-        new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue});
+        new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
     }
 
     /// <summary>
@@ -76,8 +75,15 @@ namespace Hangfire.PostgreSql
     [NotNull]
     internal IFetchedJob Dequeue_Transaction(string[] queues, CancellationToken cancellationToken)
     {
-      if (queues == null) throw new ArgumentNullException(nameof(queues));
-      if (queues.Length == 0) throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
+      if (queues == null)
+      {
+        throw new ArgumentNullException(nameof(queues));
+      }
+
+      if (queues.Length == 0)
+      {
+        throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
+      }
 
       long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
       FetchedJob fetchedJob;
@@ -101,7 +107,7 @@ namespace Hangfire.PostgreSql
         "IS NULL",
         $"< NOW() AT TIME ZONE 'UTC' + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
       };
-      
+
       int fetchConditionsIndex = 0;
       do
       {
@@ -110,34 +116,32 @@ namespace Hangfire.PostgreSql
         string fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[fetchConditionsIndex]);
 
         Utils.Utils.TryExecute(() => {
-            NpgsqlConnection connection = _storage.CreateAndOpenConnection();
+          NpgsqlConnection connection = _storage.CreateAndOpenConnection();
 
-            try
-            {
-              using (NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-              {
-                FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobSql,
-                    new { Queues = queues.ToList() }, trx)
-                  .SingleOrDefault();
+          try
+          {
+            using NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted);
+            FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobSql,
+                new { Queues = queues.ToList() }, trx)
+              .SingleOrDefault();
 
-                trx.Commit();
+            trx.Commit();
 
-                return jobToFetch;
-              }
-            }
-            catch (InvalidOperationException)
-            {
-              // thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
-            }
-            finally
-            {
-              _storage.ReleaseConnection(connection);
-            }
+            return jobToFetch;
+          }
+          catch (InvalidOperationException)
+          {
+            // thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
+          }
+          finally
+          {
+            _storage.ReleaseConnection(connection);
+          }
 
-            return null;
-          },
+          return null;
+        },
           out fetchedJob,
-          ex => ex is PostgresException postgresException && postgresException.SqlState.Equals(PostgresErrorCodes.SerializationFailure));
+          ex => ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure });
 
         if (fetchedJob == null && fetchConditionsIndex == fetchConditions.Length - 1)
         {
@@ -152,7 +156,7 @@ namespace Hangfire.PostgreSql
         }
         fetchConditionsIndex++;
         fetchConditionsIndex %= fetchConditions.Length;
-      } 
+      }
       while (fetchedJob == null);
 
       return new PostgreSqlFetchedJob(_storage,
@@ -165,9 +169,15 @@ namespace Hangfire.PostgreSql
     [NotNull]
     internal IFetchedJob Dequeue_UpdateCount(string[] queues, CancellationToken cancellationToken)
     {
-      if (queues == null) throw new ArgumentNullException("queues");
-      if (queues.Length == 0) throw new ArgumentException("Queue array must be non-empty.", "queues");
+      if (queues == null)
+      {
+        throw new ArgumentNullException(nameof(queues));
+      }
 
+      if (queues.Length == 0)
+      {
+        throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
+      }
 
       long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
       FetchedJob markJobAsFetched = null;
@@ -228,7 +238,7 @@ namespace Hangfire.PostgreSql
         }
         fetchConditionsIndex++;
         fetchConditionsIndex %= fetchConditions.Length;
-      } 
+      }
       while (markJobAsFetched == null);
 
       return new PostgreSqlFetchedJob(_storage,

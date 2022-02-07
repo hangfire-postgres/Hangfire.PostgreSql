@@ -37,7 +37,9 @@ namespace Hangfire.PostgreSql
     public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
     {
       if (connection == null)
+      {
         throw new ArgumentNullException(nameof(connection));
+      }
 
       _logger.Info("Start installing Hangfire SQL objects...");
 
@@ -66,32 +68,27 @@ namespace Hangfire.PostgreSql
 
           if (!VersionAlreadyApplied(connection, schemaName, version))
           {
-            using (NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable))
+            using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
+            using NpgsqlCommand command = new(script, connection, transaction);
+            command.CommandTimeout = 120;
+            try
             {
 #pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-              using (NpgsqlCommand command = new NpgsqlCommand(script, connection, transaction))
+              command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
 #pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
+              command.Parameters.AddWithValue("Version", version);
+              command.Parameters.AddWithValue("PreviousVersion", previousVersion);
+
+              command.ExecuteNonQuery();
+
+              transaction.Commit();
+            }
+            catch (PostgresException ex)
+            {
+              if ((ex.MessageText ?? "") != "version-already-applied")
               {
-                command.CommandTimeout = 120;
-                try
-                {
-#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-                  command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
-#pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
-                  command.Parameters.AddWithValue("Version", version);
-                  command.Parameters.AddWithValue("PreviousVersion", previousVersion);
-
-                  command.ExecuteNonQuery();
-
-                  transaction.Commit();
-                }
-                catch (PostgresException ex)
-                {
-                  if ((ex.MessageText ?? "") != "version-already-applied")
-                  {
-                    throw;
-                  }
-                }
+                throw;
               }
             }
           }
@@ -115,19 +112,20 @@ namespace Hangfire.PostgreSql
     {
       try
       {
-        using (NpgsqlCommand command =
-          new NpgsqlCommand($@"SELECT true :: boolean ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version""::integer >= @Version",
-            connection))
+        using NpgsqlCommand command = new($@"SELECT true :: boolean ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version""::integer >= @Version", connection);
+        command.Parameters.AddWithValue("Version", version);
+        object result = command.ExecuteScalar();
+        if (true.Equals(result))
         {
-          command.Parameters.AddWithValue("Version", version);
-          object result = command.ExecuteScalar();
-          if (true.Equals(result)) return true;
+          return true;
         }
       }
       catch (PostgresException ex)
       {
         if (ex.SqlState.Equals(PostgresErrorCodes.UndefinedTable)) //42P01: Relation (table) does not exist. So no schema table yet.
+        {
           return false;
+        }
 
         throw;
       }
@@ -137,16 +135,14 @@ namespace Hangfire.PostgreSql
 
     private static string GetStringResource(Assembly assembly, string resourceName)
     {
-      using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+      using Stream stream = assembly.GetManifestResourceStream(resourceName);
+      if (stream == null)
       {
-        if (stream == null)
-          throw new MissingManifestResourceException($"Requested resource `{resourceName}` was not found in the assembly `{assembly}`.");
-
-        using (StreamReader reader = new StreamReader(stream))
-        {
-          return reader.ReadToEnd();
-        }
+        throw new MissingManifestResourceException($"Requested resource `{resourceName}` was not found in the assembly `{assembly}`.");
       }
+
+      using StreamReader reader = new(stream);
+      return reader.ReadToEnd();
     }
   }
 }

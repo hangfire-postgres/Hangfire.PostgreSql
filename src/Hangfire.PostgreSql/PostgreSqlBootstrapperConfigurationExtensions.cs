@@ -71,7 +71,7 @@ namespace Hangfire.PostgreSql
       Action<NpgsqlConnection> connectionSetup,
       PostgreSqlStorageOptions options)
     {
-      PostgreSqlStorage storage = new PostgreSqlStorage(nameOrConnectionString, connectionSetup, options);
+      PostgreSqlStorage storage = new(nameOrConnectionString, connectionSetup, options);
 
       return configuration.UseStorage(storage);
     }

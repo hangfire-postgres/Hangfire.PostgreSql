@@ -81,7 +81,7 @@ namespace Hangfire.PostgreSql
     {
       return GetJobs(from, count,
         ProcessingState.StateName,
-        (sqlJob, job, stateData) => new ProcessingJobDto {
+        (_, job, stateData) => new ProcessingJobDto {
           Job = job,
           ServerId = stateData.ContainsKey("ServerId") ? stateData["ServerId"] : stateData["ServerName"],
           StartedAt = JobHelper.DeserializeDateTime(stateData["StartedAt"]),
@@ -92,7 +92,7 @@ namespace Hangfire.PostgreSql
     {
       return GetJobs(from, count,
         ScheduledState.StateName,
-        (sqlJob, job, stateData) => new ScheduledJobDto {
+        (_, job, stateData) => new ScheduledJobDto {
           Job = job,
           EnqueueAt = JobHelper.DeserializeDateTime(stateData["EnqueueAt"]),
           ScheduledAt = JobHelper.DeserializeDateTime(stateData["ScheduledAt"]),
@@ -112,22 +112,19 @@ namespace Hangfire.PostgreSql
     public IList<ServerDto> Servers()
     {
       return UseConnection(connection => {
-        List<Entities.Server> servers = connection.Query<Entities.Server>($@"SELECT * FROM ""{_storage.Options.SchemaName}"".""server""")
+        List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>($@"SELECT * FROM ""{_storage.Options.SchemaName}"".""server""")
+          .AsEnumerable()
+          .Select(server => (server, SerializationHelper.Deserialize<ServerData>(server.Data)))
           .ToList();
 
-        List<ServerDto> result = new List<ServerDto>();
+        List<ServerDto> result = servers.Select(item => new ServerDto {
+          Name = item.Server.Id,
+          Heartbeat = item.Server.LastHeartbeat,
+          Queues = item.Data.Queues,
+          StartedAt = item.Data.StartedAt ?? DateTime.MinValue,
+          WorkersCount = item.Data.WorkerCount,
+        }).ToList();
 
-        foreach (Entities.Server server in servers)
-        {
-          ServerData data = SerializationHelper.Deserialize<ServerData>(server.Data);
-          result.Add(new ServerDto {
-            Name = server.Id,
-            Heartbeat = server.LastHeartbeat,
-            Queues = data.Queues,
-            StartedAt = data.StartedAt ?? DateTime.MinValue,
-            WorkersCount = data.WorkerCount,
-          });
-        }
         return result;
       });
     }
@@ -152,7 +149,7 @@ namespace Hangfire.PostgreSql
       return GetJobs(from,
         count,
         SucceededState.StateName,
-        (sqlJob, job, stateData) => new SucceededJobDto {
+        (_, job, stateData) => new SucceededJobDto {
           Job = job,
           Result = stateData.ContainsKey("Result") ? stateData["Result"] : null,
           TotalDuration = stateData.ContainsKey("PerformanceDuration") && stateData.ContainsKey("Latency")
@@ -167,7 +164,7 @@ namespace Hangfire.PostgreSql
       return GetJobs(from,
         count,
         DeletedState.StateName,
-        (sqlJob, job, stateData) => new DeletedJobDto {
+        (_, job, stateData) => new DeletedJobDto {
           Job = job,
           DeletedAt = JobHelper.DeserializeNullableDateTime(stateData["DeletedAt"]),
         });
@@ -181,7 +178,7 @@ namespace Hangfire.PostgreSql
         .OrderBy(x => x.Queue)
         .ToArray();
 
-      List<QueueWithTopEnqueuedJobsDto> result = new List<QueueWithTopEnqueuedJobsDto>(tuples.Length);
+      List<QueueWithTopEnqueuedJobsDto> result = new(tuples.Length);
 
       foreach (var tuple in tuples)
       {
@@ -242,31 +239,32 @@ namespace Hangfire.PostgreSql
           WHERE ""jobid"" = @Id 
           ORDER BY ""id"" DESC;
         ";
-        using (SqlMapper.GridReader multi = connection.QueryMultiple(sql, new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) }))
+        using SqlMapper.GridReader multi = connection.QueryMultiple(sql, new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) });
+        SqlJob job = multi.Read<SqlJob>().SingleOrDefault();
+        if (job == null)
         {
-          SqlJob job = multi.Read<SqlJob>().SingleOrDefault();
-          if (job == null) return null;
-
-          Dictionary<string, string> parameters = multi.Read<JobParameter>().ToDictionary(x => x.Name, x => x.Value);
-          List<StateHistoryDto> history =
-            multi.Read<SqlState>()
-              .ToList()
-              .Select(x => new StateHistoryDto {
-                StateName = x.Name,
-                CreatedAt = x.CreatedAt,
-                Reason = x.Reason,
-                Data = new SafeDictionary<string, string>(SerializationHelper.Deserialize<Dictionary<string, string>>(x.Data),
-                  StringComparer.OrdinalIgnoreCase),
-              })
-              .ToList();
-
-          return new JobDetailsDto {
-            CreatedAt = job.CreatedAt,
-            Job = DeserializeJob(job.InvocationData, job.Arguments),
-            History = history,
-            Properties = parameters,
-          };
+          return null;
         }
+
+        Dictionary<string, string> parameters = multi.Read<JobParameter>().ToDictionary(x => x.Name, x => x.Value);
+        List<StateHistoryDto> history =
+          multi.Read<SqlState>()
+            .ToList()
+            .Select(x => new StateHistoryDto {
+              StateName = x.Name,
+              CreatedAt = x.CreatedAt,
+              Reason = x.Reason,
+              Data = new SafeDictionary<string, string>(SerializationHelper.Deserialize<Dictionary<string, string>>(x.Data),
+                StringComparer.OrdinalIgnoreCase),
+            })
+            .ToList();
+
+        return new JobDetailsDto {
+          CreatedAt = job.CreatedAt,
+          Job = DeserializeJob(job.InvocationData, job.Arguments),
+          History = history,
+          Properties = parameters,
+        };
       });
     }
 
@@ -305,7 +303,7 @@ namespace Hangfire.PostgreSql
           WHERE ""key"" = 'recurring-jobs';
         ";
 
-        StatisticsDto stats = new StatisticsDto();
+        StatisticsDto stats = new();
         using (SqlMapper.GridReader multi = connection.QueryMultiple(sql))
         {
           Dictionary<string, long> countByStates = multi.Read<(string StateName, long Count)>()
@@ -340,7 +338,7 @@ namespace Hangfire.PostgreSql
     private Dictionary<DateTime, long> GetHourlyTimelineStats(string type)
     {
       DateTime endDate = DateTime.UtcNow;
-      List<DateTime> dates = new List<DateTime>();
+      List<DateTime> dates = new();
       for (int i = 0; i < 24; i++)
       {
         dates.Add(endDate);
@@ -355,7 +353,7 @@ namespace Hangfire.PostgreSql
     private Dictionary<DateTime, long> GetTimelineStats(string type)
     {
       DateTime endDate = DateTime.UtcNow.Date;
-      List<DateTime> dates = new List<DateTime>();
+      List<DateTime> dates = new();
 
       for (int i = 0; i < 7; i++)
       {
@@ -384,10 +382,13 @@ namespace Hangfire.PostgreSql
 
       foreach (string key in keyMaps.Keys)
       {
-        if (!valuesMap.ContainsKey(key)) valuesMap.Add(key, 0);
+        if (!valuesMap.ContainsKey(key))
+        {
+          valuesMap.Add(key, 0);
+        }
       }
 
-      Dictionary<DateTime, long> result = new Dictionary<DateTime, long>();
+      Dictionary<DateTime, long> result = new();
       for (int i = 0; i < keyMaps.Count; i++)
       {
         long value = valuesMap[keyMaps.ElementAt(i).Key];
@@ -477,11 +478,11 @@ namespace Hangfire.PostgreSql
       ICollection<SqlJob> jobs,
       Func<SqlJob, Job, SafeDictionary<string, string>, TDto> selector)
     {
-      List<KeyValuePair<string, TDto>> result = new List<KeyValuePair<string, TDto>>(jobs.Count);
+      List<KeyValuePair<string, TDto>> result = new(jobs.Count);
 
       foreach (SqlJob job in jobs)
       {
-        TDto dto = default(TDto);
+        TDto dto = default;
 
         if (job.InvocationData != null)
         {
@@ -517,17 +518,11 @@ namespace Hangfire.PostgreSql
           new { JobIds = jobIds.ToList() })
         .ToList());
 
-      List<KeyValuePair<string, FetchedJobDto>> result = new List<KeyValuePair<string, FetchedJobDto>>(jobs.Count);
-
-      foreach (SqlJob job in jobs)
-      {
-        result.Add(new KeyValuePair<string, FetchedJobDto>(job.Id.ToString(),
-          new FetchedJobDto {
-            Job = DeserializeJob(job.InvocationData, job.Arguments),
-            State = job.StateName,
-            FetchedAt = job.FetchedAt,
-          }));
-      }
+      Dictionary<string, FetchedJobDto> result = jobs.ToDictionary(job => job.Id.ToString(), job => new FetchedJobDto {
+        Job = DeserializeJob(job.InvocationData, job.Arguments),
+        State = job.StateName,
+        FetchedAt = job.FetchedAt,
+      });
 
       return new JobList<FetchedJobDto>(result);
     }
@@ -548,7 +543,8 @@ namespace Hangfire.PostgreSql
 
       public new TValue this[TKey i]
       {
-        get => ContainsKey(i) ? base[i] : default(TValue);
+        // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+        get => ContainsKey(i) ? base[i] : default;
         set => base[i] = value;
       }
     }

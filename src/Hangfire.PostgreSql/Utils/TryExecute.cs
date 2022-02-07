@@ -20,6 +20,7 @@
 //    Special thanks goes to him.
 
 using System;
+// ReSharper disable ArrangeDefaultValueWhenTypeNotEvident
 
 namespace Hangfire.PostgreSql.Utils
 {
@@ -31,7 +32,7 @@ namespace Hangfire.PostgreSql.Utils
       Func<Exception, bool> swallowException = default,
       int? tryCount = default)
     {
-      while (tryCount == default(int?) || tryCount-- > 0)
+      while (tryCount == default || tryCount-- > 0)
       {
         try
         {
@@ -46,7 +47,7 @@ namespace Hangfire.PostgreSql.Utils
           }
         }
       }
-      result = default(T);
+      result = default;
       return false;
     }
   }
