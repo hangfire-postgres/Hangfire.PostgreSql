@@ -196,6 +196,16 @@ namespace Hangfire.PostgreSql
       }
     }
 
+    /// <summary>
+    /// Timezone must be UTC for compatibility with Npgsql 6 and our usage of "timestamp without time zone" columns
+    /// See https://github.com/frankhommers/Hangfire.PostgreSql/issues/221
+    /// </summary>
+    /// <param name="connectionStringBuilder">The ConnectionStringBuilder to set the Timezone property for</param>
+    internal static void SetTimezoneToUtcForNpgsqlCompatibility(NpgsqlConnectionStringBuilder connectionStringBuilder)
+    {
+      connectionStringBuilder.Timezone = "UTC";
+    }
+
     internal NpgsqlConnection CreateAndOpenConnection()
     {
       NpgsqlConnection connection = _existingConnection;
@@ -206,6 +216,8 @@ namespace Hangfire.PostgreSql
         {
           connectionStringBuilder.Enlist = false;
         }
+
+        SetTimezoneToUtcForNpgsqlCompatibility(connectionStringBuilder);
 
         connection = new NpgsqlConnection(connectionStringBuilder.ToString());
         _connectionSetup?.Invoke(connection);
@@ -243,8 +255,7 @@ namespace Hangfire.PostgreSql
     {
       isolationLevel ??= IsolationLevel.ReadCommitted;
 
-      // ReSharper disable once InvertIf
-      if (IsRunningOnWindows())
+      if (!EnvironmentHelpers.IsMono())
       {
         using TransactionScope transaction = CreateTransaction(isolationLevel);
         T result = UseConnection(dedicatedConnection, connection => {
@@ -318,15 +329,6 @@ namespace Hangfire.PostgreSql
       {
         PostgreSqlJobQueue._newItemInQueueEvent.Set();
       }
-    }
-
-    private static bool IsRunningOnWindows()
-    {
-#if !NETSTANDARD1_3
-      return Environment.OSVersion.Platform == PlatformID.Win32NT;
-#else
-            return System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
-#endif
     }
 
     private static TransactionScope CreateTransaction(IsolationLevel? isolationLevel)

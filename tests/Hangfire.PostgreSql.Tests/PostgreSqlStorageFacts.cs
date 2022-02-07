@@ -18,6 +18,16 @@ namespace Hangfire.PostgreSql.Tests
       _options = new PostgreSqlStorageOptions { PrepareSchemaIfNecessary = false, EnableTransactionScopeEnlistment = true };
     }
 
+    [Fact]
+    public void Connection_Timezone_Is_Set_To_UTC_For_Npgsql6_Compatibility()
+    {
+      PostgreSqlStorage storage = CreateStorage();
+
+      using (var connection = storage.CreateAndOpenConnection())
+      {
+        Assert.Equal("UTC", connection.Timezone);
+      }
+    }
 
     [Fact]
     public void Ctor_ThrowsAnException_WhenConnectionStringIsNull()

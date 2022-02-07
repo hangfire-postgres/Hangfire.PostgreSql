@@ -1,10 +1,11 @@
-#addin nuget:?package=Newtonsoft.Json&version=9.0.1
+﻿#addin nuget:?package=Newtonsoft.Json&version=9.0.1
 
 //////////////////////////////////////////////////////////////////////
 // ARGUMENTS
 //////////////////////////////////////////////////////////////////////
 
 var target = Argument("target", "Default");
+var npgsqlVersion = Argument("npgsql", "Default");
 
 //////////////////////////////////////////////////////////////////////
 // FUNCTIONS
@@ -22,7 +23,11 @@ IEnumerable<string> GetFrameworks(string path)
 Task("Restore")
   .Does(() =>
 {
-    DotNetCoreRestore();
+    var settings = new DotNetCoreRestoreSettings
+    {
+        ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}")
+    };
+    DotNetCoreRestore(settings);
 });
 
 Task("Build")
@@ -31,7 +36,9 @@ Task("Build")
 {
     var settings = new DotNetCoreBuildSettings
     {
-        Configuration = "Release"
+        ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}"),
+        Configuration = "Release",
+        NoRestore = true
     };
 
     var projects = GetFiles("./src/**/*.csproj");
@@ -57,10 +64,14 @@ Task("Test")
   .Does(() =>
 {
     var files = GetFiles("tests/**/*.csproj");
+    var settings = new DotNetCoreTestSettings
+    {
+        ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}")
+    };
     foreach(var file in files)
     {
         Information("Testing: {0}", file);
-        DotNetCoreTest(file.ToString());
+        DotNetCoreTest(file.ToString(), settings);
     }
 });
 
@@ -70,6 +81,7 @@ Task("Pack")
 {
     var settings = new DotNetCorePackSettings
     {
+        ArgumentCustomization = args => args.Append($"-p:NpgsqlVersion={npgsqlVersion}"),
         Configuration = "Release",
         OutputDirectory = "publish/",
         NoBuild = true
