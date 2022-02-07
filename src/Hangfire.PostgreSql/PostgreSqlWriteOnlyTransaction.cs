@@ -51,7 +51,7 @@ namespace Hangfire.PostgreSql
 
     public override void Commit()
     {
-      _storage.UseTransaction(_dedicatedConnectionFunc(), (connection, transaction) => {
+      _storage.UseTransaction(_dedicatedConnectionFunc(), (connection, _) => {
         foreach (Action<IDbConnection> command in _commandQueue)
         {
           command(connection);
