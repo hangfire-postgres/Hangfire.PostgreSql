@@ -811,7 +811,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, score) VALUES (@Key, @Value, 0.0)";
 
       UseConnections((connection, jobStorageConnection) => {
-        connection.Execute(arrangeSql, new [] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "set-1", Value = "value-1" },
           new { Key = "set-2", Value = "value-1" },
           new { Key = "set-1", Value = "value-2" },
@@ -1116,7 +1116,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"INSERT INTO ""{GetSchemaName()}"".set (key, value, score) VALUES (@Key, @Value, 0.0)";
 
       UseConnections((connection, jobStorageConnection) => {
-        connection.Execute(arrangeSql, new [] {
+        connection.Execute(arrangeSql, new[] {
           new { Key = "set-1", Value = "1" },
           new { Key = "set-1", Value = "2" },
           new { Key = "set-1", Value = "3" },
@@ -1296,6 +1296,7 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlStorage storage = new PostgreSqlStorage(sqlConnection, new PostgreSqlStorageOptions {
           EnableTransactionScopeEnlistment = true,
           SchemaName = GetSchemaName(),
+          TransactionSynchronisationTimeout = TimeSpan.FromSeconds(1),
         });
         using (PostgreSqlConnection connection = storage.GetStorageConnection())
         {

@@ -25,6 +25,8 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlStorageOptions
   {
+    private static readonly TimeSpan _minimumQueuePollInterval = TimeSpan.FromMilliseconds(50);
+
     private int _deleteExpiredBatchSize;
     private TimeSpan _distributedLockTimeout;
     private TimeSpan _invisibilityTimeout;
@@ -40,6 +42,7 @@ namespace Hangfire.PostgreSql
       TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
       JobExpirationCheckInterval = TimeSpan.FromHours(1);
       SchemaName = "hangfire";
+      AllowUnsafeValues = false;
       UseNativeDatabaseTransactions = true;
       PrepareSchemaIfNecessary = true;
       DeleteExpiredBatchSize = 1000;
@@ -49,7 +52,7 @@ namespace Hangfire.PostgreSql
     {
       get => _queuePollInterval;
       set {
-        ThrowIfValueIsNotPositive(value, nameof(QueuePollInterval));
+        ThrowIfValueIsLowerThan(_minimumQueuePollInterval, value, nameof(QueuePollInterval));
         _queuePollInterval = value;
       }
     }
@@ -72,6 +75,7 @@ namespace Hangfire.PostgreSql
       }
     }
 
+    // ReSharper disable once IdentifierTypo
     public TimeSpan TransactionSynchronisationTimeout
     {
       get => _transactionSerializationTimeout;
@@ -102,6 +106,7 @@ namespace Hangfire.PostgreSql
       }
     }
 
+    public bool AllowUnsafeValues { get; set; }
     public bool UseNativeDatabaseTransactions { get; set; }
     public bool PrepareSchemaIfNecessary { get; set; }
     public string SchemaName { get; set; }
@@ -122,10 +127,27 @@ namespace Hangfire.PostgreSql
       }
     }
 
+    private void ThrowIfValueIsLowerThan(TimeSpan minValue, TimeSpan value, string fieldName)
+    {
+      if (!AllowUnsafeValues)
+      {
+        string message = $"The {fieldName} property value seems to be too low ({value}, lower than suggested minimum of {minValue}). Consider increasing it. If you really need to have such a low value, please set {nameof(PostgreSqlStorageOptions)}.{nameof(AllowUnsafeValues)} to true.";
+
+        if (value < minValue)
+        {
+          throw new ArgumentException(message, nameof(value));
+        }
+      }
+
+      ThrowIfValueIsNotPositive(value, fieldName);
+    }
+
     private static void ThrowIfValueIsNotPositive(int value, string fieldName)
     {
       if (value <= 0)
+      {
         throw new ArgumentException($"The {fieldName} property value should be positive. Given: {value}.");
+      }
     }
   }
 }

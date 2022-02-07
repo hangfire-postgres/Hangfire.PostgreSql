@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -29,11 +29,9 @@ namespace Hangfire.PostgreSql
   {
     private readonly IPersistentJobQueueProvider _defaultProvider;
 
-    private readonly List<IPersistentJobQueueProvider> _providers
-      = new List<IPersistentJobQueueProvider>();
+    private readonly List<IPersistentJobQueueProvider> _providers = new();
 
-    private readonly Dictionary<string, IPersistentJobQueueProvider> _providersByQueue
-      = new Dictionary<string, IPersistentJobQueueProvider>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IPersistentJobQueueProvider> _providersByQueue = new(StringComparer.OrdinalIgnoreCase);
 
     public PersistentJobQueueProviderCollection(IPersistentJobQueueProvider defaultProvider)
     {
@@ -53,8 +51,15 @@ namespace Hangfire.PostgreSql
 
     public void Add(IPersistentJobQueueProvider provider, IEnumerable<string> queues)
     {
-      if (provider == null) throw new ArgumentNullException(nameof(provider));
-      if (queues == null) throw new ArgumentNullException(nameof(queues));
+      if (provider == null)
+      {
+        throw new ArgumentNullException(nameof(provider));
+      }
+
+      if (queues == null)
+      {
+        throw new ArgumentNullException(nameof(queues));
+      }
 
       _providers.Add(provider);
 
@@ -73,7 +78,10 @@ namespace Hangfire.PostgreSql
 
     public void Remove(string queue)
     {
-      if (!_providersByQueue.ContainsKey(queue)) return;
+      if (!_providersByQueue.ContainsKey(queue))
+      {
+        return;
+      }
 
       IPersistentJobQueueProvider provider = _providersByQueue[queue];
       _providersByQueue.Remove(queue);

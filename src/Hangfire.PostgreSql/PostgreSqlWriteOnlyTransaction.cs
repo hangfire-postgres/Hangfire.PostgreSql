@@ -36,7 +36,7 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
   {
-    private readonly Queue<Action<IDbConnection>> _commandQueue = new Queue<Action<IDbConnection>>();
+    private readonly Queue<Action<IDbConnection>> _commandQueue = new();
     private readonly Func<DbConnection> _dedicatedConnectionFunc;
 
     private readonly PostgreSqlStorage _storage;
@@ -51,7 +51,7 @@ namespace Hangfire.PostgreSql
 
     public override void Commit()
     {
-      _storage.UseTransaction(_dedicatedConnectionFunc(), (connection, transaction) => {
+      _storage.UseTransaction(_dedicatedConnectionFunc(), (connection, _) => {
         foreach (Action<IDbConnection> command in _commandQueue)
         {
           command(connection);
@@ -73,7 +73,7 @@ namespace Hangfire.PostgreSql
         }
       }
 
-      TransactionOptions transactionOptions = new TransactionOptions {
+      TransactionOptions transactionOptions = new() {
         IsolationLevel = isolationLevel,
         Timeout = TransactionManager.MaximumTimeout,
       };
@@ -100,7 +100,7 @@ namespace Hangfire.PostgreSql
         SET ""expireat"" = NULL 
         WHERE ""id"" = @Id;
       ";
-      
+
       QueueCommand(con => con.Execute(sql,
         new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) }));
     }
@@ -258,8 +258,15 @@ namespace Hangfire.PostgreSql
 
     public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
     {
-      if (key == null) throw new ArgumentNullException("key");
-      if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
+
+      if (keyValuePairs == null)
+      {
+        throw new ArgumentNullException(nameof(keyValuePairs));
+      }
 
       string sql = $@"
         WITH ""inputvalues"" AS (
@@ -291,7 +298,10 @@ namespace Hangfire.PostgreSql
 
     public override void RemoveHash(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
       QueueCommand(con => con.Execute(sql,
@@ -300,7 +310,10 @@ namespace Hangfire.PostgreSql
 
     public override void ExpireSet(string key, TimeSpan expireIn)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
 
@@ -310,7 +323,10 @@ namespace Hangfire.PostgreSql
 
     public override void ExpireList(string key, TimeSpan expireIn)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
 
@@ -320,7 +336,10 @@ namespace Hangfire.PostgreSql
 
     public override void ExpireHash(string key, TimeSpan expireIn)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = @ExpireAt WHERE ""key"" = @Key";
 
@@ -330,7 +349,10 @@ namespace Hangfire.PostgreSql
 
     public override void PersistSet(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @Key";
 
@@ -339,7 +361,10 @@ namespace Hangfire.PostgreSql
 
     public override void PersistList(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @Key";
 
@@ -348,7 +373,10 @@ namespace Hangfire.PostgreSql
 
     public override void PersistHash(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @Key";
 
@@ -358,8 +386,15 @@ namespace Hangfire.PostgreSql
 
     public override void AddRangeToSet(string key, IList<string> items)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
-      if (items == null) throw new ArgumentNullException(nameof(items));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
+
+      if (items == null)
+      {
+        throw new ArgumentNullException(nameof(items));
+      }
 
       string sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)";
 
@@ -369,7 +404,10 @@ namespace Hangfire.PostgreSql
 
     public override void RemoveSet(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""set"" WHERE ""key"" = @Key";
 

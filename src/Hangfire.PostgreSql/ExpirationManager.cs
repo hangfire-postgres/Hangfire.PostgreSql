@@ -77,12 +77,11 @@ namespace Hangfire.PostgreSql
         _logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
         UseConnectionDistributedLock(_storage, connection => {
-          using (IDbTransaction transaction = connection.BeginTransaction())
+          using IDbTransaction transaction = connection.BeginTransaction();
+          int removedCount;
+          do
           {
-            int removedCount;
-            do
-            {
-              removedCount = connection.Execute($@"
+            removedCount = connection.Execute($@"
                 DELETE FROM ""{_storage.Options.SchemaName}"".""{table}"" 
                 WHERE ""id"" IN (
                     SELECT ""id"" 
@@ -91,17 +90,19 @@ namespace Hangfire.PostgreSql
                     LIMIT {_storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)}
                 )", transaction: transaction);
 
-              if (removedCount <= 0) continue;
+            if (removedCount <= 0)
+            {
+              continue;
+            }
 
-              _logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
+            _logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
-              cancellationToken.WaitHandle.WaitOne(_delayBetweenPasses);
-              cancellationToken.ThrowIfCancellationRequested();
-            } 
-            while (removedCount != 0);
-
-            transaction.Commit();
+            cancellationToken.WaitHandle.WaitOne(_delayBetweenPasses);
+            cancellationToken.ThrowIfCancellationRequested();
           }
+          while (removedCount != 0);
+
+          transaction.Commit();
         });
       }
 
@@ -126,9 +127,8 @@ namespace Hangfire.PostgreSql
     private void AggregateCounter(string counterName)
     {
       UseConnectionDistributedLock(_storage, connection => {
-        using (IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-        {
-          string aggregateQuery = $@"
+        using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
+        string aggregateQuery = $@"
             WITH ""counters"" AS (
               DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
               WHERE ""key"" = @Key
@@ -139,14 +139,13 @@ namespace Hangfire.PostgreSql
             SELECT SUM(""value"") FROM ""counters"";
           ";
 
-          long aggregatedValue = connection.ExecuteScalar<long>(aggregateQuery, new { Key = counterName }, transaction);
-          transaction.Commit();
+        long aggregatedValue = connection.ExecuteScalar<long>(aggregateQuery, new { Key = counterName }, transaction);
+        transaction.Commit();
 
-          if (aggregatedValue > 0)
-          {
-            string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@Key, @Value);";
-            connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
-          }
+        if (aggregatedValue > 0)
+        {
+          string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@Key, @Value);";
+          connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
         }
       });
     }

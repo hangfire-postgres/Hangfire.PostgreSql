@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -138,7 +138,10 @@ namespace Hangfire.PostgreSql
               trx.Commit();
             }
 
-            if (rowsAffected > 0) return;
+            if (rowsAffected > 0)
+            {
+              return;
+            }
           }
           catch (Exception ex)
           {
@@ -152,7 +155,11 @@ namespace Hangfire.PostgreSql
           else
           {
             int sleepDuration = (int)(timeout.TotalMilliseconds - lockAcquiringTime.ElapsedMilliseconds);
-            if (sleepDuration > 1000) sleepDuration = 1000;
+            if (sleepDuration > 1000)
+            {
+              sleepDuration = 1000;
+            }
+
             if (sleepDuration > 0)
             {
               Thread.Sleep(sleepDuration);
@@ -171,16 +178,14 @@ namespace Hangfire.PostgreSql
       {
         try
         {
-          using (IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.RepeatableRead))
-          {
-            connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
-              new {
-                Resource = resource,
-                Timeout = DateTime.UtcNow - options.DistributedLockTimeout,
-              }, transaction: transaction);
+          using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.RepeatableRead);
+          connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
+            new {
+              Resource = resource,
+              Timeout = DateTime.UtcNow - options.DistributedLockTimeout,
+            }, transaction: transaction);
 
-            transaction.Commit();
-          }
+          transaction.Commit();
         }
         catch (Exception ex)
         {
@@ -223,18 +228,31 @@ namespace Hangfire.PostgreSql
             $@"UPDATE ""{options.SchemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @Resource",
             new { Resource = resource });
 
-          if (rowsAffected > 0) return;
+          if (rowsAffected > 0)
+          {
+            return;
+          }
 
           if (lockAcquiringStopwatch.ElapsedMilliseconds > timeout.TotalMilliseconds)
+          {
             tryAcquireLock = false;
+          }
           else
           {
             int sleepDuration = (int)(timeout.TotalMilliseconds - lockAcquiringStopwatch.ElapsedMilliseconds);
-            if (sleepDuration > 1000) sleepDuration = 1000;
+            if (sleepDuration > 1000)
+            {
+              sleepDuration = 1000;
+            }
+
             if (sleepDuration > 0)
+            {
               Thread.Sleep(sleepDuration);
+            }
             else
+            {
               tryAcquireLock = false;
+            }
           }
         }
 

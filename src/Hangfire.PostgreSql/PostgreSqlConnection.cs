@@ -54,11 +54,13 @@ namespace Hangfire.PostgreSql
 
     public override void Dispose()
     {
-      if (_dedicatedConnection != null)
+      if (_dedicatedConnection == null)
       {
-        _dedicatedConnection.Dispose();
-        _dedicatedConnection = null;
+        return;
       }
+
+      _dedicatedConnection.Dispose();
+      _dedicatedConnection = null;
     }
 
     public override IWriteOnlyTransaction CreateWriteTransaction()
@@ -68,17 +70,17 @@ namespace Hangfire.PostgreSql
 
     public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
     {
-      if (string.IsNullOrEmpty(resource))
-      {
-        throw new ArgumentNullException(nameof(resource));
-      }
-
-      return AcquireLock($"{_options.SchemaName}:{resource}", timeout);
+      return string.IsNullOrEmpty(resource)
+        ? throw new ArgumentNullException(nameof(resource))
+        : AcquireLock($"{_options.SchemaName}:{resource}", timeout);
     }
 
     public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
     {
-      if (queues == null || queues.Length == 0) throw new ArgumentNullException(nameof(queues));
+      if (queues == null || queues.Length == 0)
+      {
+        throw new ArgumentNullException(nameof(queues));
+      }
 
       IPersistentJobQueueProvider[] providers = queues
         .Select(queue => _storage.QueueProviders.GetProvider(queue))
@@ -101,8 +103,15 @@ namespace Hangfire.PostgreSql
       DateTime createdAt,
       TimeSpan expireIn)
     {
-      if (job == null) throw new ArgumentNullException(nameof(job));
-      if (parameters == null) throw new ArgumentNullException(nameof(parameters));
+      if (job == null)
+      {
+        throw new ArgumentNullException(nameof(job));
+      }
+
+      if (parameters == null)
+      {
+        throw new ArgumentNullException(nameof(parameters));
+      }
 
       string createJobSql = $@"
         INSERT INTO ""{_options.SchemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
@@ -148,7 +157,10 @@ namespace Hangfire.PostgreSql
 
     public override JobData GetJobData(string id)
     {
-      if (id == null) throw new ArgumentNullException(nameof(id));
+      if (id == null)
+      {
+        throw new ArgumentNullException(nameof(id));
+      }
 
       string sql = $@"
         SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
@@ -161,7 +173,10 @@ namespace Hangfire.PostgreSql
           .Query<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) })
           .SingleOrDefault());
 
-      if (jobData == null) return null;
+      if (jobData == null)
+      {
+        return null;
+      }
 
       // TODO: conversion exception could be thrown.
       InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>(jobData.InvocationData);
@@ -189,7 +204,10 @@ namespace Hangfire.PostgreSql
 
     public override StateData GetStateData(string jobId)
     {
-      if (jobId == null) throw new ArgumentNullException(nameof(jobId));
+      if (jobId == null)
+      {
+        throw new ArgumentNullException(nameof(jobId));
+      }
 
       string sql = $@"
         SELECT s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
@@ -202,42 +220,46 @@ namespace Hangfire.PostgreSql
         connection => connection
           .Query<SqlState>(sql, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
           .SingleOrDefault());
-      if (sqlState == null)
-      {
-        return null;
-      }
-
-      return new StateData {
-        Name = sqlState.Name,
-        Reason = sqlState.Reason,
-        Data = SerializationHelper.Deserialize<Dictionary<string, string>>(sqlState.Data),
-      };
+      return sqlState == null
+        ? null
+        : new StateData {
+          Name = sqlState.Name,
+          Reason = sqlState.Reason,
+          Data = SerializationHelper.Deserialize<Dictionary<string, string>>(sqlState.Data),
+        };
     }
 
     public override void SetJobParameter(string id, string name, string value)
     {
-      if (id == null) throw new ArgumentNullException(nameof(id));
-      if (name == null) throw new ArgumentNullException(nameof(name));
+      if (id == null)
+      {
+        throw new ArgumentNullException(nameof(id));
+      }
+
+      if (name == null)
+      {
+        throw new ArgumentNullException(nameof(name));
+      }
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @JobId ""jobid"", @Name ""name"", @Value ""value""
+          SELECT @JobId ""jobid"", @Name ""name"", @Value ""value""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_options.SchemaName}"".""jobparameter"" ""updatetarget""
-	        SET ""value"" = ""inputvalues"".""value""
-	        FROM ""inputvalues""
-	        WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
-	        AND ""updatetarget"".""name"" = ""inputvalues"".""name""
-	        RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
+          UPDATE ""{_options.SchemaName}"".""jobparameter"" ""updatetarget""
+          SET ""value"" = ""inputvalues"".""value""
+          FROM ""inputvalues""
+          WHERE ""updatetarget"".""jobid"" = ""inputvalues"".""jobid""
+          AND ""updatetarget"".""name"" = ""inputvalues"".""name""
+          RETURNING ""updatetarget"".""jobid"", ""updatetarget"".""name""
         )
         INSERT INTO ""{_options.SchemaName}"".""jobparameter""(""jobid"", ""name"", ""value"")
         SELECT ""jobid"", ""name"", ""value"" 
         FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
-	        SELECT 1 
-	        FROM ""updatedrows"" 
-	        WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
-	        AND ""updatedrows"".""name"" = ""insertvalues"".""name""
+          SELECT 1 
+          FROM ""updatedrows"" 
+          WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
+          AND ""updatedrows"".""name"" = ""insertvalues"".""name""
         );
       ";
 
@@ -247,8 +269,15 @@ namespace Hangfire.PostgreSql
 
     public override string GetJobParameter(string id, string name)
     {
-      if (id == null) throw new ArgumentNullException(nameof(id));
-      if (name == null) throw new ArgumentNullException(nameof(name));
+      if (id == null)
+      {
+        throw new ArgumentNullException(nameof(id));
+      }
+
+      if (name == null)
+      {
+        throw new ArgumentNullException(nameof(name));
+      }
 
       string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name;";
 
@@ -258,7 +287,10 @@ namespace Hangfire.PostgreSql
 
     public override HashSet<string> GetAllItemsFromSet(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key;";
 
@@ -271,8 +303,15 @@ namespace Hangfire.PostgreSql
 
     public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
-      if (toScore < fromScore) throw new ArgumentException($"The '{nameof(toScore)}' value must be higher or equal to the '{nameof(fromScore)}' value.");
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
+
+      if (toScore < fromScore)
+      {
+        throw new ArgumentException($"The '{nameof(toScore)}' value must be higher or equal to the '{nameof(fromScore)}' value.");
+      }
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<string>($@"
@@ -287,27 +326,34 @@ namespace Hangfire.PostgreSql
 
     public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
-      if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
+
+      if (keyValuePairs == null)
+      {
+        throw new ArgumentNullException(nameof(keyValuePairs));
+      }
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @Key ""key"", @Field ""field"", @Value ""value""
+          SELECT @Key ""key"", @Field ""field"", @Value ""value""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_options.SchemaName}"".""hash"" ""updatetarget""
-	        SET ""value"" = ""inputvalues"".""value""
-	        FROM ""inputvalues""
-	        WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
-	        AND ""updatetarget"".""field"" = ""inputvalues"".""field""
-	        RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
+          UPDATE ""{_options.SchemaName}"".""hash"" ""updatetarget""
+          SET ""value"" = ""inputvalues"".""value""
+          FROM ""inputvalues""
+          WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
+          AND ""updatetarget"".""field"" = ""inputvalues"".""field""
+          RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
         )
         INSERT INTO ""{_options.SchemaName}"".""hash""(""key"", ""field"", ""value"")
         SELECT ""key"", ""field"", ""value"" FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
-	        SELECT 1 
-	        FROM ""updatedrows"" 
-	        WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
-	        AND ""updatedrows"".""field"" = ""insertvalues"".""field""
+          SELECT 1 
+          FROM ""updatedrows"" 
+          WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
+          AND ""updatedrows"".""field"" = ""insertvalues"".""field""
         );
       ";
 
@@ -322,23 +368,30 @@ namespace Hangfire.PostgreSql
               connection.Execute(sql, new { Key = key, Field = keyValuePair.Key, keyValuePair.Value }, transaction);
             }
           }, IsolationLevel.Serializable);
-       
+
           return;
         }
         catch (PostgresException exception)
         {
           if (!exception.SqlState.Equals(PostgresErrorCodes.SerializationFailure)) // 40001
+          {
             throw;
+          }
         }
 
         if (executionTimer.Elapsed > _options.TransactionSynchronisationTimeout)
+        {
           throw new TimeoutException("SetRangeInHash experienced timeout while trying to execute transaction");
+        }
       }
     }
 
     public override Dictionary<string, string> GetAllEntriesFromHash(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       Dictionary<string, string> result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<SqlHash>($@"
@@ -353,10 +406,17 @@ namespace Hangfire.PostgreSql
 
     public override void AnnounceServer(string serverId, ServerContext context)
     {
-      if (serverId == null) throw new ArgumentNullException(nameof(serverId));
-      if (context == null) throw new ArgumentNullException(nameof(context));
+      if (serverId == null)
+      {
+        throw new ArgumentNullException(nameof(serverId));
+      }
 
-      ServerData data = new ServerData {
+      if (context == null)
+      {
+        throw new ArgumentNullException(nameof(context));
+      }
+
+      ServerData data = new() {
         WorkerCount = context.WorkerCount,
         Queues = context.Queues,
         StartedAt = DateTime.UtcNow,
@@ -364,21 +424,21 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-	        SELECT @Id ""id"", @Data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
+          SELECT @Id ""id"", @Data ""data"", NOW() AT TIME ZONE 'UTC' ""lastheartbeat""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_options.SchemaName}"".""server"" ""updatetarget""
-	        SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
-	        FROM ""inputvalues""
-	        WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
-	        RETURNING ""updatetarget"".""id""
+          UPDATE ""{_options.SchemaName}"".""server"" ""updatetarget""
+          SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
+          FROM ""inputvalues""
+          WHERE ""updatetarget"".""id"" = ""inputvalues"".""id""
+          RETURNING ""updatetarget"".""id""
         )
         INSERT INTO ""{_options.SchemaName}"".""server""(""id"", ""data"", ""lastheartbeat"")
         SELECT ""id"", ""data"", ""lastheartbeat"" 
         FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
-	        SELECT 1 
-	        FROM ""updatedrows"" 
-	        WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
+          SELECT 1 
+          FROM ""updatedrows"" 
+          WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
         );
       ";
 
@@ -388,7 +448,10 @@ namespace Hangfire.PostgreSql
 
     public override void RemoveServer(string serverId)
     {
-      if (serverId == null) throw new ArgumentNullException(nameof(serverId));
+      if (serverId == null)
+      {
+        throw new ArgumentNullException(nameof(serverId));
+      }
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
         .Execute($@"DELETE FROM ""{_options.SchemaName}"".""server"" WHERE ""id"" = @Id;", new { Id = serverId }));
@@ -396,12 +459,15 @@ namespace Hangfire.PostgreSql
 
     public override void Heartbeat(string serverId)
     {
-      if (serverId == null) throw new ArgumentNullException(nameof(serverId));
+      if (serverId == null)
+      {
+        throw new ArgumentNullException(nameof(serverId));
+      }
 
       string query = $@"
         UPDATE ""{_options.SchemaName}"".""server"" 
-				SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
-				WHERE ""id"" = @Id;
+        SET ""lastheartbeat"" = NOW() AT TIME ZONE 'UTC' 
+        WHERE ""id"" = @Id;
       ";
 
       int affectedRows = _storage.UseConnection(_dedicatedConnection, connection => connection
@@ -422,14 +488,17 @@ namespace Hangfire.PostgreSql
 
       string query = $@"
         DELETE FROM ""{_options.SchemaName}"".""server"" 
-				WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
+        WHERE ""lastheartbeat"" < (NOW() AT TIME ZONE 'UTC' - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection.Execute(query));
     }
 
     public override long GetSetCount(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT COUNT(""key"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
 
@@ -439,7 +508,10 @@ namespace Hangfire.PostgreSql
 
     public override List<string> GetAllItemsFromList(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key ORDER BY ""id"" DESC";
 
@@ -450,7 +522,10 @@ namespace Hangfire.PostgreSql
 
     public override long GetCounter(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT SUM(""value"") FROM ""{_options.SchemaName}"".""counter"" WHERE ""key"" = @Key";
 
@@ -460,7 +535,10 @@ namespace Hangfire.PostgreSql
 
     public override long GetListCount(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
 
@@ -471,41 +549,46 @@ namespace Hangfire.PostgreSql
 
     public override TimeSpan GetListTtl(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
 
-      if (!result.HasValue) return TimeSpan.FromSeconds(-1);
-
-      return result.Value - DateTime.UtcNow;
+      return !result.HasValue ? TimeSpan.FromSeconds(-1) : result.Value - DateTime.UtcNow;
     }
 
     public override List<string> GetRangeFromList(string key, int startingFrom, int endingAt)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"
-					SELECT ""value"" 
-					FROM ""{_options.SchemaName}"".""list""
-					WHERE ""key"" = @Key
+          SELECT ""value"" 
+          FROM ""{_options.SchemaName}"".""list""
+          WHERE ""key"" = @Key
           ORDER BY ""id"" DESC
           LIMIT @Limit OFFSET @Offset
         ";
- 
 
-      return _storage.UseConnection(_dedicatedConnection, connection => 
+      return _storage.UseConnection(_dedicatedConnection, connection =>
         connection
-        .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
-        .ToList()
-          );
+          .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
+          .ToList());
     }
 
     public override long GetHashCount(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
 
@@ -515,30 +598,34 @@ namespace Hangfire.PostgreSql
 
     public override TimeSpan GetHashTtl(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT MIN(""expireat"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
 
-      if (!result.HasValue) return TimeSpan.FromSeconds(-1);
-
-      return result.Value - DateTime.UtcNow;
+      return !result.HasValue ? TimeSpan.FromSeconds(-1) : result.Value - DateTime.UtcNow;
     }
 
     public override List<string> GetRangeFromSet(string key, int startingFrom, int endingAt)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"
-					SELECT ""value"" 
-					FROM ""{_options.SchemaName}"".""set""
-					WHERE ""key"" = @Key
+          SELECT ""value"" 
+          FROM ""{_options.SchemaName}"".""set""
+          WHERE ""key"" = @Key
           ORDER BY ""id"" 
           LIMIT @Limit OFFSET @Offset
         ";
- 
+
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
         .ToList());
@@ -546,22 +633,30 @@ namespace Hangfire.PostgreSql
 
     public override TimeSpan GetSetTtl(string key)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
 
       string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
-        
-      if (!result.HasValue) return TimeSpan.FromSeconds(-1);
 
-      return result.Value - DateTime.UtcNow;
+      return !result.HasValue ? TimeSpan.FromSeconds(-1) : result.Value - DateTime.UtcNow;
     }
 
     public override string GetValueFromHash(string key, string name)
     {
-      if (key == null) throw new ArgumentNullException(nameof(key));
-      if (name == null) throw new ArgumentNullException(nameof(name));
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
+
+      if (name == null)
+      {
+        throw new ArgumentNullException(nameof(name));
+      }
 
       string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key AND ""field"" = @Field";
 
@@ -572,10 +667,7 @@ namespace Hangfire.PostgreSql
 
     private IDisposable AcquireLock(string resource, TimeSpan timeout)
     {
-      if (_dedicatedConnection == null)
-      {
-        _dedicatedConnection = _storage.CreateAndOpenConnection();
-      }
+      _dedicatedConnection ??= _storage.CreateAndOpenConnection();
 
       Guid lockId = Guid.NewGuid();
 
