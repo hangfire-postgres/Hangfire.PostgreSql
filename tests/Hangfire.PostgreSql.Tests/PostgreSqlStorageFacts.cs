@@ -32,9 +32,17 @@ namespace Hangfire.PostgreSql.Tests
     [Fact]
     public void Ctor_ThrowsAnException_WhenConnectionStringIsNull()
     {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlStorage(nameOrConnectionString: null));
+      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlStorage(connectionString: null));
 
-      Assert.Equal("nameOrConnectionString", exception.ParamName);
+      Assert.Equal("connectionString", exception.ParamName);
+    }
+
+    [Fact]
+    public void Ctor_ThrowsAnException_WhenConnectionStringIsInvalid()
+    {
+      ArgumentException exception = Assert.Throws<ArgumentException>(() => new PostgreSqlStorage("hello", new PostgreSqlStorageOptions()));
+
+      Assert.Equal("connectionString", exception.ParamName);
     }
 
     [Fact]
@@ -90,8 +98,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private PostgreSqlStorage CreateStorage()
     {
-      return new PostgreSqlStorage(ConnectionUtils.GetConnectionString(),
-        _options);
+      return new PostgreSqlStorage(ConnectionUtils.GetConnectionString(), _options);
     }
   }
 }
