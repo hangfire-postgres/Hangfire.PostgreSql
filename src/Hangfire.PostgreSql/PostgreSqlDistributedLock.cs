@@ -36,7 +36,7 @@ namespace Hangfire.PostgreSql
     private static void Log(string resource, string message, Exception ex)
     {
       bool isConcurrencyError = ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure };
-      _logger.Log(isConcurrencyError ? LogLevel.Debug : LogLevel.Warn, () => $"{resource}: {message}", ex);
+      _logger.Log(isConcurrencyError ? LogLevel.Trace : LogLevel.Warn, () => $"{resource}: {message}", ex);
     }
 
     internal static void Acquire(IDbConnection connection, string resource, TimeSpan timeout, PostgreSqlStorageOptions options)
