@@ -25,6 +25,7 @@ using System.Diagnostics;
 using System.Threading;
 using Dapper;
 using Hangfire.Logging;
+using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
@@ -34,7 +35,8 @@ namespace Hangfire.PostgreSql
 
     private static void Log(string resource, string message, Exception ex)
     {
-      _logger.WarnException($"{resource}: {message}", ex);
+      bool isConcurrencyError = ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure };
+      _logger.Log(isConcurrencyError ? LogLevel.Trace : LogLevel.Warn, () => $"{resource}: {message}", ex);
     }
 
     internal static void Acquire(IDbConnection connection, string resource, TimeSpan timeout, PostgreSqlStorageOptions options)
