@@ -37,47 +37,42 @@ namespace Hangfire.PostgreSql
   public class PostgreSqlStorage : JobStorage
   {
     private readonly Action<NpgsqlConnection> _connectionSetup;
-    private readonly string _connectionString;
+    private readonly NpgsqlConnectionStringBuilder _connectionStringBuilder;
     private readonly NpgsqlConnection _existingConnection;
 
-    public PostgreSqlStorage(string nameOrConnectionString)
-      : this(nameOrConnectionString, new PostgreSqlStorageOptions()) { }
+    public PostgreSqlStorage(string connectionString)
+      : this(connectionString, new PostgreSqlStorageOptions()) { }
 
-    public PostgreSqlStorage(string nameOrConnectionString, PostgreSqlStorageOptions options)
-      : this(nameOrConnectionString, null, options) { }
+    public PostgreSqlStorage(string connectionString, PostgreSqlStorageOptions options)
+      : this(connectionString, null, options) { }
 
     /// <summary>
-    ///   Initializes PostgreSqlStorage from the provided PostgreSqlStorageOptions and either the provided connection
-    ///   string or the connection string with provided name pulled from the application config file.
+    ///   Initializes PostgreSqlStorage from the provided PostgreSqlStorageOptions and either the provided connection string.
     /// </summary>
-    /// <param name="nameOrConnectionString">
-    ///   Either a SQL Server connection string or the name of
-    ///   a SQL Server connection string located in the connectionStrings node in the application config
-    /// </param>
+    /// <param name="connectionString">PostgreSQL connection string</param>
     /// <param name="connectionSetup">Optional setup action to apply to created connections</param>
-    /// <param name="options"></param>
-    /// <exception cref="ArgumentNullException"><paramref name="nameOrConnectionString" /> argument is null.</exception>
+    /// <param name="options">Storage options</param>
+    /// <exception cref="ArgumentNullException"><paramref name="connectionString" /> argument is null.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> argument is null.</exception>
-    /// <exception cref="ArgumentException">
-    ///   <paramref name="nameOrConnectionString" /> argument is neither
-    ///   a valid SQL Server connection string nor the name of a connection string in the application
-    ///   config file.
-    /// </exception>
-    public PostgreSqlStorage(string nameOrConnectionString,
+    /// <exception cref="ArgumentException"><paramref name="connectionString" /> argument not a valid PostgreSQL connection string config file.</exception>
+    public PostgreSqlStorage(
+      string connectionString,
       Action<NpgsqlConnection> connectionSetup,
       PostgreSqlStorageOptions options)
     {
-      if (nameOrConnectionString == null)
+      if (connectionString == null)
       {
-        throw new ArgumentNullException(nameof(nameOrConnectionString));
+        throw new ArgumentNullException(nameof(connectionString));
       }
 
       Options = options ?? throw new ArgumentNullException(nameof(options));
 
-      _connectionString = IsConnectionString(nameOrConnectionString)
-        ? nameOrConnectionString
-        : throw new ArgumentException($"Could not find connection string with name '{nameOrConnectionString}' in application config file");
+      if (!TryCreateConnectionStringBuilder(connectionString, out NpgsqlConnectionStringBuilder builder))
+      {
+        throw new ArgumentException($"Connection string [{connectionString}] is not valid", nameof(connectionString));
+      }
 
+      _connectionStringBuilder = builder;
       _connectionSetup = connectionSetup;
 
       if (options.PrepareSchemaIfNecessary)
@@ -176,13 +171,12 @@ namespace Hangfire.PostgreSql
 
       try
       {
-        NpgsqlConnectionStringBuilder connectionStringBuilder = new(_connectionString);
         StringBuilder builder = new();
 
         builder.Append("Host: ");
-        builder.Append(connectionStringBuilder.Host);
+        builder.Append(_connectionStringBuilder.Host);
         builder.Append(", DB: ");
-        builder.Append(connectionStringBuilder.Database);
+        builder.Append(_connectionStringBuilder.Database);
         builder.Append(", Schema: ");
         builder.Append(Options.SchemaName);
 
@@ -211,15 +205,11 @@ namespace Hangfire.PostgreSql
       NpgsqlConnection connection = _existingConnection;
       if (connection == null)
       {
-        NpgsqlConnectionStringBuilder connectionStringBuilder = new(_connectionString);
-        if (!Options.EnableTransactionScopeEnlistment)
-        {
-          connectionStringBuilder.Enlist = false;
-        }
+        _connectionStringBuilder.Enlist = Options.EnableTransactionScopeEnlistment;
 
-        SetTimezoneToUtcForNpgsqlCompatibility(connectionStringBuilder);
+        SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
 
-        connection = new NpgsqlConnection(connectionStringBuilder.ToString());
+        connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
         _connectionSetup?.Invoke(connection);
       }
 
@@ -399,9 +389,18 @@ namespace Hangfire.PostgreSql
       QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
     }
 
-    private bool IsConnectionString(string nameOrConnectionString)
+    private bool TryCreateConnectionStringBuilder(string connectionString, out NpgsqlConnectionStringBuilder builder)
     {
-      return nameOrConnectionString.Contains(";");
+      try
+      {
+        builder = new NpgsqlConnectionStringBuilder(connectionString);
+        return true;
+      }
+      catch (ArgumentException)
+      {
+        builder = null;
+        return false;
+      }
     }
   }
 }

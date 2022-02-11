@@ -32,46 +32,46 @@ namespace Hangfire.PostgreSql
     ///   its name.
     /// </summary>
     /// <param name="configuration">Configuration</param>
-    /// <param name="nameOrConnectionString">Connection string or its name</param>
+    /// <param name="connectionString">Connection string</param>
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
-      string nameOrConnectionString)
+      string connectionString)
     {
-      return configuration.UsePostgreSqlStorage(nameOrConnectionString, null, new PostgreSqlStorageOptions());
+      return configuration.UsePostgreSqlStorage(connectionString, null, new PostgreSqlStorageOptions());
     }
 
     /// <summary>
     ///   Tells the bootstrapper to use PostgreSQL as a job storage
     ///   with the given options, that can be accessed using the specified
-    ///   connection string or its name.
+    ///   connection string.
     /// </summary>
     /// <param name="configuration">Configuration</param>
-    /// <param name="nameOrConnectionString">Connection string or its name</param>
+    /// <param name="connectionString">Connection string</param>
     /// <param name="options">Advanced options</param>
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
-      string nameOrConnectionString,
+      string connectionString,
       PostgreSqlStorageOptions options)
     {
-      return configuration.UsePostgreSqlStorage(nameOrConnectionString, null, options);
+      return configuration.UsePostgreSqlStorage(connectionString, null, options);
     }
 
     /// <summary>
     ///   Tells the bootstrapper to use PostgreSQL as a job storage
     ///   with the given options, that can be accessed using the specified
-    ///   connection string or its name.
+    ///   connection string.
     /// </summary>
     /// <param name="configuration">Configuration</param>
-    /// <param name="nameOrConnectionString">Connection string or its name</param>
+    /// <param name="connectionString">Connection string</param>
     /// <param name="connectionSetup">Optional setup action to apply to created connections</param>
     /// <param name="options">Advanced options</param>
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
-      string nameOrConnectionString,
+      string connectionString,
       Action<NpgsqlConnection> connectionSetup,
       PostgreSqlStorageOptions options)
     {
-      PostgreSqlStorage storage = new(nameOrConnectionString, connectionSetup, options);
+      PostgreSqlStorage storage = new(connectionString, connectionSetup, options);
 
       return configuration.UseStorage(storage);
     }
