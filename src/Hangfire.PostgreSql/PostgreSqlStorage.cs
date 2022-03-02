@@ -205,9 +205,14 @@ namespace Hangfire.PostgreSql
       NpgsqlConnection connection = _existingConnection;
       if (connection == null)
       {
-        _connectionStringBuilder.Enlist = Options.EnableTransactionScopeEnlistment;
-
-        SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+        // Connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
+        // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
+        // transaction. Also see #248.
+        if (!Options.EnableTransactionScopeEnlistment)
+        {
+          _connectionStringBuilder.Enlist = false;
+          SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+        }
 
         connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
         _connectionSetup?.Invoke(connection);
