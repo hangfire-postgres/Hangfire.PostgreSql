@@ -75,5 +75,39 @@ namespace Hangfire.PostgreSql
 
       return configuration.UseStorage(storage);
     }
+
+    /// <summary>
+    ///   Tells the bootstrapper to use PostgreSQL as a job storage
+    ///   with the given options, that can be accessed using the specified
+    ///   connection factory.
+    /// </summary>
+    /// <param name="configuration">Configuration</param>
+    /// <param name="connectionFactory">Connection factory</param>
+    /// <param name="options">Advanced options</param>
+    public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
+      this IGlobalConfiguration configuration,
+      IConnectionFactory connectionFactory,
+      PostgreSqlStorageOptions options)
+    {
+      PostgreSqlStorage storage = new(connectionFactory, options);
+
+      return configuration.UseStorage(storage);
+    }
+
+    /// <summary>
+    ///   Tells the bootstrapper to use PostgreSQL as a job storage
+    ///   with the given options, that can be accessed using the specified
+    ///   connection factory.
+    /// </summary>
+    /// <param name="configuration">Configuration</param>
+    /// <param name="connectionFactory">Connection factory</param>
+    public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
+      this IGlobalConfiguration configuration,
+      IConnectionFactory connectionFactory)
+    {
+      PostgreSqlStorage storage = new(connectionFactory, new PostgreSqlStorageOptions());
+
+      return configuration.UseStorage(storage);
+    }
   }
 }
