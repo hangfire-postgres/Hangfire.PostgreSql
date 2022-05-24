@@ -36,6 +36,7 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlStorage : JobStorage
   {
+    private readonly IConnectionFactory _connectionFactory;
     private readonly Action<NpgsqlConnection> _connectionSetup;
     private readonly NpgsqlConnectionStringBuilder _connectionStringBuilder;
     private readonly NpgsqlConnection _existingConnection;
@@ -45,6 +46,20 @@ namespace Hangfire.PostgreSql
 
     public PostgreSqlStorage(string connectionString, PostgreSqlStorageOptions options)
       : this(connectionString, null, options) { }
+
+    public PostgreSqlStorage(IConnectionFactory connectionFactory, PostgreSqlStorageOptions options)
+    {
+      _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+      Options = options ?? throw new ArgumentNullException(nameof(options));
+     
+      if (options.PrepareSchemaIfNecessary)
+      {
+        using NpgsqlConnection connection = CreateAndOpenConnection();
+        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
+      }
+
+      InitializeQueueProviders();
+    }
 
     /// <summary>
     ///   Initializes PostgreSqlStorage from the provided PostgreSqlStorageOptions and either the provided connection string.
@@ -202,15 +217,34 @@ namespace Hangfire.PostgreSql
 
     internal NpgsqlConnection CreateAndOpenConnection()
     {
-      NpgsqlConnection connection = _existingConnection;
-      if (connection == null)
+      NpgsqlConnection connection;
+
+      if (_connectionFactory is not null)
       {
-        _connectionStringBuilder.Enlist = Options.EnableTransactionScopeEnlistment;
+        connection = _connectionFactory.GetOrCreateConnection();
+        
+        if (!Options.EnableTransactionScopeEnlistment)
+        {
+          if (connection.Settings.Enlist)
+          {
+            throw new ArgumentException(
+              $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
+          }
+        }
 
-        SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+      }
+      else
+      {
+        connection = _existingConnection;
+        if (connection == null)
+        {
+          _connectionStringBuilder.Enlist = Options.EnableTransactionScopeEnlistment;
 
-        connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
-        _connectionSetup?.Invoke(connection);
+          SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+
+          connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
+          _connectionSetup?.Invoke(connection);
+        }
       }
 
       try
