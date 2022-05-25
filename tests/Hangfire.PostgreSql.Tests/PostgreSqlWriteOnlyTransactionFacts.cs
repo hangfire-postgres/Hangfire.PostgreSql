@@ -1072,22 +1072,37 @@ namespace Hangfire.PostgreSql.Tests
     public void AddToQueue_AddsAJobToTheQueue_UsingStorageConnection_WithTransactionScopeEnlistment()
     {
       string jobId;
-      PostgreSqlStorage storage =
-        new PostgreSqlStorage(ConnectionUtils.GetConnectionString(), new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true });
-      using (IStorageConnection storageConnection = storage.GetConnection())
-      {
-        using (IWriteOnlyTransaction writeTransaction = storageConnection.CreateWriteTransaction())
-        {
-          // Explicitly call multiple write commands here, as AddToQueue previously opened an own connection.
-          // This triggered a prepared transaction which should be avoided.
-          jobId = storageConnection.CreateExpiredJob(Job.FromExpression(() => Console.Write("Hi")), new Dictionary<string, string>(), DateTime.UtcNow,
-            TimeSpan.FromMinutes(1));
 
-          writeTransaction.SetJobState(jobId, new ScheduledState(DateTime.UtcNow));
-          writeTransaction.AddToQueue("default", jobId);
-          writeTransaction.PersistJob(jobId);
-          writeTransaction.Commit();
+      using (var transactionScope = new TransactionScope(TransactionScopeOption.Required,
+               new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
+               TransactionScopeAsyncFlowOption.Enabled))
+      {
+        // Need to run a query within that transaction. If PostgreSqlStorage modifies the connection string, TransactionAbortedExceptions appear
+        // because of prepared transactions.
+        var connectionString = ConnectionUtils.GetConnectionString();
+        using (var connection = new NpgsqlConnection(connectionString))
+        {
+          var _ = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").FirstOrDefault();
         }
+
+        var storage = new PostgreSqlStorage(connectionString, new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true });
+        using (IStorageConnection storageConnection = storage.GetConnection())
+        {
+          using (IWriteOnlyTransaction writeTransaction = storageConnection.CreateWriteTransaction())
+          {
+            // Explicitly call multiple write commands here, as AddToQueue previously opened an own connection.
+            // This triggered a prepared transaction which should be avoided.
+            jobId = storageConnection.CreateExpiredJob(Job.FromExpression(() => Console.Write("Hi")), new Dictionary<string, string>(), DateTime.UtcNow,
+              TimeSpan.FromMinutes(1));
+
+            writeTransaction.SetJobState(jobId, new ScheduledState(DateTime.UtcNow));
+            writeTransaction.AddToQueue("default", jobId);
+            writeTransaction.PersistJob(jobId);
+            writeTransaction.Commit();
+          }
+        }
+
+        transactionScope.Complete();
       }
 
       UseConnection(connection => {

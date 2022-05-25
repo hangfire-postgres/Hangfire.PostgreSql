@@ -51,7 +51,7 @@ namespace Hangfire.PostgreSql
     {
       _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
       Options = options ?? throw new ArgumentNullException(nameof(options));
-     
+
       if (options.PrepareSchemaIfNecessary)
       {
         using NpgsqlConnection connection = CreateAndOpenConnection();
@@ -222,7 +222,7 @@ namespace Hangfire.PostgreSql
       if (_connectionFactory is not null)
       {
         connection = _connectionFactory.GetOrCreateConnection();
-        
+
         if (!Options.EnableTransactionScopeEnlistment)
         {
           if (connection.Settings.Enlist)
@@ -238,9 +238,14 @@ namespace Hangfire.PostgreSql
         connection = _existingConnection;
         if (connection == null)
         {
-          _connectionStringBuilder.Enlist = Options.EnableTransactionScopeEnlistment;
-
-          SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+          // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
+          // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
+          // transaction. Also see #248.
+          if (!Options.EnableTransactionScopeEnlistment)
+          {
+            _connectionStringBuilder.Enlist = false;
+            SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+          }
 
           connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
           _connectionSetup?.Invoke(connection);
