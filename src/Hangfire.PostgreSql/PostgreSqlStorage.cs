@@ -72,6 +72,10 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException($"Connection string [{connectionString}] is not valid", nameof(connectionString));
       }
 
+      builder.Enlist = Options.EnableTransactionScopeEnlistment;
+
+      SetTimezoneToUtcForNpgsqlCompatibility(builder);
+
       _connectionStringBuilder = builder;
       _connectionSetup = connectionSetup;
 
@@ -203,12 +207,9 @@ namespace Hangfire.PostgreSql
     internal NpgsqlConnection CreateAndOpenConnection()
     {
       NpgsqlConnection connection = _existingConnection;
+
       if (connection == null)
       {
-        _connectionStringBuilder.Enlist = Options.EnableTransactionScopeEnlistment;
-
-        SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
-
         connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
         _connectionSetup?.Invoke(connection);
       }
