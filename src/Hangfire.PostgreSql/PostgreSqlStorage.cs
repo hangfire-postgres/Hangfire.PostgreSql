@@ -36,6 +36,7 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlStorage : JobStorage
   {
+    private readonly IConnectionFactory _connectionFactory;
     private readonly Action<NpgsqlConnection> _connectionSetup;
     private readonly NpgsqlConnectionStringBuilder _connectionStringBuilder;
     private readonly NpgsqlConnection _existingConnection;
@@ -45,6 +46,20 @@ namespace Hangfire.PostgreSql
 
     public PostgreSqlStorage(string connectionString, PostgreSqlStorageOptions options)
       : this(connectionString, null, options) { }
+
+    public PostgreSqlStorage(IConnectionFactory connectionFactory, PostgreSqlStorageOptions options)
+    {
+      _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+      Options = options ?? throw new ArgumentNullException(nameof(options));
+
+      if (options.PrepareSchemaIfNecessary)
+      {
+        using NpgsqlConnection connection = CreateAndOpenConnection();
+        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
+      }
+
+      InitializeQueueProviders();
+    }
 
     /// <summary>
     ///   Initializes PostgreSqlStorage from the provided PostgreSqlStorageOptions and either the provided connection string.
@@ -206,12 +221,39 @@ namespace Hangfire.PostgreSql
 
     internal NpgsqlConnection CreateAndOpenConnection()
     {
-      NpgsqlConnection connection = _existingConnection;
+      NpgsqlConnection connection;
 
-      if (connection == null)
+      if (_connectionFactory is not null)
       {
-        connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
-        _connectionSetup?.Invoke(connection);
+        connection = _connectionFactory.GetOrCreateConnection();
+
+        if (!Options.EnableTransactionScopeEnlistment)
+        {
+          if (connection.Settings.Enlist)
+          {
+            throw new ArgumentException(
+              $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
+          }
+        }
+
+      }
+      else
+      {
+        connection = _existingConnection;
+        if (connection == null)
+        {
+          // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
+          // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
+          // transaction. Also see #248.
+          if (!Options.EnableTransactionScopeEnlistment)
+          {
+            _connectionStringBuilder.Enlist = false;
+            SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
+          }
+
+          connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
+          _connectionSetup?.Invoke(connection);
+        }
       }
 
       try
