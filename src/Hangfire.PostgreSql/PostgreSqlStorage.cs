@@ -222,7 +222,7 @@ namespace Hangfire.PostgreSql
 
       if (_connectionFactory is not null)
       {
-        connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
+        connection = _connectionFactory.GetOrCreateConnection();
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
