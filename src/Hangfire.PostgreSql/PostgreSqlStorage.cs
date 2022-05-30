@@ -87,11 +87,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException($"Connection string [{connectionString}] is not valid", nameof(connectionString));
       }
 
-      builder.Enlist = Options.EnableTransactionScopeEnlistment;
+      _connectionStringBuilder = SetupConnectionStringBuilderParameters(builder);
 
-      SetTimezoneToUtcForNpgsqlCompatibility(builder);
-
-      _connectionStringBuilder = builder;
       _connectionSetup = connectionSetup;
 
       if (options.PrepareSchemaIfNecessary)
@@ -229,7 +226,7 @@ namespace Hangfire.PostgreSql
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
-          if (connection.Settings.Enlist)
+          if (connection.PostgresParameters.TryGetValue("Enlist", out string enlistValue) && enlistValue.ToLowerInvariant() == "true")
           {
             throw new ArgumentException(
               $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
@@ -242,15 +239,6 @@ namespace Hangfire.PostgreSql
         connection = _existingConnection;
         if (connection == null)
         {
-          // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
-          // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
-          // transaction. Also see #248.
-          if (!Options.EnableTransactionScopeEnlistment)
-          {
-            _connectionStringBuilder.Enlist = false;
-            SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
-          }
-
           connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
           _connectionSetup?.Invoke(connection);
         }
@@ -444,6 +432,20 @@ namespace Hangfire.PostgreSql
         builder = null;
         return false;
       }
+    }
+
+    private NpgsqlConnectionStringBuilder SetupConnectionStringBuilderParameters(NpgsqlConnectionStringBuilder builder)
+    {
+      // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
+      // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
+      // transaction. Also see #248.
+      if (!Options.EnableTransactionScopeEnlistment)
+      {
+        builder.Enlist = false;
+        SetTimezoneToUtcForNpgsqlCompatibility(builder);
+      }
+
+      return builder;
     }
   }
 }
