@@ -222,11 +222,11 @@ namespace Hangfire.PostgreSql
 
       if (_connectionFactory is not null)
       {
-        connection = _connectionFactory.GetOrCreateConnection();
+        connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
-          if (connection.PostgresParameters.TryGetValue("Enlist", out string enlistValue) && enlistValue.ToLowerInvariant() == "true")
+          if (connection.ConnectionString.Contains("Enlist=True"))
           {
             throw new ArgumentException(
               $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");

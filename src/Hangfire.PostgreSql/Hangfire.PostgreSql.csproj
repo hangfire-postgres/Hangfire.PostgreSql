@@ -61,7 +61,7 @@
         <PackageId>Hangfire.PostgreSql</PackageId>
       </PropertyGroup>
       <ItemGroup>
-        <PackageReference Include="Npgsql" Version="5.0.0" />
+        <PackageReference Include="Npgsql" Version="6.0.0" />
       </ItemGroup>
     </Otherwise>
   </Choose>
