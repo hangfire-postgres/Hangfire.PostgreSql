@@ -87,7 +87,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException($"Connection string [{connectionString}] is not valid", nameof(connectionString));
       }
 
-      _connectionStringBuilder = builder;
+      _connectionStringBuilder = SetupConnectionStringBuilderParameters(builder);
       _connectionSetup = connectionSetup;
 
       if (options.PrepareSchemaIfNecessary)
@@ -238,15 +238,6 @@ namespace Hangfire.PostgreSql
         connection = _existingConnection;
         if (connection == null)
         {
-          // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
-          // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
-          // transaction. Also see #248.
-          if (!Options.EnableTransactionScopeEnlistment)
-          {
-            _connectionStringBuilder.Enlist = false;
-            SetTimezoneToUtcForNpgsqlCompatibility(_connectionStringBuilder);
-          }
-
           connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
           _connectionSetup?.Invoke(connection);
         }
@@ -440,6 +431,20 @@ namespace Hangfire.PostgreSql
         builder = null;
         return false;
       }
+    }
+
+    private NpgsqlConnectionStringBuilder SetupConnectionStringBuilderParameters(NpgsqlConnectionStringBuilder builder)
+    {
+      // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
+      // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
+      // transaction. Also see #248.
+      if (!Options.EnableTransactionScopeEnlistment)
+      {
+        builder.Enlist = false;
+        SetTimezoneToUtcForNpgsqlCompatibility(builder);
+      }
+
+      return builder;
     }
   }
 }

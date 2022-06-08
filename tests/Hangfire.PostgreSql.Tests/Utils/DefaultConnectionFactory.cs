@@ -1,14 +1,15 @@
 ﻿using Npgsql;
 
-namespace Hangfire.PostgreSql.Tests.Utils;
-
-public class DefaultConnectionFactory: IConnectionFactory
+namespace Hangfire.PostgreSql.Tests.Utils
 {
-  /// <summary>
-  /// Get or create NpgsqlConnection
-  /// </summary>
-  public NpgsqlConnection GetOrCreateConnection()
+  public class DefaultConnectionFactory : IConnectionFactory
   {
-    return ConnectionUtils.CreateConnection();
+    /// <summary>
+    /// Get or create NpgsqlConnection
+    /// </summary>
+    public NpgsqlConnection GetOrCreateConnection()
+    {
+      return ConnectionUtils.CreateConnection();
+    }
   }
 }
