@@ -50,7 +50,7 @@
   <Choose>
     <When Condition="'$(NpgsqlVersion)' == '5'">
       <PropertyGroup>
-        <!--For pre-processor directive use in source code; set in both Hangfire.PostgreSql.csproj and Hangfire.PostgreSql.Tests.csproj -->
+        <!--For pre-processor directive use in source code -->
         <DefineConstants>USING_NPGSQL_VERSION_5</DefineConstants>
         <PackageId>Hangfire.PostgreSql.Npgsql5</PackageId>
       </PropertyGroup>
