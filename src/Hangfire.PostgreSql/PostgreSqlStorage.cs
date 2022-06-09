@@ -225,7 +225,13 @@ namespace Hangfire.PostgreSql
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
-          if (connection.Settings.Enlist)
+          NpgsqlConnectionStringBuilder connectionStringBuilder;
+#if !USING_NPGSQL_VERSION_5
+          connectionStringBuilder = connection.Settings;
+#else
+          connectionStringBuilder = new(connection.ConnectionString);
+#endif
+          if (connectionStringBuilder.Enlist)
           {
             throw new ArgumentException(
               $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
