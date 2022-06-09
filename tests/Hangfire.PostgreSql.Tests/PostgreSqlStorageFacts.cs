@@ -134,6 +134,10 @@ namespace Hangfire.PostgreSql.Tests
       Assert.NotNull(connection);
     }
 
+#if !USING_NPGSQL_VERSION_5
+    /// <summary>
+    /// This test relies upon Npgsql v6 properties being available to PostgreSqlStorage
+    /// </summary>
     [Fact]
     public void CreateAndOpenConnection_ThrowsAnException_WithExistingConnectionFactoryAndInvalidOptions()
     {
@@ -144,6 +148,7 @@ namespace Hangfire.PostgreSql.Tests
       PostgreSqlStorage storage = new(new DefaultConnectionFactory(), option);
       Assert.Throws<ArgumentException>(() => storage.CreateAndOpenConnection());
     }
+#endif
 
     private PostgreSqlStorage CreateStorage()
     {
