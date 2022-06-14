@@ -57,10 +57,10 @@ config.UsePostgreSqlStorage(new DefaultConnectionBuilder(
 ```
 
 ### License
-Copyright © 2014-2021 Frank Hommers http://hmm.rs/Hangfire.PostgreSql.
+Copyright © 2014-2022 Frank Hommers [https://github.com/frankhommers/Hangfire.PostgreSql].
 
 Collaborators: 
-Frank Hommers (frankhommers), Vytautas Kasparavičius (vytautask) and Žygimantas Arūna (azygis)
+Frank Hommers (frankhommers), Vytautas Kasparavičius (vytautask), Žygimantas Arūna (azygis) and Andrew Armstrong (Plasma)
 
 Contributors:
 Burhan Irmikci (barhun), Zachary Sims(zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel), , Vincent Vrijburg, David Roth (davidroth) and Tinyakov.
