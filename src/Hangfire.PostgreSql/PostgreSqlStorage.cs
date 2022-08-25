@@ -279,7 +279,8 @@ namespace Hangfire.PostgreSql
       [InstantHandle] Func<DbConnection, IDbTransaction, T> func,
       IsolationLevel? isolationLevel = null)
     {
-      isolationLevel ??= IsolationLevel.ReadCommitted;
+      // Use isolation level of an already opened transaction in order to avoid isolation level conflict
+      isolationLevel ??= Transaction.Current?.IsolationLevel ?? IsolationLevel.ReadCommitted;
 
       if (!EnvironmentHelpers.IsMono())
       {

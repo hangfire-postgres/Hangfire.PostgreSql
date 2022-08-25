@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Transactions;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -143,6 +144,20 @@ namespace Hangfire.PostgreSql.Tests
       };
       PostgreSqlStorage storage = new(new DefaultConnectionFactory(), option);
       Assert.Throws<ArgumentException>(() => storage.CreateAndOpenConnection());
+    }
+
+    [Fact]
+    public void CanUseTransaction_WithDifferentTransactionIsolationLevel()
+    {
+      using TransactionScope scope = new(TransactionScopeOption.Required,
+        new TransactionOptions() { IsolationLevel = IsolationLevel.Serializable });
+      
+      PostgreSqlStorage storage = new(new DefaultConnectionFactory(), _options);
+      NpgsqlConnection connection = storage.CreateAndOpenConnection();
+      
+      bool success = storage.UseTransaction(connection, (_, _) => true);
+      
+      Assert.True(success);
     }
 
     private PostgreSqlStorage CreateStorage()
