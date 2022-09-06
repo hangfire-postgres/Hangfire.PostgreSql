@@ -1,7 +1,7 @@
 License
 ========
 
-Copyright © 2014-2021 Frank Hommers http://hmm.rs/Hangfire.PostgreSql and others (Burhan Irmikci (barhun), Zachary Sims(
+Copyright © 2014-2022 Frank Hommers https://github.com/frankhommers/Hangfire.PostgreSql and others (Burhan Irmikci (barhun), Zachary Sims(
 zsims), kgamecarter, Stafford Williams (staff0rd), briangweber, Viktor Svyatokha (ahydrax), Christopher Dresel (Dresel),
 Vytautas Kasparavičius (vytautask), Vincent Vrijburg, David Roth (davidroth).
 
