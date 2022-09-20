@@ -264,6 +264,7 @@ namespace Hangfire.PostgreSql
           Job = DeserializeJob(job.InvocationData, job.Arguments),
           History = history,
           Properties = parameters,
+          ExpireAt = job.ExpireAt,
         };
       });
     }
