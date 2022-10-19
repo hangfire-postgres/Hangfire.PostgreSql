@@ -527,10 +527,10 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT SUM(""VALUE"") FROM (
-            SELECT SUM(""value"") VALUE FROM ""{_options.SchemaName}"".""counter"" WHERE ""key"" = @Key
+      string query = $@"SELECT SUM(""value"") FROM (
+            SELECT SUM(""value"") ""value"" FROM ""{_options.SchemaName}"".""counter"" WHERE ""key"" = @Key
             UNION ALL
-            SELECT SUM(""value"") VALUE FROM ""{_options.SchemaName}"".""aggregatedcounter"" WHERE ""key"" = @Key) c";
+            SELECT SUM(""value"") ""value"" FROM ""{_options.SchemaName}"".""aggregatedcounter"" WHERE ""key"" = @Key) c";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
           .QuerySingleOrDefault<long?>(query, new { Key = key }) ?? 0);

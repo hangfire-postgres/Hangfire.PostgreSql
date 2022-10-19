@@ -9,10 +9,10 @@ $$
     END
 $$;
 
-create table aggregatedcounter (
-    "id" bigserial primary key not null,
-    "key" text not null unique,
-    "value" int8 not null,
+CREATE TABLE aggregatedcounter (
+    "id" bigserial PRIMARY KEY NOT NULL,
+    "key" text NOT NULL UNIQUE,
+    "value" int8 NOT NULL,
     "expireat" timestamp
 );
 

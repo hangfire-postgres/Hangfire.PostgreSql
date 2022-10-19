@@ -89,27 +89,27 @@ namespace Hangfire.PostgreSql
       // However extended support for SQL Server 2012 SP4 ends only on
       // July 12, 2022.
       return
-        $@"begin;
+        $@"BEGIN;
 
-insert into ""{_storage.Options.SchemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
-      select
+INSERT INTO ""{_storage.Options.SchemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
+      SELECT
       ""key"",
-      sum(""value""),
-      max(""expireat"")
-      from ""hangfire"".""counter""
-      group by
+      SUM(""value""),
+      MAX(""expireat"")
+      FROM ""{_storage.Options.SchemaName}"".""counter""
+      GROUP BY
       ""key""
-      on conflict(""key"") do
-        update
-          set
-      ""value"" = ""aggregatedcounter"".""value"" + excluded.""value"",
-      ""expireat"" = excluded.""expireat"";
+      ON CONFLICT(""key"") DO
+        UPDATE
+          SET
+      ""value"" = ""aggregatedcounter"".""value"" + EXCLUDED.""value"",
+      ""expireat"" = EXCLUDED.""expireat"";
 
-      delete from ""{_storage.Options.SchemaName}"".""counter""
-        where
-      ""key"" in (select ""key"" from ""{_storage.Options.SchemaName}"".""aggregatedcounter"" );
+      DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
+        WHERE
+      ""key"" IN (SELECT ""key"" FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" );
 
-      commit;
+      COMMIT;
       ";
     }
   }
