@@ -33,6 +33,7 @@ namespace Hangfire.PostgreSql
     private TimeSpan _jobExpirationCheckInterval;
     private TimeSpan _queuePollInterval;
     private TimeSpan _transactionSerializationTimeout;
+    private TimeSpan _countersAggregateInterval;
 
     public PostgreSqlStorageOptions()
     {
@@ -41,6 +42,7 @@ namespace Hangfire.PostgreSql
       DistributedLockTimeout = TimeSpan.FromMinutes(10);
       TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
       JobExpirationCheckInterval = TimeSpan.FromHours(1);
+      CountersAggregateInterval = TimeSpan.FromMinutes(5);
       SchemaName = "hangfire";
       AllowUnsafeValues = false;
       UseNativeDatabaseTransactions = true;
@@ -94,6 +96,15 @@ namespace Hangfire.PostgreSql
       }
     }
 
+    public TimeSpan CountersAggregateInterval
+    {
+      get => _countersAggregateInterval;
+      set {
+        ThrowIfValueIsNotPositive(value, nameof(CountersAggregateInterval));
+        _countersAggregateInterval = value;
+      }
+    }
+    
     /// <summary>
     ///   Gets or sets the number of records deleted in a single batch in expiration manager
     /// </summary>
