@@ -171,8 +171,6 @@ namespace Hangfire.PostgreSql
     {
       yield return new ExpirationManager(this);
       yield return new CountersAggregator(this, Options.CountersAggregateInterval);
-
-      //TODO: add counters aggregator? (like https://github.com/HangfireIO/Hangfire/blob/master/src/Hangfire.SqlServer/SqlServerStorage.cs#L154)
     }
 
     public override void WriteOptionsToLog(ILog logger)

@@ -77,17 +77,8 @@ namespace Hangfire.PostgreSql
       cancellationToken.Wait(_interval);
     }
 
-    public override string ToString()
-    {
-      return GetType().ToString();
-    }
-
     private string GetAggregationQuery(PostgreSqlStorage storage)
     {
-      // Starting from SQL Server 2014 it's possible to get a query with
-      // much lower cost by adding a clustered index on [Key] column.
-      // However extended support for SQL Server 2012 SP4 ends only on
-      // July 12, 2022.
       return
         $@"BEGIN;
 
