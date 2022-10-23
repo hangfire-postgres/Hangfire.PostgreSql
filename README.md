@@ -45,15 +45,17 @@ If you encounter any issues/bugs or have idea of a feature regarding Hangfire.Po
 ### Enabling SSL support
 SSL support can be enabled for Hangfire.PostgreSql library using the following mechanism:
 ```csharp
-config.UsePostgreSqlStorage(new DefaultConnectionBuilder(
-    options.HangfireDatabaseConnectionString,
-    connection =>
+config.UsePostgreSqlStorage(
+    Configuration.GetConnectionString("HangfireConnection"), // connection string
+    connection => // connection setup - gets called after instantiating the connection and before any calls to DB are made
     {
         connection.ProvideClientCertificatesCallback += clientCerts =>
         {
             clientCerts.Add(X509Certificate.CreateFromCertFile("[CERT_FILENAME]"));
         };
-    }));
+    },
+    new PostgreSqlStorageOptions() // no overload without options, so just pass the default or configured options
+);
 ```
 
 ### License
