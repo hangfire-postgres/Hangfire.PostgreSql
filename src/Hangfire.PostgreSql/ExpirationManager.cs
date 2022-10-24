@@ -45,6 +45,7 @@ namespace Hangfire.PostgreSql
     };
 
     private static readonly string[] _processedTables = {
+      "aggregatedcounter",
       "counter",
       "job",
       "list",

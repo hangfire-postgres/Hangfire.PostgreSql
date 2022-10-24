@@ -291,13 +291,23 @@ namespace Hangfire.PostgreSql
           SELECT COUNT(*) 
           FROM ""{_storage.Options.SchemaName}"".""server"";
 
-          SELECT SUM(""value"") 
-          FROM ""{_storage.Options.SchemaName}"".""counter"" 
-          WHERE ""key"" = 'stats:succeeded';
+          SELECT SUM(""value"") FROM
+            (SELECT SUM(""value"") value
+            FROM ""{_storage.Options.SchemaName}"".""counter"" 
+            WHERE ""key"" = 'stats:succeeded'
+            UNION ALL
+            SELECT SUM(""value"") value
+            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
+            WHERE ""key"" = 'stats:succeeded') c;
 
-          SELECT SUM(""value"") 
-          FROM ""{_storage.Options.SchemaName}"".""counter"" 
-          WHERE ""key"" = 'stats:deleted';
+          SELECT SUM(""value"") FROM
+            (SELECT SUM(""value"") value
+            FROM ""{_storage.Options.SchemaName}"".""counter"" 
+            WHERE ""key"" = 'stats:deleted'
+            UNION ALL
+            SELECT SUM(""value"") value
+            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
+            WHERE ""key"" = 'stats:deleted') c;
 
           SELECT COUNT(*) 
           FROM ""{_storage.Options.SchemaName}"".""set"" 
