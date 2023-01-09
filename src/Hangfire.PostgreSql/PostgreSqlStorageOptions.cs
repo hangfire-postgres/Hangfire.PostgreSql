@@ -105,7 +105,7 @@ namespace Hangfire.PostgreSql
         _countersAggregateInterval = value;
       }
     }
-    
+
     /// <summary>
     ///   Gets or sets the number of records deleted in a single batch in expiration manager
     /// </summary>
