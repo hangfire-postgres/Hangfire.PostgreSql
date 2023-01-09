@@ -47,6 +47,7 @@ namespace Hangfire.PostgreSql
       AllowUnsafeValues = false;
       UseNativeDatabaseTransactions = true;
       PrepareSchemaIfNecessary = true;
+      EnableTransactionScopeEnlistment = true;
       DeleteExpiredBatchSize = 1000;
     }
 
