@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Tests.Utils;
@@ -37,7 +36,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = SerializationHelper.Serialize(invocationData), invocationData.Arguments,
+            InvocationData = SerializationHelper.Serialize(invocationData),
+            invocationData.Arguments,
           });
 
         Mock<IState> state = new();
