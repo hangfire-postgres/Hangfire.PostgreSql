@@ -76,7 +76,7 @@ namespace Hangfire.PostgreSql.Tests
 
     [Fact]
     [CleanDatabase]
-    public void Acquire_AcquiresExclusiveApplicationLock_WithUseNativeDatabaseTransactions_OnSession_WhenDeadlockIsOccured()
+    public void Acquire_AcquiresExclusiveApplicationLock_WithUseNativeDatabaseTransactions_OnSession_WhenDeadlockOccurs()
     {
       PostgreSqlStorageOptions options = new() {
         SchemaName = GetSchemaName(),
@@ -177,7 +177,6 @@ namespace Hangfire.PostgreSql.Tests
       thread.Join();
     }
 
-
     [Fact]
     [CleanDatabase]
     public void Dispose_ReleasesExclusiveApplicationLock_WithUseNativeDatabaseTransactions()
@@ -220,7 +219,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private void UseConnection(Action<NpgsqlConnection> action)
     {
-      _connection = _connection ?? ConnectionUtils.CreateConnection();
+      _connection ??= ConnectionUtils.CreateConnection();
       action(_connection);
     }
 

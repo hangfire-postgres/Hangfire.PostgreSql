@@ -197,12 +197,13 @@ namespace Hangfire.PostgreSql
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
-          NpgsqlConnectionStringBuilder connectionStringBuilder;
+          NpgsqlConnectionStringBuilder connectionStringBuilder =
 #if !USING_NPGSQL_VERSION_5
-          connectionStringBuilder = connection.Settings;
+          connection.Settings;
 #else
-          connectionStringBuilder = new(connection.ConnectionString);
+          new(connection.ConnectionString);
 #endif
+
           if (connectionStringBuilder.Enlist)
           {
             throw new ArgumentException(
@@ -332,20 +333,7 @@ namespace Hangfire.PostgreSql
 
     internal TransactionScope CreateTransactionScope(IsolationLevel? isolationLevel, TimeSpan? timeout = null)
     {
-      isolationLevel ??= IsolationLevel.ReadCommitted;
-      timeout ??= TransactionManager.DefaultTimeout;
-      TransactionScopeOption scopeOption = TransactionScopeOption.RequiresNew;
-      if (Options.EnableTransactionScopeEnlistment)
-      {
-        Transaction currentTransaction = Transaction.Current;
-        if (currentTransaction != null)
-        {
-          isolationLevel = currentTransaction.IsolationLevel;
-          scopeOption = TransactionScopeOption.Required;
-        }
-      }
-
-      return new TransactionScope(scopeOption, new TransactionOptions { IsolationLevel = isolationLevel.Value, Timeout = timeout.GetValueOrDefault(TransactionManager.DefaultTimeout) });
+      return TransactionHelpers.CreateTransactionScope(isolationLevel, Options.EnableTransactionScopeEnlistment, timeout);
     }
 
     private static System.Data.IsolationLevel? ConvertIsolationLevel(IsolationLevel? isolationLevel)

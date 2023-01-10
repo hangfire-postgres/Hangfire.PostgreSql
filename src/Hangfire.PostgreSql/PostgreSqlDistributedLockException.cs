@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -27,6 +27,10 @@ namespace Hangfire.PostgreSql
   public class PostgreSqlDistributedLockException : Exception
   {
     public PostgreSqlDistributedLockException(string message) : base(message)
+    {
+    }
+
+    public PostgreSqlDistributedLockException(string message, Exception innerException) : base(message, innerException)
     {
     }
   }
