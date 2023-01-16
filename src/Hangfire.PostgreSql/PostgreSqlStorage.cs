@@ -225,12 +225,8 @@ namespace Hangfire.PostgreSql
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
-          NpgsqlConnectionStringBuilder connectionStringBuilder;
-#if !USING_NPGSQL_VERSION_5
-          connectionStringBuilder = connection.Settings;
-#else
-          connectionStringBuilder = new(connection.ConnectionString);
-#endif
+          NpgsqlConnectionStringBuilder connectionStringBuilder = new(connection.ConnectionString);
+
           if (connectionStringBuilder.Enlist)
           {
             throw new ArgumentException(

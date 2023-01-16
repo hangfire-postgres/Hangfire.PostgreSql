@@ -30,11 +30,11 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.0.123" />
-    <PackageReference Include="GitVersion.MsBuild" Version="5.8.1">
+    <PackageReference Include="GitVersion.MsBuild" Version="5.11.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Hangfire.Core" Version="1.7.27" />
+    <PackageReference Include="Hangfire.Core" Version="1.7.32" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
   </ItemGroup>
 
@@ -63,7 +63,7 @@
         <PackageId>Hangfire.PostgreSql</PackageId>
       </PropertyGroup>
       <ItemGroup>
-        <PackageReference Include="Npgsql" Version="6.0.0" />
+        <PackageReference Include="Npgsql" Version="7.0.1" />
       </ItemGroup>
     </Otherwise>
   </Choose>
