@@ -25,6 +25,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Transactions;
 using Dapper;
+using Hangfire.Annotations;
 using Hangfire.Logging;
 using Npgsql;
 using IsolationLevel = System.Data.IsolationLevel;
@@ -126,7 +127,7 @@ namespace Hangfire.PostgreSql
           IDbTransaction trx = null;
           try
           {
-            TryBeginTransaction(connection, out trx);
+            trx = BeginTransactionIfNotPresent(connection);
 
             int rowsAffected = connection.Execute($@"
                 INSERT INTO ""{options.SchemaName}"".""lock""(""resource"", ""acquired"") 
@@ -189,7 +190,7 @@ namespace Hangfire.PostgreSql
         IDbTransaction trx = null;
         try
         {
-          TryBeginTransaction(connection, out trx);
+          trx = BeginTransactionIfNotPresent(connection);
           connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
             new {
               Resource = resource,
@@ -208,11 +209,12 @@ namespace Hangfire.PostgreSql
         }
       }
 
-      private static void TryBeginTransaction(IDbConnection connection, out IDbTransaction trx)
+      [CanBeNull]
+      private static IDbTransaction BeginTransactionIfNotPresent(IDbConnection connection)
       {
         // If transaction scope was created outside of hangfire, the newly-opened connection is automatically enlisted into the transaction.
         // Starting a new transaction throws "A transaction is already in progress; nested/concurrent transactions aren't supported." in that case.
-        trx = Transaction.Current == null ? connection.BeginTransaction(IsolationLevel.ReadCommitted) : null;
+        return Transaction.Current == null ? connection.BeginTransaction(IsolationLevel.ReadCommitted) : null;
       }
     }
 
