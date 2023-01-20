@@ -30,7 +30,6 @@ using Dapper;
 using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
-using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql
 {
@@ -61,24 +60,7 @@ namespace Hangfire.PostgreSql
 
     private TransactionScope CreateTransactionScope()
     {
-      IsolationLevel isolationLevel = IsolationLevel.ReadCommitted;
-      TransactionScopeOption scopeOption = TransactionScopeOption.RequiresNew;
-      if (_storage.Options.EnableTransactionScopeEnlistment)
-      {
-        Transaction currentTransaction = Transaction.Current;
-        if (currentTransaction != null)
-        {
-          isolationLevel = currentTransaction.IsolationLevel;
-          scopeOption = TransactionScopeOption.Required;
-        }
-      }
-
-      TransactionOptions transactionOptions = new() {
-        IsolationLevel = isolationLevel,
-        Timeout = TransactionManager.MaximumTimeout,
-      };
-
-      return new TransactionScope(scopeOption, transactionOptions);
+      return _storage.CreateTransactionScope(null, TransactionManager.MaximumTimeout);
     }
 
     public override void ExpireJob(string jobId, TimeSpan expireIn)
