@@ -47,6 +47,7 @@ namespace Hangfire.PostgreSql
       AllowUnsafeValues = false;
       UseNativeDatabaseTransactions = true;
       PrepareSchemaIfNecessary = true;
+      EnableTransactionScopeEnlistment = true;
       DeleteExpiredBatchSize = 1000;
     }
 
@@ -104,7 +105,7 @@ namespace Hangfire.PostgreSql
         _countersAggregateInterval = value;
       }
     }
-    
+
     /// <summary>
     ///   Gets or sets the number of records deleted in a single batch in expiration manager
     /// </summary>

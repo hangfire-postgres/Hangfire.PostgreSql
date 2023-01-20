@@ -27,6 +27,7 @@ using System.Text;
 using System.Transactions;
 using Hangfire.Annotations;
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
@@ -119,13 +120,9 @@ namespace Hangfire.PostgreSql
       }
 
       NpgsqlConnectionStringBuilder connectionStringBuilder = new(existingConnection.ConnectionString);
-
-      if (!options.EnableTransactionScopeEnlistment)
+      if (!options.EnableTransactionScopeEnlistment && connectionStringBuilder.Enlist)
       {
-        if (connectionStringBuilder.Enlist)
-        {
-          throw new ArgumentException($"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(options.EnableTransactionScopeEnlistment)} to `true`.");
-        }
+        throw new ArgumentException($"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(options.EnableTransactionScopeEnlistment)} to `true`.");
       }
 
       _existingConnection = existingConnection;
@@ -134,23 +131,8 @@ namespace Hangfire.PostgreSql
       InitializeQueueProviders();
     }
 
-    public PostgreSqlStorage(NpgsqlConnection existingConnection)
+    public PostgreSqlStorage(NpgsqlConnection existingConnection) : this(existingConnection, new PostgreSqlStorageOptions())
     {
-      if (existingConnection == null)
-      {
-        throw new ArgumentNullException(nameof(existingConnection));
-      }
-
-      NpgsqlConnectionStringBuilder connectionStringBuilder = new(existingConnection.ConnectionString);
-      if (connectionStringBuilder.Enlist)
-      {
-        throw new ArgumentException($"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(PostgreSqlStorageOptions.EnableTransactionScopeEnlistment)} to `true`.");
-      }
-
-      _existingConnection = existingConnection;
-      Options = new PostgreSqlStorageOptions();
-
-      InitializeQueueProviders();
     }
 
     public PersistentJobQueueProviderCollection QueueProviders { get; internal set; }
@@ -205,16 +187,6 @@ namespace Hangfire.PostgreSql
       }
     }
 
-    /// <summary>
-    /// Timezone must be UTC for compatibility with Npgsql 6 and our usage of "timestamp without time zone" columns
-    /// See https://github.com/frankhommers/Hangfire.PostgreSql/issues/221
-    /// </summary>
-    /// <param name="connectionStringBuilder">The ConnectionStringBuilder to set the Timezone property for</param>
-    internal static void SetTimezoneToUtcForNpgsqlCompatibility(NpgsqlConnectionStringBuilder connectionStringBuilder)
-    {
-      connectionStringBuilder.Timezone = "UTC";
-    }
-
     internal NpgsqlConnection CreateAndOpenConnection()
     {
       NpgsqlConnection connection;
@@ -225,12 +197,13 @@ namespace Hangfire.PostgreSql
 
         if (!Options.EnableTransactionScopeEnlistment)
         {
-          NpgsqlConnectionStringBuilder connectionStringBuilder;
+          NpgsqlConnectionStringBuilder connectionStringBuilder =
 #if !USING_NPGSQL_VERSION_5
-          connectionStringBuilder = connection.Settings;
+          connection.Settings;
 #else
-          connectionStringBuilder = new(connection.ConnectionString);
+          new(connection.ConnectionString);
 #endif
+
           if (connectionStringBuilder.Enlist)
           {
             throw new ArgumentException(
@@ -284,7 +257,7 @@ namespace Hangfire.PostgreSql
 
       if (!EnvironmentHelpers.IsMono())
       {
-        using TransactionScope transaction = CreateTransaction(isolationLevel);
+        using TransactionScope transaction = CreateTransactionScope(isolationLevel);
         T result = UseConnection(dedicatedConnection, connection => {
           connection.EnlistTransaction(Transaction.Current);
           return func(connection, null);
@@ -358,12 +331,9 @@ namespace Hangfire.PostgreSql
       }
     }
 
-    private static TransactionScope CreateTransaction(IsolationLevel? isolationLevel)
+    internal TransactionScope CreateTransactionScope(IsolationLevel? isolationLevel, TimeSpan? timeout = null)
     {
-      return isolationLevel != null
-        ? new TransactionScope(TransactionScopeOption.Required,
-          new TransactionOptions { IsolationLevel = isolationLevel.Value })
-        : new TransactionScope();
+      return TransactionHelpers.CreateTransactionScope(isolationLevel, Options.EnableTransactionScopeEnlistment, timeout);
     }
 
     private static System.Data.IsolationLevel? ConvertIsolationLevel(IsolationLevel? isolationLevel)
@@ -448,7 +418,7 @@ namespace Hangfire.PostgreSql
       if (!Options.EnableTransactionScopeEnlistment)
       {
         builder.Enlist = false;
-        SetTimezoneToUtcForNpgsqlCompatibility(builder);
+        builder.SetTimezoneToUtcForNpgsqlCompatibility();
       }
 
       return builder;

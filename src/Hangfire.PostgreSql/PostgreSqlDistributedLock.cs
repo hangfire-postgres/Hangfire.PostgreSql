@@ -23,9 +23,12 @@ using System;
 using System.Data;
 using System.Diagnostics;
 using System.Threading;
+using System.Transactions;
 using Dapper;
+using Hangfire.Annotations;
 using Hangfire.Logging;
 using Npgsql;
+using IsolationLevel = System.Data.IsolationLevel;
 
 namespace Hangfire.PostgreSql
 {
@@ -98,7 +101,7 @@ namespace Hangfire.PostgreSql
 
       if (rowsAffected <= 0)
       {
-        throw new PostgreSqlDistributedLockException($"Could not release a lock on the resource '{resource}'. Lock does not exists.");
+        throw new PostgreSqlDistributedLockException($"Could not release a lock on the resource '{resource}'. Lock does not exist.");
       }
     }
 
@@ -109,9 +112,11 @@ namespace Hangfire.PostgreSql
         Stopwatch lockAcquiringTime = Stopwatch.StartNew();
 
         bool tryAcquireLock = true;
+        Exception lastException = null;
 
         while (tryAcquireLock)
         {
+          lastException = null;
           if (connection.State != ConnectionState.Open)
           {
             connection.Open();
@@ -119,12 +124,12 @@ namespace Hangfire.PostgreSql
 
           TryRemoveLock(resource, connection, options);
 
+          IDbTransaction trx = null;
           try
           {
-            int rowsAffected;
-            using (IDbTransaction trx = connection.BeginTransaction(IsolationLevel.RepeatableRead))
-            {
-              rowsAffected = connection.Execute($@"
+            trx = BeginTransactionIfNotPresent(connection);
+
+            int rowsAffected = connection.Execute($@"
                 INSERT INTO ""{options.SchemaName}"".""lock""(""resource"", ""acquired"") 
                 SELECT @Resource, @Acquired
                 WHERE NOT EXISTS (
@@ -133,12 +138,11 @@ namespace Hangfire.PostgreSql
                 )
                 ON CONFLICT DO NOTHING;
               ",
-                new {
-                  Resource = resource,
-                  Acquired = DateTime.UtcNow,
-                }, trx);
-              trx.Commit();
-            }
+              new {
+                Resource = resource,
+                Acquired = DateTime.UtcNow,
+              }, trx);
+            trx?.Commit();
 
             if (rowsAffected > 0)
             {
@@ -147,7 +151,12 @@ namespace Hangfire.PostgreSql
           }
           catch (Exception ex)
           {
+            lastException = ex;
             Log(resource, "Failed to lock with transaction", ex);
+          }
+          finally
+          {
+            trx?.Dispose();
           }
 
           if (lockAcquiringTime.ElapsedMilliseconds > timeout.TotalMilliseconds)
@@ -173,26 +182,39 @@ namespace Hangfire.PostgreSql
           }
         }
 
-        throw new PostgreSqlDistributedLockException($@"Could not place a lock on the resource '{resource}': Lock timeout.");
+        throw new PostgreSqlDistributedLockException($@"Could not place a lock on the resource '{resource}': Lock timeout.", lastException);
       }
 
       private static void TryRemoveLock(string resource, IDbConnection connection, PostgreSqlStorageOptions options)
       {
+        IDbTransaction trx = null;
         try
         {
-          using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.RepeatableRead);
+          trx = BeginTransactionIfNotPresent(connection);
           connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
             new {
               Resource = resource,
               Timeout = DateTime.UtcNow - options.DistributedLockTimeout,
-            }, transaction: transaction);
+            }, trx);
 
-          transaction.Commit();
+          trx?.Commit();
         }
         catch (Exception ex)
         {
           Log(resource, "Failed to remove lock", ex);
         }
+        finally
+        {
+          trx?.Dispose();
+        }
+      }
+
+      [CanBeNull]
+      private static IDbTransaction BeginTransactionIfNotPresent(IDbConnection connection)
+      {
+        // If transaction scope was created outside of hangfire, the newly-opened connection is automatically enlisted into the transaction.
+        // Starting a new transaction throws "A transaction is already in progress; nested/concurrent transactions aren't supported." in that case.
+        return Transaction.Current == null ? connection.BeginTransaction(IsolationLevel.ReadCommitted) : null;
       }
     }
 
