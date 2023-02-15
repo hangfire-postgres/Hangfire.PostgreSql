@@ -86,6 +86,7 @@ namespace Hangfire.PostgreSql
         WHERE jq.""queue"" = @Queue 
         AND jq.""fetchedat"" {(fetched ? "IS NOT NULL" : "IS NULL")}
         AND j.""id"" IS NOT NULL
+        ORDER BY jq.""fetchedat"", jq.""jobid""
         LIMIT @Limit OFFSET @Offset;
       ";
 
