@@ -464,6 +464,34 @@ namespace Hangfire.PostgreSql.Tests
       });
     }
 
+    [Fact]
+    [CleanDatabase]
+    public void Queues_Can_Dequeue_On_Notification()
+    {
+      var timeout = TimeSpan.FromSeconds(30);
+
+      UseConnection((connection, storage) => {
+
+        storage.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
+        storage.Options.EnableLongPolling = true;
+
+        PostgreSqlJobQueue queue = CreateJobQueue(storage, false);
+        IFetchedJob job = null;
+        //as UseConnection does not support async-await we have to work with Thread.Sleep
+
+        var task = Task.Run(() => {
+          //dequeue the job asynchronously
+          job = queue.Dequeue(new[] { "default" }, new CancellationTokenSource(timeout).Token);
+        });
+
+        Thread.Sleep(2000); // Give thread time to startup.
+
+        queue.Enqueue(connection, "default", "1");
+        task.Wait(timeout);
+        Assert.NotNull(job);
+      });
+    }
+
     private void Enqueue_AddsAJobToTheQueue(bool useNativeDatabaseTransactions)
     {
       UseConnection((connection, storage) => {

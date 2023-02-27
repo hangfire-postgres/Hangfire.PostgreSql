@@ -123,6 +123,7 @@ namespace Hangfire.PostgreSql
     public bool PrepareSchemaIfNecessary { get; set; }
     public string SchemaName { get; set; }
     public bool EnableTransactionScopeEnlistment { get; set; }
+    public bool EnableLongPolling { get; set; }
 
     private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
     {
