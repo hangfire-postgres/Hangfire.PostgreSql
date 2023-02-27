@@ -71,7 +71,7 @@ namespace Hangfire.PostgreSql
         try
         {
           cancelListenSource?.Cancel();
-          listenTask.Wait();
+          listenTask?.Wait();
         }
         catch (AggregateException)
         {
