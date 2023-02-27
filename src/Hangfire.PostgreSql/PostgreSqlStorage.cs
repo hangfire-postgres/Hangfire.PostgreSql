@@ -187,7 +187,7 @@ namespace Hangfire.PostgreSql
       }
     }
 
-    internal NpgsqlConnection CreateAndOpenConnection()
+    internal NpgsqlConnection CreateAndOpenConnection(bool requireNew = false)
     {
       NpgsqlConnection connection;
 
@@ -215,9 +215,16 @@ namespace Hangfire.PostgreSql
       else
       {
         connection = _existingConnection;
+
         if (connection == null)
         {
           connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
+          _connectionSetup?.Invoke(connection);
+        }
+
+        if(connection != null && requireNew)
+        {
+          connection = connection.CloneWith(connection.Settings.ConnectionString);
           _connectionSetup?.Invoke(connection);
         }
       }

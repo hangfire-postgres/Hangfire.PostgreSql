@@ -24,6 +24,7 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Dapper;
 using Hangfire.PostgreSql.Properties;
 using Hangfire.Storage;
@@ -40,16 +41,43 @@ namespace Hangfire.PostgreSql
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       SignalDequeue = new AutoResetEvent(false);
+      JobQueueNotification = new AutoResetEvent(false);
     }
 
     private AutoResetEvent SignalDequeue { get; }
+    private AutoResetEvent JobQueueNotification { get; }
+    private const string _jobNotificationChannel = "new_job";
 
     [NotNull]
     public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
     {
-      return _storage.Options.UseNativeDatabaseTransactions
-        ? Dequeue_Transaction(queues, cancellationToken)
-        : Dequeue_UpdateCount(queues, cancellationToken);
+      Task listenTask = null;
+      CancellationTokenSource cancelListenSource = null;
+
+      if(_storage.Options.EnableLongPolling)
+      {
+        cancelListenSource = new CancellationTokenSource();
+        listenTask = ListenForNotifications(cancelListenSource.Token);
+      }
+
+      try
+      {
+        return _storage.Options.UseNativeDatabaseTransactions
+          ? Dequeue_Transaction(queues, cancellationToken)
+          : Dequeue_UpdateCount(queues, cancellationToken);
+      }
+      finally
+      {
+        try
+        {
+          cancelListenSource?.Cancel();
+          listenTask.Wait();
+        }
+        catch (AggregateException)
+        {
+          // Do nothing, cancel exception is expected.
+        }
+      }
     }
 
     public void Enqueue(IDbConnection connection, string queue, string jobId)
@@ -61,6 +89,11 @@ namespace Hangfire.PostgreSql
 
       connection.Execute(enqueueJobSql,
         new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
+
+      if(_storage.Options.EnableLongPolling)
+      {
+        connection.Execute($"NOTIFY {_jobNotificationChannel}");
+      }
     }
 
     /// <summary>
@@ -149,6 +182,7 @@ namespace Hangfire.PostgreSql
               cancellationToken.WaitHandle,
               _newItemInQueueEvent,
               SignalDequeue,
+              JobQueueNotification,
             },
             _storage.Options.QueuePollInterval);
 
@@ -224,6 +258,7 @@ namespace Hangfire.PostgreSql
             WaitHandle.WaitAny(new[] {
                 cancellationToken.WaitHandle,
                 SignalDequeue,
+                JobQueueNotification,
               },
               _storage.Options.QueuePollInterval);
 
@@ -245,6 +280,58 @@ namespace Hangfire.PostgreSql
         markJobAsFetched.Id,
         markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
         markJobAsFetched.Queue);
+    }
+
+    private bool SupportsNotifications(IDbConnection connection)
+    {
+      var npgsqlConnection = connection as NpgsqlConnection;
+
+      if(npgsqlConnection == null)
+        return false;
+
+      if(npgsqlConnection.State != ConnectionState.Open)
+        npgsqlConnection.Open();
+
+      return npgsqlConnection.PostgreSqlVersion.Major > 10;
+    }
+
+    private Task ListenForNotifications(CancellationToken cancellationToken)
+    {
+      var connection = _storage.CreateAndOpenConnection(true);
+
+      if(SupportsNotifications(connection))
+      {
+        return Task.Run(async () => 
+        {
+          try
+          {
+            if(connection.State != ConnectionState.Open)
+              connection.Open(); // Open so that Dapper doesn't auto-close.
+  
+            while (!cancellationToken.IsCancellationRequested)
+            {
+              await connection.ExecuteAsync($"LISTEN {_jobNotificationChannel}");
+              await connection.WaitAsync(cancellationToken);
+              JobQueueNotification.Set();
+            }
+          }
+          catch(TaskCanceledException)
+          {
+            // Do nothing, cancellation requested so just end.
+          }
+          finally
+          {
+            _storage.ReleaseConnection(connection);
+          }
+
+        });
+      }
+      else
+      {
+        _storage.ReleaseConnection(connection);
+        return Task.CompletedTask;
+      }
+
     }
 
     [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
