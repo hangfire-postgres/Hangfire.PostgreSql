@@ -13,6 +13,9 @@
       ]
     }
   },
+  "containerEnv": {
+    "DOTNET_CLI_HOME": "/tmp/DOTNET_CLI_HOME"
+  },
   "postCreateCommand": "./.devcontainer/init.sh",
   "postStartCommand": "sudo service postgresql start"
 }
