@@ -292,20 +292,20 @@ namespace Hangfire.PostgreSql
           FROM ""{_storage.Options.SchemaName}"".""server"";
 
           SELECT SUM(""value"") FROM
-            (SELECT SUM(""value"") AS value
+            (SELECT SUM(""value"") AS ""value""
             FROM ""{_storage.Options.SchemaName}"".""counter"" 
             WHERE ""key"" = 'stats:succeeded'
             UNION ALL
-            SELECT SUM(""value"") AS value
+            SELECT SUM(""value"") AS ""value""
             FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
             WHERE ""key"" = 'stats:succeeded') c;
 
           SELECT SUM(""value"") FROM
-            (SELECT SUM(""value"") AS value
+            (SELECT SUM(""value"") AS ""value""
             FROM ""{_storage.Options.SchemaName}"".""counter"" 
             WHERE ""key"" = 'stats:deleted'
             UNION ALL
-            SELECT SUM(""value"") AS value
+            SELECT SUM(""value"") AS ""value""
             FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
             WHERE ""key"" = 'stats:deleted') c;
 
