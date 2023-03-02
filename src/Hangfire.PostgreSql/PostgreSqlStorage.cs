@@ -263,14 +263,16 @@ namespace Hangfire.PostgreSql
       isolationLevel ??= Transaction.Current?.IsolationLevel ?? IsolationLevel.ReadCommitted;
 
       if (!EnvironmentHelpers.IsMono())
-      {
-        using TransactionScope transaction = CreateTransactionScope(isolationLevel);
+      {        
         T result = UseConnection(dedicatedConnection, connection => {
-          connection.EnlistTransaction(Transaction.Current);
-          return func(connection, null);
-        });
 
-        transaction.Complete();
+          using TransactionScope transaction = CreateTransactionScope(isolationLevel);
+          connection.EnlistTransaction(Transaction.Current);
+          var result = func(connection, null);
+          transaction.Complete();
+          return result;
+
+        });        
 
         return result;
       }
