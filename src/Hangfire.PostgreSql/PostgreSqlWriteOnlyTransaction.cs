@@ -67,7 +67,7 @@ namespace Hangfire.PostgreSql
     {
       string sql = $@"
         UPDATE ""{_storage.Options.SchemaName}"".""job""
-        SET ""expireat"" = NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS'
+        SET ""expireat"" = NOW() + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS'
         WHERE ""id"" = @Id;
       ";
 
@@ -150,7 +150,7 @@ namespace Hangfire.PostgreSql
     {
       string sql = $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
-        VALUES (@Key, @Value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS');
+        VALUES (@Key, @Value, NOW() + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS');
       ";
       QueueCommand(con => con.Execute(sql,
         new { Key = key, Value = +1 }));
@@ -170,7 +170,7 @@ namespace Hangfire.PostgreSql
     {
       string sql = $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
-        VALUES (@Key, @Value, NOW() AT TIME ZONE 'UTC' + INTERVAL '{((long)expireIn.TotalSeconds).ToString(CultureInfo.InvariantCulture)} SECONDS');
+        VALUES (@Key, @Value, NOW() + INTERVAL '{((long)expireIn.TotalSeconds).ToString(CultureInfo.InvariantCulture)} SECONDS');
       ";
       QueueCommand(con => con.Execute(sql, new { Key = key, Value = -1 }));
     }

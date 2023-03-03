@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -75,7 +74,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES ('', '', NOW(), NOW()) RETURNING ""id""
       ";
 
       UseConnection(connection => {
@@ -98,7 +97,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        VALUES ('', '', NOW()) RETURNING ""id""";
 
       UseConnection(connection => {
         dynamic jobId = connection.Query(arrangeSql).Single().id.ToString();
@@ -148,7 +147,7 @@ namespace Hangfire.PostgreSql.Tests
 
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC') RETURNING ""id""";
+        VALUES ('', '', NOW()) RETURNING ""id""";
 
 
       string jobId = null;
@@ -209,7 +208,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW() AT TIME ZONE 'UTC')
+        VALUES ('', '', NOW())
         RETURNING ""id""
       ";
 
