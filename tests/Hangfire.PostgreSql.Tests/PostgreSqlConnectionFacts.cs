@@ -133,7 +133,7 @@ namespace Hangfire.PostgreSql.Tests
     public void CreateExpiredJob_CreatesAJobInTheStorage_AndSetsItsParameters()
     {
       UseConnections((connection, jobStorageConnection) => {
-        DateTime createdAt = new DateTime(2012, 12, 12);
+        DateTime createdAt = new DateTime(2012, 12, 12, 0, 0, 0, DateTimeKind.Utc);
         string jobId = jobStorageConnection.CreateExpiredJob(Job.FromExpression(() => SampleMethod("Hello")),
           new Dictionary<string, string> { { "Key1", "Value1" }, { "Key2", "Value2" } },
           createdAt,
@@ -1241,7 +1241,7 @@ namespace Hangfire.PostgreSql.Tests
       }
 
       string jobId = null;
-      DateTime createdAt = new DateTime(2012, 12, 12);
+      DateTime createdAt = new DateTime(2012, 12, 12, 0, 0, 0, DateTimeKind.Utc);
       using (TransactionScope scope = CreateTransactionScope())
       {
         UseConnections((_, connection) => {
