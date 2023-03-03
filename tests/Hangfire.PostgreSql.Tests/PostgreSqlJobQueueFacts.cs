@@ -193,7 +193,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          VALUES (@InvocationData, @Arguments, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -240,7 +240,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          VALUES (@InvocationData, @Arguments, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
@@ -287,7 +287,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          VALUES (@InvocationData, @Arguments, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -334,7 +334,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          VALUES (@InvocationData, @Arguments, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -370,7 +370,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW() AT TIME ZONE 'UTC')
+          VALUES (@InvocationData, @Arguments, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")

@@ -420,7 +420,6 @@ namespace Hangfire.PostgreSql
       if (!Options.EnableTransactionScopeEnlistment)
       {
         builder.Enlist = false;
-        builder.SetTimezoneToUtcForNpgsqlCompatibility();
       }
 
       return builder;

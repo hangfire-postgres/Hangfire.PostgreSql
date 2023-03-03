@@ -87,7 +87,7 @@ namespace Hangfire.PostgreSql
                 WHERE ""id"" IN (
                     SELECT ""id"" 
                     FROM ""{_storage.Options.SchemaName}"".""{table}"" 
-                    WHERE ""expireat"" < NOW() AT TIME ZONE 'UTC' 
+                    WHERE ""expireat"" < NOW() 
                     LIMIT {_storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)}
                 )", transaction: transaction);
 

@@ -128,7 +128,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
-        VALUES (@Id, @Queue, NOW() AT TIME ZONE 'UTC') RETURNING ""id""
+        VALUES (@Id, @Queue, NOW()) RETURNING ""id""
       ";
 
       return

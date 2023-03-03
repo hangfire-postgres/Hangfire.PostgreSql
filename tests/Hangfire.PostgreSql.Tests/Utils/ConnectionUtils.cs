@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Globalization;
-using Hangfire.PostgreSql.Utils;
 using Npgsql;
 
 namespace Hangfire.PostgreSql.Tests.Utils
@@ -47,7 +46,6 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static NpgsqlConnection CreateConnection()
     {
       NpgsqlConnectionStringBuilder csb = new(GetConnectionString());
-      csb.SetTimezoneToUtcForNpgsqlCompatibility();
 
       NpgsqlConnection connection = new() {
         ConnectionString = csb.ToString(),
@@ -60,7 +58,6 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static NpgsqlConnection CreateMasterConnection()
     {
       NpgsqlConnectionStringBuilder csb = new(GetMasterConnectionString());
-      csb.SetTimezoneToUtcForNpgsqlCompatibility();
 
       NpgsqlConnection connection = new() {
         ConnectionString = csb.ToString(),
