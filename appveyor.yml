@@ -7,6 +7,12 @@ environment:
     - BUILD_NPGSQL_VERSION: 5
     - BUILD_NPGSQL_VERSION: 6
 
+# only build pull requests and
+# commits to 'master'
+branches:
+  only:
+    - master
+
 init:
 - ps: >-
     # Change default database session timezone from UTC to catch potential DateTime/timestamp
