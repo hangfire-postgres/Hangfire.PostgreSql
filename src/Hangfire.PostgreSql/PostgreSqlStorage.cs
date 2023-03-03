@@ -224,7 +224,7 @@ namespace Hangfire.PostgreSql
 
         if(connection != null && requireNew)
         {
-          connection = connection.CloneWith(connection.Settings.ConnectionString);
+          connection = connection.CloneWith(connection.ConnectionString);
           _connectionSetup?.Invoke(connection);
         }
       }
