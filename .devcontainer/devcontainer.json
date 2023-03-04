@@ -1,0 +1,21 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "eamodio.gitlens",
+        "formulahendry.dotnet-test-explorer",
+        "mtxr.sqltools-driver-pg"
+      ]
+    }
+  },
+  "containerEnv": {
+    "DOTNET_CLI_HOME": "/tmp/DOTNET_CLI_HOME"
+  },
+  "postCreateCommand": "./.devcontainer/init.sh",
+  "postStartCommand": "sudo service postgresql start"
+}
