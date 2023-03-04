@@ -54,10 +54,10 @@ namespace Hangfire.PostgreSql
       Task listenTask = null;
       CancellationTokenSource cancelListenSource = null;
 
-      if(_storage.Options.EnableLongPolling)
+      if (_storage.Options.EnableLongPolling)
       {
         cancelListenSource = new CancellationTokenSource();
-        listenTask = ListenForNotifications(cancelListenSource.Token);
+        listenTask = ListenForNotificationsAsync(cancelListenSource.Token);
       }
 
       try
@@ -73,9 +73,14 @@ namespace Hangfire.PostgreSql
           cancelListenSource?.Cancel();
           listenTask?.Wait();
         }
-        catch (AggregateException)
+        catch (AggregateException ex)
         {
-          // Do nothing, cancel exception is expected.
+          if (ex.InnerException is not TaskCanceledException)
+          {
+            throw;
+          }
+
+          // Otherwise do nothing, cancel exception is expected.
         }
       }
     }
@@ -90,7 +95,7 @@ namespace Hangfire.PostgreSql
       connection.Execute(enqueueJobSql,
         new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
 
-      if(_storage.Options.EnableLongPolling)
+      if (_storage.Options.EnableLongPolling)
       {
         connection.Execute($"NOTIFY {_jobNotificationChannel}");
       }
@@ -286,52 +291,65 @@ namespace Hangfire.PostgreSql
     {
       var npgsqlConnection = connection as NpgsqlConnection;
 
-      if(npgsqlConnection == null)
+      if (npgsqlConnection == null)
+      {
         return false;
+      }
 
-      if(npgsqlConnection.State != ConnectionState.Open)
+      if (npgsqlConnection.State != ConnectionState.Open)
+      {
         npgsqlConnection.Open();
+      }
 
       return npgsqlConnection.PostgreSqlVersion.Major > 10;
     }
 
-    private Task ListenForNotifications(CancellationToken cancellationToken)
+    private Task ListenForNotificationsAsync(CancellationToken cancellationToken)
     {
-      var connection = _storage.CreateAndOpenConnection(true);
+      var connection = _storage.CreateAndOpenConnection();
 
-      if(SupportsNotifications(connection))
+      try
       {
-        return Task.Run(async () => 
+        if (SupportsNotifications(connection))
         {
-          try
-          {
-            if(connection.State != ConnectionState.Open)
-              connection.Open(); // Open so that Dapper doesn't auto-close.
-  
-            while (!cancellationToken.IsCancellationRequested)
-            {
-              await connection.ExecuteAsync($"LISTEN {_jobNotificationChannel}");
-              await connection.WaitAsync(cancellationToken);
-              JobQueueNotification.Set();
-            }
-          }
-          catch(TaskCanceledException)
-          {
-            // Do nothing, cancellation requested so just end.
-          }
-          finally
-          {
-            _storage.ReleaseConnection(connection);
-          }
+          // CreateAnOpenConnection can return the same connection over and over if an existing connection
+          //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
+          //  connection to listen for notifications.
+          var clonedConnection = connection.CloneWith(connection.ConnectionString);
 
-        });
-      }
-      else
-      {
-        _storage.ReleaseConnection(connection);
+          return Task.Run(async () => {
+            try
+            {
+              if (clonedConnection.State != ConnectionState.Open)
+              {
+                clonedConnection.Open(); // Open so that Dapper doesn't auto-close.
+              }
+
+              while (!cancellationToken.IsCancellationRequested)
+              {
+                await clonedConnection.ExecuteAsync($"LISTEN {_jobNotificationChannel}");
+                await clonedConnection.WaitAsync(cancellationToken);
+                JobQueueNotification.Set();
+              }
+            }
+            catch (TaskCanceledException)
+            {
+              // Do nothing, cancellation requested so just end.
+            }
+            finally
+            {
+              _storage.ReleaseConnection(clonedConnection);
+            }
+
+          });
+        }
+
         return Task.CompletedTask;
       }
-
+      finally
+      {
+        _storage.ReleaseConnection(connection);
+      }
     }
 
     [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
