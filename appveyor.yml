@@ -4,7 +4,6 @@ platform: Any CPU
 
 environment:
   matrix:
-    - BUILD_NPGSQL_VERSION: 5
     - BUILD_NPGSQL_VERSION: 6
 
 # only build pull requests and

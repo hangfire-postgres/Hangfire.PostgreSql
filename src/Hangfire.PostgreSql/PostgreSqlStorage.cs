@@ -195,20 +195,9 @@ namespace Hangfire.PostgreSql
       {
         connection = _connectionFactory.GetOrCreateConnection();
 
-        if (!Options.EnableTransactionScopeEnlistment)
+        if (!Options.EnableTransactionScopeEnlistment && connection.Settings.Enlist)
         {
-          NpgsqlConnectionStringBuilder connectionStringBuilder =
-#if !USING_NPGSQL_VERSION_5
-          connection.Settings;
-#else
-          new(connection.ConnectionString);
-#endif
-
-          if (connectionStringBuilder.Enlist)
-          {
-            throw new ArgumentException(
-              $"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
-          }
+          throw new ArgumentException($"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
         }
 
       }
@@ -256,7 +245,7 @@ namespace Hangfire.PostgreSql
       isolationLevel ??= Transaction.Current?.IsolationLevel ?? IsolationLevel.ReadCommitted;
 
       if (!EnvironmentHelpers.IsMono())
-      {        
+      {
         T result = UseConnection(dedicatedConnection, connection => {
 
           using TransactionScope transaction = CreateTransactionScope(isolationLevel);
@@ -265,7 +254,7 @@ namespace Hangfire.PostgreSql
           transaction.Complete();
           return result;
 
-        });        
+        });
 
         return result;
       }

@@ -10,6 +10,7 @@
     <AssemblyName>Hangfire.PostgreSql</AssemblyName>
     <OutputType>Library</OutputType>
     <PackageTags>Hangfire;PostgreSql;Postgres</PackageTags>
+    <PackageId>Hangfire.PostgreSql</PackageId>
     <PackageReleaseNotes>https://github.com/frankhommers/Hangfire.PostgreSql/releases</PackageReleaseNotes>
     <PackageProjectUrl>http://hmm.rs/Hangfire.PostgreSql</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
@@ -36,6 +37,7 @@
     </PackageReference>
     <PackageReference Include="Hangfire.Core" Version="1.7.28" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="Npgsql" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,30 +46,5 @@
       <PackagePath></PackagePath>
     </None>
   </ItemGroup>
-  
-  <!-- Overrides for Cake script -->
-
-  <Choose>
-    <When Condition="'$(NpgsqlVersion)' == '5'">
-      <PropertyGroup>
-        <!--For pre-processor directive use in source code -->
-        <DefineConstants>USING_NPGSQL_VERSION_5</DefineConstants>
-        <PackageId>Hangfire.PostgreSql.Npgsql5</PackageId>
-      </PropertyGroup>
-      <ItemGroup>
-        <PackageReference Include="Npgsql" Version="5.0.0" />
-      </ItemGroup>
-    </When>
-    <Otherwise>
-      <PropertyGroup>
-        <PackageId>Hangfire.PostgreSql</PackageId>
-      </PropertyGroup>
-      <ItemGroup>
-        <PackageReference Include="Npgsql" Version="6.0.0" />
-      </ItemGroup>
-    </Otherwise>
-  </Choose>
-
-  <!-- END Overrides for Cake script -->
 
 </Project>
