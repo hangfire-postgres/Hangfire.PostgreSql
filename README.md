@@ -24,7 +24,7 @@ First, NuGet package needs installation.
 * Hangfire.PostgreSql (Uses Npgsql 6)
 * Hangfire.PostgreSql.Npgsql5 (Uses Npgsql 5)
 
-Both packages are functionally the same, the only difference is the underlying Npgsql dependency version.
+Historically both packages were functionally the same up until the package version 1.9.11, the only difference was the underlying Npgsql dependency version. Afterwards, the support for Npgsql v5 has been dropped and now minimum required version is 6.0.0.
 
 In `Startup.cs` _ConfigureServices(IServiceCollection services)_ method add the following line:
 ```csharp
