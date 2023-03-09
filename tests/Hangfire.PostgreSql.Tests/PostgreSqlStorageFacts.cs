@@ -41,7 +41,7 @@ namespace Hangfire.PostgreSql.Tests
       {
         // Assert
         // test database has GMT+13 time zone set
-        Assert.Equal("'GMT+13'", connection.Timezone);
+        Assert.Equal("UTC+13", connection.Timezone);
       }
     }
 
