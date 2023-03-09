@@ -478,9 +478,7 @@ namespace Hangfire.PostgreSql.Tests
           storage.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
         }
 
-        storage.Options.EnableLongPolling = true;
-
-        PostgreSqlJobQueue queue = CreateJobQueue(storage, false);
+        PostgreSqlJobQueue queue = CreateJobQueue(storage, false, true);
         IFetchedJob job = null;
         //as UseConnection does not support async-await we have to work with Thread.Sleep
 
@@ -536,10 +534,11 @@ namespace Hangfire.PostgreSql.Tests
 #pragma warning restore xUnit1013 // Public method should be marked as test
     { }
 
-    private static PostgreSqlJobQueue CreateJobQueue(PostgreSqlStorage storage, bool useNativeDatabaseTransactions)
+    private static PostgreSqlJobQueue CreateJobQueue(PostgreSqlStorage storage, bool useNativeDatabaseTransactions, bool enableLongPolling = false)
     {
       storage.Options.SchemaName = GetSchemaName();
       storage.Options.UseNativeDatabaseTransactions = useNativeDatabaseTransactions;
+      storage.Options.EnableLongPolling = enableLongPolling;
       return new PostgreSqlJobQueue(storage);
     }
 
