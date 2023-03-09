@@ -229,6 +229,11 @@ namespace Hangfire.PostgreSql
           connection.Open();
         }
 
+        if (Options.EnableLongPolling && !connection.SupportsNotifications())
+        {
+          throw new InvalidOperationException("Long polling is supported only with PostgreSQL version 11 or higher.");
+        }
+
         return connection;
       }
       catch
@@ -256,7 +261,7 @@ namespace Hangfire.PostgreSql
       isolationLevel ??= Transaction.Current?.IsolationLevel ?? IsolationLevel.ReadCommitted;
 
       if (!EnvironmentHelpers.IsMono())
-      {        
+      {
         T result = UseConnection(dedicatedConnection, connection => {
 
           using TransactionScope transaction = CreateTransactionScope(isolationLevel);
@@ -265,7 +270,7 @@ namespace Hangfire.PostgreSql
           transaction.Complete();
           return result;
 
-        });        
+        });
 
         return result;
       }

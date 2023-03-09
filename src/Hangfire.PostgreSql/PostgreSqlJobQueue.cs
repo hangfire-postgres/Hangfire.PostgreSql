@@ -27,6 +27,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 using Hangfire.PostgreSql.Properties;
+using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
 using Npgsql;
 
@@ -34,6 +35,8 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlJobQueue : IPersistentJobQueue
   {
+    private const string JobNotificationChannel = "new_job";
+
     internal static readonly AutoResetEvent _newItemInQueueEvent = new(true);
     private readonly PostgreSqlStorage _storage;
 
@@ -46,7 +49,6 @@ namespace Hangfire.PostgreSql
 
     private AutoResetEvent SignalDequeue { get; }
     private AutoResetEvent JobQueueNotification { get; }
-    private const string _jobNotificationChannel = "new_job";
 
     [NotNull]
     public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
@@ -82,6 +84,10 @@ namespace Hangfire.PostgreSql
 
           // Otherwise do nothing, cancel exception is expected.
         }
+        finally
+        {
+          cancelListenSource?.Dispose();
+        }
       }
     }
 
@@ -95,9 +101,9 @@ namespace Hangfire.PostgreSql
       connection.Execute(enqueueJobSql,
         new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
 
-      if (_storage.Options.EnableLongPolling && SupportsNotifications(connection))
+      if (_storage.Options.EnableLongPolling)
       {
-        connection.Execute($"NOTIFY {_jobNotificationChannel}");
+        connection.Execute($"NOTIFY {JobNotificationChannel}");
       }
     }
 
@@ -287,64 +293,48 @@ namespace Hangfire.PostgreSql
         markJobAsFetched.Queue);
     }
 
-    private bool SupportsNotifications(IDbConnection connection)
-    {
-      var npgsqlConnection = connection as NpgsqlConnection;
-
-      if (npgsqlConnection == null)
-      {
-        return false;
-      }
-
-      if (npgsqlConnection.State != ConnectionState.Open)
-      {
-        npgsqlConnection.Open();
-      }
-
-      return npgsqlConnection.PostgreSqlVersion.Major > 10;
-    }
-
     private Task ListenForNotificationsAsync(CancellationToken cancellationToken)
     {
-      var connection = _storage.CreateAndOpenConnection();
+      NpgsqlConnection connection = _storage.CreateAndOpenConnection();
 
       try
       {
-        if (SupportsNotifications(connection))
+        if (!connection.SupportsNotifications())
         {
-          // CreateAnOpenConnection can return the same connection over and over if an existing connection
-          //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
-          //  connection to listen for notifications.
-          var clonedConnection = connection.CloneWith(connection.ConnectionString);
-
-          return Task.Run(async () => {
-            try
-            {
-              if (clonedConnection.State != ConnectionState.Open)
-              {
-                clonedConnection.Open(); // Open so that Dapper doesn't auto-close.
-              }
-
-              while (!cancellationToken.IsCancellationRequested)
-              {
-                await clonedConnection.ExecuteAsync($"LISTEN {_jobNotificationChannel}");
-                await clonedConnection.WaitAsync(cancellationToken);
-                JobQueueNotification.Set();
-              }
-            }
-            catch (TaskCanceledException)
-            {
-              // Do nothing, cancellation requested so just end.
-            }
-            finally
-            {
-              _storage.ReleaseConnection(clonedConnection);
-            }
-
-          });
+          return Task.CompletedTask;
         }
 
-        return Task.CompletedTask;
+        // CreateAnOpenConnection can return the same connection over and over if an existing connection
+        //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
+        //  connection to listen for notifications.
+        NpgsqlConnection clonedConnection = connection.CloneWith(connection.ConnectionString);
+
+        return Task.Run(async () => {
+          try
+          {
+            if (clonedConnection.State != ConnectionState.Open)
+            {
+              await clonedConnection.OpenAsync(cancellationToken); // Open so that Dapper doesn't auto-close.
+            }
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+              await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
+              await clonedConnection.WaitAsync(cancellationToken);
+              JobQueueNotification.Set();
+            }
+          }
+          catch (TaskCanceledException)
+          {
+            // Do nothing, cancellation requested so just end.
+          }
+          finally
+          {
+            _storage.ReleaseConnection(clonedConnection);
+          }
+
+        }, cancellationToken);
+
       }
       finally
       {
