@@ -95,7 +95,7 @@ namespace Hangfire.PostgreSql
       connection.Execute(enqueueJobSql,
         new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
 
-      if (_storage.Options.EnableLongPolling)
+      if (_storage.Options.EnableLongPolling && SupportsNotifications(connection))
       {
         connection.Execute($"NOTIFY {_jobNotificationChannel}");
       }

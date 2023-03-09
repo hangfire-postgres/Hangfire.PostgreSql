@@ -468,31 +468,41 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void Queues_Can_Dequeue_On_Notification()
     {
-      var timeout = TimeSpan.FromSeconds(30);
-
       UseConnection((connection, storage) => {
 
-        // Only test for Postgres 11+.
+        var timeout = TimeSpan.FromSeconds(30);
+
+        // Only for Postgres 11+ should we have a polling time greater than the timeout.
         if (((Npgsql.NpgsqlConnection)connection).PostgreSqlVersion.Major > 10)
         {
           storage.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
-          storage.Options.EnableLongPolling = true;
-
-          PostgreSqlJobQueue queue = CreateJobQueue(storage, false);
-          IFetchedJob job = null;
-          //as UseConnection does not support async-await we have to work with Thread.Sleep
-
-          var task = Task.Run(() => {
-            //dequeue the job asynchronously
-            job = queue.Dequeue(new[] { "default" }, new CancellationTokenSource(timeout).Token);
-          });
-
-          Thread.Sleep(2000); // Give thread time to startup.
-
-          queue.Enqueue(connection, "default", "1");
-          task.Wait(timeout);
-          Assert.NotNull(job);
         }
+        
+        storage.Options.EnableLongPolling = true;
+
+        PostgreSqlJobQueue queue = CreateJobQueue(storage, false);
+        IFetchedJob job = null;
+        //as UseConnection does not support async-await we have to work with Thread.Sleep
+
+        var task = Task.Run(() => {
+          //dequeue the job asynchronously
+          try
+          {
+            job = queue.Dequeue(new[] { "default" }, new CancellationTokenSource(timeout).Token);
+          }
+          catch (OperationCanceledException)
+          {
+            // Do nothing, task was intentionally cancelled.
+          }
+        });
+
+        Thread.Sleep(2000); // Give thread time to startup.
+
+        queue.Enqueue(connection, "default", "1");
+        
+        task.Wait(timeout);
+        
+        Assert.NotNull(job);
 
       });
     }
