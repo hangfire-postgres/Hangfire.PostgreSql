@@ -218,6 +218,11 @@ namespace Hangfire.PostgreSql
           connection.Open();
         }
 
+        if (Options.EnableLongPolling && !connection.SupportsNotifications())
+        {
+          throw new InvalidOperationException("Long polling is supported only with PostgreSQL version 11 or higher.");
+        }
+
         return connection;
       }
       catch

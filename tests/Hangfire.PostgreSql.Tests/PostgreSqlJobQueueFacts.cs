@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 using Hangfire.PostgreSql.Tests.Utils;
+using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
 using Xunit;
 
@@ -468,26 +469,44 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void Queues_Can_Dequeue_On_Notification()
     {
-      var timeout = TimeSpan.FromSeconds(30);
-
       UseConnection((connection, storage) => {
+        TimeSpan timeout = TimeSpan.FromSeconds(30);
 
-        storage.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
+        // Only for Postgres 11+ should we have a polling time greater than the timeout.
+        if (connection.SupportsNotifications())
+        {
+          storage.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
+        }
+
         storage.Options.EnableLongPolling = true;
 
         PostgreSqlJobQueue queue = CreateJobQueue(storage, false);
         IFetchedJob job = null;
         //as UseConnection does not support async-await we have to work with Thread.Sleep
 
-        var task = Task.Run(() => {
+        Task task = Task.Run(() => {
           //dequeue the job asynchronously
-          job = queue.Dequeue(new[] { "default" }, new CancellationTokenSource(timeout).Token);
+          CancellationTokenSource cancellationTokenSource = new(timeout);
+          try
+          {
+            job = queue.Dequeue(new[] { "default" }, cancellationTokenSource.Token);
+          }
+          catch (OperationCanceledException)
+          {
+            // Do nothing, task was intentionally cancelled.
+          }
+          finally
+          {
+            cancellationTokenSource.Dispose();
+          }
         });
 
         Thread.Sleep(2000); // Give thread time to startup.
 
         queue.Enqueue(connection, "default", "1");
+
         task.Wait(timeout);
+
         Assert.NotNull(job);
       });
     }
