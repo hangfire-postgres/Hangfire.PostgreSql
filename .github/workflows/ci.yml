@@ -1,12 +1,15 @@
 # This workflow will build a .NET project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
 
-name: Hangfire.PostgreSQL.CI
+name: Build and tests
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [ "master" ]
+    paths:
+      - 'src/**'
+      - 'test/**'
 
 jobs:
   build-and-test:
