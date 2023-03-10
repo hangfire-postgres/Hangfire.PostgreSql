@@ -17,8 +17,9 @@ jobs:
         image: postgres
         env:
           POSTGRES_PASSWORD: postgres
-          TZ: 'UTC+13'
-          PGTZ: 'UTC+13'
+          POSTGRES_HOST_AUTH_METHOD: password
+          TZ: UTC+13
+          PGTZ: UTC+13
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
