@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [ "master" ]
-    #paths:
-    #  - 'src/**'
-    #  - 'test/**'
+    paths:
+     - 'src/**'
+     - 'test/**'
 
 jobs:
   build-and-test:
