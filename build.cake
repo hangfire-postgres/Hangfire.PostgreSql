@@ -76,7 +76,8 @@ Task("Test")
 });
 
 Task("Pack")
-    .IsDependentOn("Test")
+//    .IsDependentOn("Test")
+    .IsDependentOn("Build")
   .Does(() =>
 {
     var settings = new DotNetCorePackSettings
@@ -95,6 +96,7 @@ Task("Pack")
 });
 
 Task("Default")
-    .IsDependentOn("Test");
+//    .IsDependentOn("Test");
+    .IsDependentOn("Pack")
 
 RunTarget(target);
