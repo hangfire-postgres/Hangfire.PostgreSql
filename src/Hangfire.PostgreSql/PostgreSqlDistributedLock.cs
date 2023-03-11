@@ -69,14 +69,7 @@ namespace Hangfire.PostgreSql
         throw new InvalidOperationException("Connection must be open before acquiring a distributed lock.");
       }
 
-      if (options.UseNativeDatabaseTransactions)
-      {
-        TransactionLockHandler.Lock(resource, timeout, connection, options);
-      }
-      else
-      {
-        UpdateCountLockHandler.Lock(resource, timeout, connection, options);
-      }
+      LockHandler.Lock(resource, timeout, connection, options);
     }
 
     internal static void Release(IDbConnection connection, string resource, PostgreSqlStorageOptions options)
@@ -96,16 +89,13 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(options));
       }
 
-      int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource;",
-        new { Resource = resource });
-
-      if (rowsAffected <= 0)
+      if (!LockHandler.TryRemoveLock(resource, connection, options, false))
       {
         throw new PostgreSqlDistributedLockException($"Could not release a lock on the resource '{resource}'. Lock does not exist.");
       }
     }
 
-    private static class TransactionLockHandler
+    private static class LockHandler
     {
       public static void Lock(string resource, TimeSpan timeout, IDbConnection connection, PostgreSqlStorageOptions options)
       {
@@ -113,6 +103,9 @@ namespace Hangfire.PostgreSql
 
         bool tryAcquireLock = true;
         Exception lastException = null;
+        Func<IDbConnection, string, string, bool> tryLock = options.UseNativeDatabaseTransactions
+          ? TransactionLockHandler.TryLock
+          : UpdateCountLockHandler.TryLock;
 
         while (tryAcquireLock)
         {
@@ -122,29 +115,11 @@ namespace Hangfire.PostgreSql
             connection.Open();
           }
 
-          TryRemoveLock(resource, connection, options);
+          TryRemoveLock(resource, connection, options, true);
 
-          IDbTransaction trx = null;
           try
           {
-            trx = BeginTransactionIfNotPresent(connection);
-
-            int rowsAffected = connection.Execute($@"
-                INSERT INTO ""{options.SchemaName}"".""lock""(""resource"", ""acquired"") 
-                SELECT @Resource, @Acquired
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM ""{options.SchemaName}"".""lock"" 
-                    WHERE ""resource"" = @Resource
-                )
-                ON CONFLICT DO NOTHING;
-              ",
-              new {
-                Resource = resource,
-                Acquired = DateTime.UtcNow,
-              }, trx);
-            trx?.Commit();
-
-            if (rowsAffected > 0)
+            if (tryLock(connection, options.SchemaName, resource))
             {
               return;
             }
@@ -152,11 +127,7 @@ namespace Hangfire.PostgreSql
           catch (Exception ex)
           {
             lastException = ex;
-            Log(resource, "Failed to lock with transaction", ex);
-          }
-          finally
-          {
-            trx?.Dispose();
+            Log(resource, "Failed to acquire lock", ex);
           }
 
           if (lockAcquiringTime.ElapsedMilliseconds > timeout.TotalMilliseconds)
@@ -185,23 +156,66 @@ namespace Hangfire.PostgreSql
         throw new PostgreSqlDistributedLockException($@"Could not place a lock on the resource '{resource}': Lock timeout.", lastException);
       }
 
-      private static void TryRemoveLock(string resource, IDbConnection connection, PostgreSqlStorageOptions options)
+      public static bool TryRemoveLock(string resource, IDbConnection connection, PostgreSqlStorageOptions options, bool onlyExpired)
+      {
+        IDbTransaction trx = null;
+        try
+        {
+          // Non-expired locks are removed only when releasing them. Transaction is not needed in that case.
+          if (onlyExpired && options.UseNativeDatabaseTransactions)
+          {
+            trx = TransactionLockHandler.BeginTransactionIfNotPresent(connection);
+          }
+
+          DateTime timeout = onlyExpired ? DateTime.UtcNow - options.DistributedLockTimeout : DateTime.MaxValue;
+
+          int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
+            new {
+              Resource = resource,
+              Timeout = timeout,
+            }, trx);
+
+          trx?.Commit();
+
+          return rowsAffected >= 0;
+        }
+        catch (Exception ex)
+        {
+          Log(resource, "Failed to remove lock", ex);
+          return false;
+        }
+        finally
+        {
+          trx?.Dispose();
+        }
+      }
+    }
+
+    private static class TransactionLockHandler
+    {
+      public static bool TryLock(IDbConnection connection, string schemaName, string resource)
       {
         IDbTransaction trx = null;
         try
         {
           trx = BeginTransactionIfNotPresent(connection);
-          connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
+
+          int rowsAffected = connection.Execute($@"
+                INSERT INTO ""{schemaName}"".""lock""(""resource"", ""acquired"") 
+                SELECT @Resource, @Acquired
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM ""{schemaName}"".""lock"" 
+                    WHERE ""resource"" = @Resource
+                )
+                ON CONFLICT DO NOTHING;
+              ",
             new {
               Resource = resource,
-              Timeout = DateTime.UtcNow - options.DistributedLockTimeout,
+              Acquired = DateTime.UtcNow,
             }, trx);
-
           trx?.Commit();
-        }
-        catch (Exception ex)
-        {
-          Log(resource, "Failed to remove lock", ex);
+
+          return rowsAffected > 0;
         }
         finally
         {
@@ -210,7 +224,7 @@ namespace Hangfire.PostgreSql
       }
 
       [CanBeNull]
-      private static IDbTransaction BeginTransactionIfNotPresent(IDbConnection connection)
+      public static IDbTransaction BeginTransactionIfNotPresent(IDbConnection connection)
       {
         // If transaction scope was created outside of hangfire, the newly-opened connection is automatically enlisted into the transaction.
         // Starting a new transaction throws "A transaction is already in progress; nested/concurrent transactions aren't supported." in that case.
@@ -220,67 +234,26 @@ namespace Hangfire.PostgreSql
 
     private static class UpdateCountLockHandler
     {
-      public static void Lock(string resource, TimeSpan timeout, IDbConnection connection, PostgreSqlStorageOptions options)
+      public static bool TryLock(IDbConnection connection, string schemaName, string resource)
       {
-        Stopwatch lockAcquiringStopwatch = Stopwatch.StartNew();
-
-        bool tryAcquireLock = true;
-
-        while (tryAcquireLock)
-        {
-          try
-          {
-            connection.Execute($@"
-              INSERT INTO ""{options.SchemaName}"".""lock""(""resource"", ""updatecount"", ""acquired"") 
+        connection.Execute($@"
+              INSERT INTO ""{schemaName}"".""lock""(""resource"", ""updatecount"", ""acquired"") 
               SELECT @Resource, 0, @Acquired
               WHERE NOT EXISTS (
-                  SELECT 1 FROM ""{options.SchemaName}"".""lock"" 
+                  SELECT 1 FROM ""{schemaName}"".""lock"" 
                   WHERE ""resource"" = @Resource
               )
               ON CONFLICT DO NOTHING;
             ", new {
-              Resource = resource,
-              Acquired = DateTime.UtcNow,
-            });
-          }
-          catch (Exception ex)
-          {
-            Log(resource, "Failed to lock with update count", ex);
-          }
+          Resource = resource,
+          Acquired = DateTime.UtcNow,
+        });
 
-          int rowsAffected = connection.Execute(
-            $@"UPDATE ""{options.SchemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @Resource",
-            new { Resource = resource });
+        int rowsAffected = connection.Execute(
+          $@"UPDATE ""{schemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @Resource",
+          new { Resource = resource });
 
-          if (rowsAffected > 0)
-          {
-            return;
-          }
-
-          if (lockAcquiringStopwatch.ElapsedMilliseconds > timeout.TotalMilliseconds)
-          {
-            tryAcquireLock = false;
-          }
-          else
-          {
-            int sleepDuration = (int)(timeout.TotalMilliseconds - lockAcquiringStopwatch.ElapsedMilliseconds);
-            if (sleepDuration > 1000)
-            {
-              sleepDuration = 1000;
-            }
-
-            if (sleepDuration > 0)
-            {
-              Thread.Sleep(sleepDuration);
-            }
-            else
-            {
-              tryAcquireLock = false;
-            }
-          }
-        }
-
-        throw new PostgreSqlDistributedLockException($"Could not place a lock on the resource '{resource}': Lock timeout.");
+        return rowsAffected > 0;
       }
     }
   }

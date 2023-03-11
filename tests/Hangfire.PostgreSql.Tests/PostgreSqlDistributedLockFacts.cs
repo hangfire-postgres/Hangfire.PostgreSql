@@ -109,8 +109,6 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
         PostgreSqlDistributedLock.Acquire(connection, "hello2", _timeout, options);
 
-        // ReSharper restore UnusedVariable
-
         long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
           new { Resource = "hello" });
 
@@ -175,6 +173,32 @@ namespace Hangfire.PostgreSql.Tests
 
       releaseLock.Set();
       thread.Join();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [CleanDatabase]
+    public void Acquire_ExpiredLockExists_LocksAnyway(bool useNativeDatabaseTransactions)
+    {
+      const string resource = "hello";
+
+      PostgreSqlStorageOptions options = new() {
+        SchemaName = GetSchemaName(),
+        UseNativeDatabaseTransactions = useNativeDatabaseTransactions,
+      };
+
+      UseConnection(connection => {
+        DateTime acquired = DateTime.UtcNow - options.DistributedLockTimeout - TimeSpan.FromMinutes(1);
+        connection.Execute($@"INSERT INTO ""{GetSchemaName()}"".""lock"" (""resource"", ""acquired"") VALUES (@Resource, @Acquired)", new { Resource = resource, Acquired = acquired });
+
+        PostgreSqlDistributedLock.Acquire(connection, resource, _timeout, options);
+
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
+          new { Resource = resource });
+
+        Assert.Equal(1, lockCount);
+      });
     }
 
     [Fact]
