@@ -27,11 +27,9 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Pack
-      run: dotnet nuget pack --no-build --output publish
+      run: dotnet pack --no-build --output publish
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3.1.2
       with:
-        # Artifact name
         name: Package
-        # A file, directory or wildcard pattern that describes what to upload
         path: publish/**.nupkg
