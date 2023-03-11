@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -36,7 +36,8 @@ namespace Hangfire.PostgreSql
     // but low enough to not to cause large amount of row locks to be taken.
     // Lock escalation to page locks may pause the background processing.
     private const int NumberOfRecordsInSinglePass = 1000;
-    private static readonly TimeSpan DelayBetweenPasses = TimeSpan.FromMilliseconds(500);
+
+    private static readonly TimeSpan _delayBetweenPasses = TimeSpan.FromMilliseconds(500);
 
     private readonly ILog _logger = LogProvider.For<CountersAggregator>();
     private readonly TimeSpan _interval;
@@ -44,9 +45,7 @@ namespace Hangfire.PostgreSql
 
     public CountersAggregator(PostgreSqlStorage storage, TimeSpan interval)
     {
-      if (storage == null) throw new ArgumentNullException(nameof(storage));
-
-      _storage = storage;
+      _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       _interval = interval;
     }
 
@@ -59,16 +58,18 @@ namespace Hangfire.PostgreSql
       do
       {
         _storage.UseConnection(null, connection => {
-          removedCount = connection.Execute(GetAggregationQuery(_storage),
+          removedCount = connection.Execute(GetAggregationQuery(),
             new { now = DateTime.UtcNow, count = NumberOfRecordsInSinglePass },
             commandTimeout: 0);
         });
 
-        if (removedCount >= NumberOfRecordsInSinglePass)
+        if (removedCount < NumberOfRecordsInSinglePass)
         {
-          cancellationToken.Wait(DelayBetweenPasses);
-          cancellationToken.ThrowIfCancellationRequested();
+          continue;
         }
+
+        cancellationToken.Wait(_delayBetweenPasses);
+        cancellationToken.ThrowIfCancellationRequested();
         // ReSharper disable once LoopVariableIsNeverChangedInsideLoop
       } while (removedCount >= NumberOfRecordsInSinglePass);
 
@@ -77,17 +78,18 @@ namespace Hangfire.PostgreSql
       cancellationToken.Wait(_interval);
     }
 
-    private string GetAggregationQuery(PostgreSqlStorage storage)
+    private string GetAggregationQuery()
     {
+      string schemaName = _storage.Options.SchemaName;
       return
         $@"BEGIN;
 
-INSERT INTO ""{_storage.Options.SchemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
+INSERT INTO ""{schemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
       SELECT
       ""key"",
       SUM(""value""),
       MAX(""expireat"")
-      FROM ""{_storage.Options.SchemaName}"".""counter""
+      FROM ""{schemaName}"".""counter""
       GROUP BY
       ""key""
       ON CONFLICT(""key"") DO
@@ -96,9 +98,9 @@ INSERT INTO ""{_storage.Options.SchemaName}"".""aggregatedcounter"" (""key"", ""
       ""value"" = ""aggregatedcounter"".""value"" + EXCLUDED.""value"",
       ""expireat"" = EXCLUDED.""expireat"";
 
-      DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
+      DELETE FROM ""{schemaName}"".""counter""
         WHERE
-      ""key"" IN (SELECT ""key"" FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" );
+      ""key"" IN (SELECT ""key"" FROM ""{schemaName}"".""aggregatedcounter"" );
 
       COMMIT;
       ";

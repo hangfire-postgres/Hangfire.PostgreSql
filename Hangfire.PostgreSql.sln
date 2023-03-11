@@ -1,23 +1,23 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.28729.10
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33424.131
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{766BE831-F758-46BC-AFD3-BBEEFE0F686F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{5CA38188-92EE-453C-A04E-A506DF15A787}"
-ProjectSection(SolutionItems) = preProject
-	build.cake = build.cake
-	appveyor.yml = appveyor.yml
-	build.ps1 = build.ps1
-	build.sh = build.sh
-EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{0D30A51B-814F-474E-93B8-44E9C155255C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hangfire.PostgreSql", "src\Hangfire.PostgreSql\Hangfire.PostgreSql.csproj", "{3E4DBC41-F38E-4D1C-A6A7-206A132A29D6}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hangfire.PostgreSql.Tests", "tests\Hangfire.PostgreSql.Tests\Hangfire.PostgreSql.Tests.csproj", "{6044A48D-730B-4D1F-B03A-EB2B458DAF53}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{AAA78654-9846-4870-A13C-D9DBAF0792C4}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\ci.yml = .github\workflows\ci.yml
+		.github\workflows\pack.yml = .github\workflows\pack.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -40,6 +40,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{3E4DBC41-F38E-4D1C-A6A7-206A132A29D6} = {0D30A51B-814F-474E-93B8-44E9C155255C}
 		{6044A48D-730B-4D1F-B03A-EB2B458DAF53} = {766BE831-F758-46BC-AFD3-BBEEFE0F686F}
+		{AAA78654-9846-4870-A13C-D9DBAF0792C4} = {5CA38188-92EE-453C-A04E-A506DF15A787}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F7E32105-7F61-4127-8517-5E4275B9CABE}

@@ -83,7 +83,7 @@ namespace Hangfire.PostgreSql
       }
 
       IPersistentJobQueueProvider[] providers = queues
-        .Select(queue => _storage.QueueProviders.GetProvider(queue))
+        .Select(_storage.QueueProviders.GetProvider)
         .Distinct()
         .ToArray();
 

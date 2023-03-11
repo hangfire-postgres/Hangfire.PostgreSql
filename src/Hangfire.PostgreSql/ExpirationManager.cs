@@ -30,20 +30,20 @@ using Hangfire.Storage;
 
 namespace Hangfire.PostgreSql
 {
+#pragma warning disable CS0618
   internal class ExpirationManager : IBackgroundProcess, IServerComponent
+#pragma warning restore CS0618
   {
     private const string DistributedLockKey = "locks:expirationmanager";
+
     private static readonly TimeSpan _defaultLockTimeout = TimeSpan.FromMinutes(5);
-
     private static readonly TimeSpan _delayBetweenPasses = TimeSpan.FromSeconds(1);
-
     private static readonly ILog _logger = LogProvider.GetLogger(typeof(ExpirationManager));
 
     private static readonly string[] _processedCounters = {
       "stats:succeeded",
       "stats:deleted",
     };
-
     private static readonly string[] _processedTables = {
       "aggregatedcounter",
       "counter",
@@ -54,7 +54,6 @@ namespace Hangfire.PostgreSql
     };
 
     private readonly TimeSpan _checkInterval;
-
     private readonly PostgreSqlStorage _storage;
 
     public ExpirationManager(PostgreSqlStorage storage)

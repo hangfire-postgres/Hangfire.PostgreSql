@@ -149,7 +149,9 @@ namespace Hangfire.PostgreSql
       return new PostgreSqlConnection(this);
     }
 
+#pragma warning disable CS0618
     public override IEnumerable<IServerComponent> GetComponents()
+#pragma warning restore CS0618
     {
       yield return new ExpirationManager(this);
       yield return new CountersAggregator(this, Options.CountersAggregateInterval);
@@ -255,7 +257,7 @@ namespace Hangfire.PostgreSql
 
           using TransactionScope transaction = CreateTransactionScope(isolationLevel);
           connection.EnlistTransaction(Transaction.Current);
-          var result = func(connection, null);
+          T result = func(connection, null);
           transaction.Complete();
           return result;
 
