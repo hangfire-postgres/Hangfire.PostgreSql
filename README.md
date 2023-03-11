@@ -68,7 +68,7 @@ config.UsePostgreSqlStorage(
 
 ### License
 
-Copyright © 2014-2022 Frank Hommers https://github.com/hangfire-postgres/Hangfire.PostgreSql.
+Copyright © 2014-2023 Frank Hommers https://github.com/hangfire-postgres/Hangfire.PostgreSql.
 
 Collaborators:
 Frank Hommers (frankhommers), Vytautas Kasparavičius (vytautask), Žygimantas Arūna (azygis) and Andrew Armstrong (Plasma)
