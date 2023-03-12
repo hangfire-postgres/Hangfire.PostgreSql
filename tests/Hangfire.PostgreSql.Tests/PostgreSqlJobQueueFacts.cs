@@ -204,7 +204,7 @@ namespace Hangfire.PostgreSql.Tests
       // Arrange
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
-          new { InvocationData = "", Arguments = "", Queue = "default" });
+          new { InvocationData = new JsonParameter(""), Arguments = new JsonParameter(""), Queue = "default" });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
         // Act
@@ -255,8 +255,8 @@ namespace Hangfire.PostgreSql.Tests
           new {
             Queue = "default",
             FetchedAt = DateTime.UtcNow.AddDays(-1),
-            InvocationData = "",
-            Arguments = "",
+            InvocationData = new JsonParameter(""),
+            Arguments = new JsonParameter(""),
           });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
@@ -298,8 +298,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
           new[] {
-            new { Queue = "default", InvocationData = "", Arguments = "" },
-            new { Queue = "default", InvocationData = "", Arguments = "" },
+            new { Queue = "default", InvocationData = new JsonParameter(""), Arguments = new JsonParameter("") },
+            new { Queue = "default", InvocationData = new JsonParameter(""), Arguments = new JsonParameter("") },
           });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
@@ -345,7 +345,7 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
         connection.Execute(arrangeSql,
-          new { Queue = "critical", InvocationData = "", Arguments = "" });
+          new { Queue = "critical", InvocationData = new JsonParameter(""), Arguments = new JsonParameter("") });
 
         Assert.Throws<OperationCanceledException>(() => queue.Dequeue(_defaultQueues,
           CreateTimingOutCancellationToken()));
@@ -383,8 +383,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
           new[] {
-            new { Queue = queueNames.First(), InvocationData = "", Arguments = "" },
-            new { Queue = queueNames.Last(), InvocationData = "", Arguments = "" },
+            new { Queue = queueNames.First(), InvocationData = new JsonParameter("") , Arguments = new JsonParameter("") },
+            new { Queue = queueNames.Last(), InvocationData = new JsonParameter(""), Arguments = new JsonParameter("") },
           });
 
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);

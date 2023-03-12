@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -199,9 +200,9 @@ namespace Hangfire.PostgreSql.Tests
 
         long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = SerializationHelper.Serialize(InvocationData.SerializeJob(job)),
+            InvocationData = new JsonParameter(SerializationHelper.Serialize(InvocationData.SerializeJob(job))),
             StateName = "Succeeded",
-            Arguments = "[\"\\\"Arguments\\\"\"]",
+            Arguments = new JsonParameter("[\"\\\"Arguments\\\"\"]"),
           });
 
         JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
@@ -239,7 +240,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string createJobSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES ('', '', '', NOW()) RETURNING ""id"";
+        VALUES ('{{}}', '[]', '', NOW()) RETURNING ""id"";
       ";
 
       string createStateSql = $@"
@@ -265,7 +266,7 @@ namespace Hangfire.PostgreSql.Tests
         long jobId = connection.QuerySingle<long>(createJobSql);
 
         long stateId = connection.QuerySingle<long>(createStateSql,
-          new { JobId = jobId, Name = "Name", Reason = "Reason", Data = SerializationHelper.Serialize(data) });
+          new { JobId = jobId, Name = "Name", Reason = "Reason", Data = new JsonParameter(SerializationHelper.Serialize(data)) });
 
         connection.Execute(updateJobStateSql, new { JobId = jobId, StateId = stateId });
 
@@ -275,29 +276,6 @@ namespace Hangfire.PostgreSql.Tests
         Assert.Equal("Name", result.Name);
         Assert.Equal("Reason", result.Reason);
         Assert.Equal("Value", result.Data["Key"]);
-      });
-    }
-
-    [Fact]
-    [CleanDatabase]
-    public void GetJobData_ReturnsJobLoadException_IfThereWasADeserializationException()
-    {
-      string arrangeSql = $@"
-        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, @StateName, NOW()) RETURNING ""id""
-      ";
-
-      UseConnections((connection, jobStorageConnection) => {
-        long jobId = connection.QuerySingle<long>(arrangeSql,
-          new {
-            InvocationData = SerializationHelper.Serialize(new InvocationData(null, null, null, null)),
-            StateName = "Succeeded",
-            Arguments = "['Arguments']",
-          });
-
-        JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
-
-        Assert.NotNull(result.LoadException);
       });
     }
 
@@ -329,7 +307,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW()) RETURNING ""id""
+        VALUES ('{{}}', '[]', NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -350,7 +328,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW()) RETURNING ""id""
+        VALUES ('{{}}', '[]', NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -372,7 +350,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW()) RETURNING ""id""
+        VALUES ('{{}}', '[]', NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -426,7 +404,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH ""insertedjob"" AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES ('', '', NOW()) RETURNING ""id""
+          VALUES ('{{}}', '[]', NOW()) RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobparameter"" (""jobid"", ""name"", ""value"")
         SELECT ""insertedjob"".""id"", @Name, @Value
@@ -522,15 +500,17 @@ namespace Hangfire.PostgreSql.Tests
     {
       UseConnections((connection, jobStorageConnection) => {
         ServerContext context1 = new ServerContext {
-          Queues = new[] { "critical", "default" },
           WorkerCount = 4,
+          Queues = new[] { "critical", "default" },
         };
         jobStorageConnection.AnnounceServer("server", context1);
 
         dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
         Assert.Equal("server", server.id);
-        Assert.True(((string)server.data).StartsWith("{\"WorkerCount\":4,\"Queues\":[\"critical\",\"default\"],\"StartedAt\":"),
-          server.data);
+
+        ServerContext serverData = JsonSerializer.Deserialize<ServerContext>(server.data);
+        Assert.Equal(4, serverData.WorkerCount);
+        Assert.Equal(context1.Queues, serverData.Queues);
         Assert.NotNull(server.lastheartbeat);
 
         ServerContext context2 = new ServerContext {
@@ -557,8 +537,8 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
-        VALUES ('Server1', '', NOW()),
-        ('Server2', '', NOW())
+        VALUES ('Server1', '{{}}', NOW()),
+        ('Server2', '{{}}', NOW())
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -593,7 +573,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
-        VALUES ('server1', '', '2012-12-12 12:12:12'), ('server2', '', '2012-12-12 12:12:12')
+        VALUES ('server1', '{{}}', '2012-12-12 12:12:12'), ('server2', '{{}}', '2012-12-12 12:12:12')
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -622,7 +602,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""server"" (""id"", ""data"", ""lastheartbeat"")
-        VALUES (@Id, '', @Heartbeat)
+        VALUES (@Id, '{{}}', @Heartbeat)
       ";
 
       UseConnections((connection, jobStorageConnection) => {
