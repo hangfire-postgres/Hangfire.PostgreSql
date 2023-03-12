@@ -12,10 +12,6 @@ UPDATE "job" SET "invocationdata" = '{}' WHERE "invocationdata" = '';
 UPDATE "job" SET "arguments" = '[]' WHERE "arguments" = '';
 
 -- Change the type
--- ALTER TABLE "job" ALTER COLUMN "invocationdata" TYPE jsonb USING to_jsonb("invocationdata");
--- ALTER TABLE "job" ALTER COLUMN "arguments" TYPE jsonb USING to_jsonb("arguments");
--- ALTER TABLE "server" ALTER COLUMN "data" TYPE jsonb USING to_jsonb("data");
--- ALTER TABLE "state" ALTER COLUMN "data" TYPE jsonb USING to_jsonb("data");
 
 ALTER TABLE "job" ALTER COLUMN "invocationdata" TYPE jsonb USING "invocationdata"::jsonb;
 ALTER TABLE "job" ALTER COLUMN "arguments" TYPE jsonb USING "arguments"::jsonb;
