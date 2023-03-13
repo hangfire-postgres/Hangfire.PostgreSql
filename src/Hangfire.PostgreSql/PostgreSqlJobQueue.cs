@@ -39,10 +39,12 @@ namespace Hangfire.PostgreSql
 
     internal static readonly AutoResetEvent _newItemInQueueEvent = new(true);
     private readonly PostgreSqlStorage _storage;
+    private readonly QueryProvider _queryProvider;
 
     public PostgreSqlJobQueue(PostgreSqlStorage storage)
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+      _queryProvider = QueryProvider.Instance;
       SignalDequeue = new AutoResetEvent(false);
       JobQueueNotification = new AutoResetEvent(false);
     }
@@ -93,17 +95,18 @@ namespace Hangfire.PostgreSql
 
     public void Enqueue(IDbConnection connection, string queue, string jobId)
     {
-      string enqueueJobSql = $@"
+      string enqueueJobQuery = _queryProvider.GetQuery("job-queue:enqueue", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""jobqueue"" (""jobid"", ""queue"") 
         VALUES (@JobId, @Queue);
-      ";
+      ");
 
-      connection.Execute(enqueueJobSql,
+      connection.Execute(enqueueJobQuery,
         new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
 
       if (_storage.Options.EnableLongPolling)
       {
-        connection.Execute($"NOTIFY {JobNotificationChannel}");
+        string notifyQuery = _queryProvider.GetQuery("job-queue:notify", () => $"NOTIFY {JobNotificationChannel}");
+        connection.Execute(notifyQuery);
       }
     }
 
@@ -129,27 +132,11 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
       }
 
-      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
       FetchedJob fetchedJob;
 
-      string fetchJobSqlTemplate = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NOW()
-        WHERE ""id"" = (
-          SELECT ""id"" 
-          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-          WHERE ""queue"" = ANY (@Queues)
-          AND ""fetchedat"" {{0}}
-          ORDER BY ""queue"", ""fetchedat"", ""jobid""
-          FOR UPDATE SKIP LOCKED
-          LIMIT 1
-        )
-        RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
-      ";
-
-      string[] fetchConditions = {
-        "IS NULL",
-        $"< NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
+      (string CacheKey, string Condition)[] fetchConditions = {
+        ("null", "IS NULL"),
+        ("interval", "< NOW() - @Timeout"),
       };
 
       int fetchConditionsIndex = 0;
@@ -157,7 +144,22 @@ namespace Hangfire.PostgreSql
       {
         cancellationToken.ThrowIfCancellationRequested();
 
-        string fetchJobSql = string.Format(fetchJobSqlTemplate, fetchConditions[fetchConditionsIndex]);
+        (string conditionCacheKey, string condition) = fetchConditions[fetchConditionsIndex];
+
+        string fetchJobQuery = _queryProvider.GetQuery($"job-queue:dequeue:transaction:fetch-job:{conditionCacheKey}", () => $@"
+          UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          SET ""fetchedat"" = NOW()
+          WHERE ""id"" = (
+            SELECT ""id"" 
+            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+            WHERE ""queue"" = ANY (@Queues)
+            AND ""fetchedat"" {condition}
+            ORDER BY ""queue"", ""fetchedat"", ""jobid""
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+          )
+          RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
+        ");
 
         Utils.Utils.TryExecute(() => {
           NpgsqlConnection connection = _storage.CreateAndOpenConnection();
@@ -165,9 +167,7 @@ namespace Hangfire.PostgreSql
           try
           {
             using NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-            FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobSql,
-                new { Queues = queues.ToList() }, trx)
-              .SingleOrDefault();
+            FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobQuery, new { Queues = queues.ToList(), Timeout = _storage.Options.InvisibilityTimeout }, trx).SingleOrDefault();
 
             trx.Commit();
 
@@ -224,31 +224,11 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
       }
 
-      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
-      FetchedJob markJobAsFetched = null;
+      FetchedJob fetchedJob = null;
 
-
-      string jobToFetchSqlTemplate = $@"
-        SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
-        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        WHERE ""queue"" = ANY (@Queues)
-        AND ""fetchedat"" {{0}} 
-        ORDER BY ""queue"", ""fetchedat"", ""jobid"" 
-        LIMIT 1;
-        ";
-
-      string markJobAsFetchedSql = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-        SET ""fetchedat"" = NOW(), 
-            ""updatecount"" = (""updatecount"" + 1) % 2000000000
-        WHERE ""id"" = @Id 
-        AND ""updatecount"" = @UpdateCount
-        RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
-      ";
-
-      string[] fetchConditions = {
-        "IS NULL",
-        $"< NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS'",
+      (string CacheKey, string Condition)[] fetchConditions = {
+        ("null", "IS NULL"),
+        ("interval", "< NOW() - @Timeout"),
       };
 
       int fetchConditionsIndex = 0;
@@ -256,11 +236,18 @@ namespace Hangfire.PostgreSql
       {
         cancellationToken.ThrowIfCancellationRequested();
 
-        string jobToFetchJobSql = string.Format(jobToFetchSqlTemplate, fetchConditions[fetchConditionsIndex]);
+        (string conditionCacheKey, string condition) = fetchConditions[fetchConditionsIndex];
 
-        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(jobToFetchJobSql,
-            new { Queues = queues.ToList() })
-          .SingleOrDefault());
+        string fetchJobQuery = _queryProvider.GetQuery($"job-queue:dequeue:updatecount:fetch-job:{conditionCacheKey}", () => $@"
+          SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
+          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          WHERE ""queue"" = ANY (@Queues)
+          AND ""fetchedat"" {condition}
+          ORDER BY ""queue"", ""fetchedat"", ""jobid"" 
+          LIMIT 1;
+        ");
+
+        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(fetchJobQuery, new { Queues = queues.ToList(), Timeout = _storage.Options.InvisibilityTimeout }).SingleOrDefault());
 
         if (jobToFetch == null)
         {
@@ -278,19 +265,25 @@ namespace Hangfire.PostgreSql
         }
         else
         {
-          markJobAsFetched = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(markJobAsFetchedSql,
-              jobToFetch)
-            .SingleOrDefault());
+          string markJobAsFetchedQuery = _queryProvider.GetQuery("job-queue:dequeue:updatecount:mark-as-fetched", () => $@"
+            UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+            SET ""fetchedat"" = NOW(), 
+                ""updatecount"" = (""updatecount"" + 1) % 2000000000
+            WHERE ""id"" = @Id 
+            AND ""updatecount"" = @UpdateCount
+            RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
+          ");
+          fetchedJob = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(markJobAsFetchedQuery, jobToFetch).SingleOrDefault());
         }
         fetchConditionsIndex++;
         fetchConditionsIndex %= fetchConditions.Length;
       }
-      while (markJobAsFetched == null);
+      while (fetchedJob == null);
 
       return new PostgreSqlFetchedJob(_storage,
-        markJobAsFetched.Id,
-        markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
-        markJobAsFetched.Queue);
+        fetchedJob.Id,
+        fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
+        fetchedJob.Queue);
     }
 
     private Task ListenForNotificationsAsync(CancellationToken cancellationToken)
@@ -319,7 +312,8 @@ namespace Hangfire.PostgreSql
 
             while (!cancellationToken.IsCancellationRequested)
             {
-              await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
+              string query = _queryProvider.GetQuery("job-queue:listen-notification", () => $"LISTEN {JobNotificationChannel}");
+              await clonedConnection.ExecuteAsync(query);
               await clonedConnection.WaitAsync(cancellationToken);
               JobQueueNotification.Set();
             }

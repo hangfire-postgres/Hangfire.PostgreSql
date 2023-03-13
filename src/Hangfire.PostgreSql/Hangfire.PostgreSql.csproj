@@ -37,6 +37,7 @@
     </PackageReference>
     <PackageReference Include="Hangfire.Core" Version="1.7.28" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.0" />
     <PackageReference Include="Npgsql" Version="6.0.0" />
   </ItemGroup>
 

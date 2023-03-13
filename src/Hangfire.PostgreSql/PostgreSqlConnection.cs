@@ -42,6 +42,7 @@ namespace Hangfire.PostgreSql
     private readonly Dictionary<string, HashSet<Guid>> _lockedResources;
     private readonly PostgreSqlStorageOptions _options;
     private readonly PostgreSqlStorage _storage;
+    private readonly QueryProvider _queryProvider;
 
     private DbConnection _dedicatedConnection;
 
@@ -50,6 +51,7 @@ namespace Hangfire.PostgreSql
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       _options = storage.Options ?? throw new ArgumentNullException(nameof(storage.Options));
       _lockedResources = new Dictionary<string, HashSet<Guid>>();
+      _queryProvider = QueryProvider.Instance;
     }
 
     public override void Dispose()
@@ -113,16 +115,16 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(parameters));
       }
 
-      string createJobSql = $@"
+      string createJobQuery = _queryProvider.GetQuery("connection:create-job", () => $@"
         INSERT INTO ""{_options.SchemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
         VALUES (@InvocationData, @Arguments, @CreatedAt, @ExpireAt) 
         RETURNING ""id"";
-      ";
+      ");
 
       InvocationData invocationData = InvocationData.SerializeJob(job);
 
       return _storage.UseTransaction(_dedicatedConnection, (connection, transaction) => {
-        string jobId = connection.QuerySingle<long>(createJobSql,
+        string jobId = connection.QuerySingle<long>(createJobQuery,
           new {
             InvocationData = SerializationHelper.Serialize(invocationData),
             invocationData.Arguments,
@@ -143,12 +145,12 @@ namespace Hangfire.PostgreSql
             };
           }
 
-          string insertParameterSql = $@"
+          string insertParameterQuery = _queryProvider.GetQuery("connection:insert-job-parameter", () => $@"
             INSERT INTO ""{_options.SchemaName}"".""jobparameter"" (""jobid"", ""name"", ""value"")
             VALUES (@JobId, @Name, @Value);
-          ";
+          ");
 
-          connection.Execute(insertParameterSql, parameterArray, transaction);
+          connection.Execute(insertParameterQuery, parameterArray, transaction);
         }
 
         return jobId;
@@ -162,15 +164,15 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(id));
       }
 
-      string sql = $@"
+      string query = _queryProvider.GetQuery("connection:get-job-data", () => $@"
         SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
         FROM ""{_options.SchemaName}"".""job"" 
         WHERE ""id"" = @Id;
-      ";
+      ");
 
       SqlJob jobData = _storage.UseConnection(_dedicatedConnection,
         connection => connection
-          .Query<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) })
+          .Query<SqlJob>(query, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) })
           .SingleOrDefault());
 
       if (jobData == null)
@@ -209,16 +211,16 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(jobId));
       }
 
-      string sql = $@"
+      string query = _queryProvider.GetQuery("connection:get-state-data", () => $@"
         SELECT s.""name"" ""Name"", s.""reason"" ""Reason"", s.""data"" ""Data""
         FROM ""{_options.SchemaName}"".""state"" s
         INNER JOIN ""{_options.SchemaName}"".""job"" j on j.""stateid"" = s.""id""
         WHERE j.""id"" = @JobId;
-      ";
+      ");
 
       SqlState sqlState = _storage.UseConnection(_dedicatedConnection,
         connection => connection
-          .Query<SqlState>(sql, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
+          .Query<SqlState>(query, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
           .SingleOrDefault());
       return sqlState == null
         ? null
@@ -241,7 +243,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(name));
       }
 
-      string sql = $@"
+      string query = _queryProvider.GetQuery("connection:set-job-parameter", () => $@"
         WITH ""inputvalues"" AS (
           SELECT @JobId ""jobid"", @Name ""name"", @Value ""value""
         ), ""updatedrows"" AS ( 
@@ -261,10 +263,10 @@ namespace Hangfire.PostgreSql
           WHERE ""updatedrows"".""jobid"" = ""insertvalues"".""jobid"" 
           AND ""updatedrows"".""name"" = ""insertvalues"".""name""
         );
-      ";
+      ");
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute(sql, new { JobId = Convert.ToInt64(id, CultureInfo.InvariantCulture), Name = name, Value = value }));
+        .Execute(query, new { JobId = Convert.ToInt64(id, CultureInfo.InvariantCulture), Name = name, Value = value }));
     }
 
     public override string GetJobParameter(string id, string name)
@@ -279,7 +281,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(name));
       }
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name;";
+      string query = _queryProvider.GetQuery("connection:get-job-parameter", () =>
+        $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name;");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<string>(query, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture), Name = name }));
@@ -292,7 +295,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key;";
+      string query = _queryProvider.GetQuery("connection:get-all-items-from-set", () =>
+        $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key;");
 
       return _storage.UseConnection(_dedicatedConnection, connection => {
         IEnumerable<string> result = connection.Query<string>(query, new { Key = key });
@@ -313,14 +317,16 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException($"The '{nameof(toScore)}' value must be higher or equal to the '{nameof(fromScore)}' value.");
       }
 
+      string query = _queryProvider.GetQuery("connection:get-first-by-lowest-score-from-set", () => $@"
+        SELECT ""value"" 
+        FROM ""{_options.SchemaName}"".""set"" 
+        WHERE ""key"" = @Key 
+        AND ""score"" BETWEEN @FromScore AND @ToScore 
+        ORDER BY ""score"" LIMIT 1;
+      ");
+
       return _storage.UseConnection(_dedicatedConnection, connection => connection
-        .QuerySingleOrDefault<string>($@"
-          SELECT ""value"" 
-          FROM ""{_options.SchemaName}"".""set"" 
-          WHERE ""key"" = @Key 
-          AND ""score"" BETWEEN @FromScore AND @ToScore 
-          ORDER BY ""score"" LIMIT 1;
-        ",
+        .QuerySingleOrDefault<string>(query,
           new { Key = key, FromScore = fromScore, ToScore = toScore }));
     }
 
@@ -336,7 +342,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(keyValuePairs));
       }
 
-      string sql = $@"
+      string query = _queryProvider.GetQuery("connection:set-range-in-hash", () => $@"
         WITH ""inputvalues"" AS (
           SELECT @Key ""key"", @Field ""field"", @Value ""value""
         ), ""updatedrows"" AS ( 
@@ -355,7 +361,7 @@ namespace Hangfire.PostgreSql
           WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
           AND ""updatedrows"".""field"" = ""insertvalues"".""field""
         );
-      ";
+      ");
 
       Stopwatch executionTimer = Stopwatch.StartNew();
       while (true)
@@ -365,7 +371,7 @@ namespace Hangfire.PostgreSql
           _storage.UseTransaction(_dedicatedConnection, (connection, transaction) => {
             foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
             {
-              connection.Execute(sql, new { Key = key, Field = keyValuePair.Key, keyValuePair.Value }, transaction);
+              connection.Execute(query, new { Key = key, Field = keyValuePair.Key, keyValuePair.Value }, transaction);
             }
           }, IsolationLevel.Serializable);
 
@@ -393,12 +399,14 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
+      string query = _queryProvider.GetQuery("connection:get-all-entries-from-hash", () => $@"
+        SELECT ""field"" ""Field"", ""value"" ""Value"" 
+        FROM ""{_options.SchemaName}"".""hash"" 
+        WHERE ""key"" = @Key;
+      ");
+
       Dictionary<string, string> result = _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Query<SqlHash>($@"
-          SELECT ""field"" ""Field"", ""value"" ""Value"" 
-          FROM ""{_options.SchemaName}"".""hash"" 
-          WHERE ""key"" = @Key;",
-          new { Key = key })
+        .Query<SqlHash>(query, new { Key = key })
         .ToDictionary(x => x.Field, x => x.Value));
 
       return result.Count != 0 ? result : null;
@@ -422,7 +430,7 @@ namespace Hangfire.PostgreSql
         StartedAt = DateTime.UtcNow,
       };
 
-      string sql = $@"
+      string query = _queryProvider.GetQuery("connection:announce-server", () => $@"
         WITH ""inputvalues"" AS (
           SELECT @Id ""id"", @Data ""data"", NOW() ""lastheartbeat""
         ), ""updatedrows"" AS ( 
@@ -440,10 +448,10 @@ namespace Hangfire.PostgreSql
           FROM ""updatedrows"" 
           WHERE ""updatedrows"".""id"" = ""insertvalues"".""id"" 
         );
-      ";
+      ");
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute(sql, new { Id = serverId, Data = SerializationHelper.Serialize(data) }));
+        .Execute(query, new { Id = serverId, Data = SerializationHelper.Serialize(data) }));
     }
 
     public override void RemoveServer(string serverId)
@@ -453,8 +461,11 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(serverId));
       }
 
+      string query = _queryProvider.GetQuery("connection:remove-server", () =>
+        $@"DELETE FROM ""{_options.SchemaName}"".""server"" WHERE ""id"" = @Id;");
+
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute($@"DELETE FROM ""{_options.SchemaName}"".""server"" WHERE ""id"" = @Id;", new { Id = serverId }));
+        .Execute(query, new { Id = serverId }));
     }
 
     public override void Heartbeat(string serverId)
@@ -464,11 +475,11 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(serverId));
       }
 
-      string query = $@"
+      string query = _queryProvider.GetQuery("connection:heartbeat", () => $@"
         UPDATE ""{_options.SchemaName}"".""server"" 
         SET ""lastheartbeat"" = NOW() 
         WHERE ""id"" = @Id;
-      ";
+      ");
 
       int affectedRows = _storage.UseConnection(_dedicatedConnection, connection => connection
         .Execute(query, new { Id = serverId }));
@@ -486,11 +497,13 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException("The 'timeOut' value must be positive.", nameof(timeOut));
       }
 
-      string query = $@"
+      string query = _queryProvider.GetQuery("connection:remove-timed-out-servers", () => $@"
         DELETE FROM ""{_options.SchemaName}"".""server"" 
-        WHERE ""lastheartbeat"" < (NOW() - INTERVAL '{((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture)} MILLISECONDS');";
+        WHERE ""lastheartbeat"" < (NOW() - @Interval);
+      ");
 
-      return _storage.UseConnection(_dedicatedConnection, connection => connection.Execute(query));
+      return _storage.UseConnection(_dedicatedConnection, connection => connection
+        .Execute(query, new { Interval = timeOut }));
     }
 
     public override long GetSetCount(string key)
@@ -500,7 +513,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT COUNT(""key"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
+      string query = _queryProvider.GetQuery("connection:get-set-count", () =>
+        $@"SELECT COUNT(""key"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<long>(query, new { Key = key }));
@@ -513,7 +527,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key ORDER BY ""id"" DESC";
+      string query = _queryProvider.GetQuery("connection:get-all-items-from-list", () =>
+        $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key ORDER BY ""id"" DESC");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key })
@@ -527,10 +542,13 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT SUM(""value"") FROM (
-            SELECT SUM(""value"") ""value"" FROM ""{_options.SchemaName}"".""counter"" WHERE ""key"" = @Key
-            UNION ALL
-            SELECT SUM(""value"") ""value"" FROM ""{_options.SchemaName}"".""aggregatedcounter"" WHERE ""key"" = @Key) c";
+      string query = _queryProvider.GetQuery("connection:get-counter", () => $@"
+        SELECT SUM(""value"") FROM (
+          SELECT SUM(""value"") ""value"" FROM ""{_options.SchemaName}"".""counter"" WHERE ""key"" = @Key
+          UNION ALL
+          SELECT SUM(""value"") ""value"" FROM ""{_options.SchemaName}"".""aggregatedcounter"" WHERE ""key"" = @Key
+        ) c
+      ");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
           .QuerySingleOrDefault<long?>(query, new { Key = key }) ?? 0);
@@ -543,11 +561,11 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
+      string query = _queryProvider.GetQuery("connection:get-list-count", () =>
+        $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<long>(query, new { Key = key }));
-
     }
 
     public override TimeSpan GetListTtl(string key)
@@ -557,7 +575,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key";
+      string query = _queryProvider.GetQuery("connection:get-list-ttl", () =>
+        $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""list"" WHERE ""key"" = @Key");
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -572,13 +591,13 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"
-          SELECT ""value"" 
-          FROM ""{_options.SchemaName}"".""list""
-          WHERE ""key"" = @Key
-          ORDER BY ""id"" DESC
-          LIMIT @Limit OFFSET @Offset
-        ";
+      string query = _queryProvider.GetQuery("connection:get-range-from-list", () => $@"
+        SELECT ""value"" 
+        FROM ""{_options.SchemaName}"".""list""
+        WHERE ""key"" = @Key
+        ORDER BY ""id"" DESC
+        LIMIT @Limit OFFSET @Offset
+      ");
 
       return _storage.UseConnection(_dedicatedConnection, connection =>
         connection
@@ -593,7 +612,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
+      string query = _queryProvider.GetQuery("connection:get-hash-count", () =>
+        $@"SELECT COUNT(""id"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingle<long>(query, new { Key = key }));
@@ -606,7 +626,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT MIN(""expireat"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
+      string query = _queryProvider.GetQuery("connection:get-hash-ttl", () =>
+        $@"SELECT MIN(""expireat"") FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key");
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -621,13 +642,13 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"
+      string query = _queryProvider.GetQuery("connection:get-range-from-set", () => $@"
           SELECT ""value"" 
           FROM ""{_options.SchemaName}"".""set""
           WHERE ""key"" = @Key
           ORDER BY ""id"" 
           LIMIT @Limit OFFSET @Offset
-        ";
+        ");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
@@ -641,7 +662,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string query = $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key";
+      string query = _queryProvider.GetQuery("connection:get-set-ttl", () =>
+        $@"SELECT min(""expireat"") FROM ""{_options.SchemaName}"".""set"" WHERE ""key"" = @Key");
 
       DateTime? result = _storage.UseConnection(_dedicatedConnection, connection => connection
         .QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
@@ -661,7 +683,8 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(name));
       }
 
-      string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key AND ""field"" = @Field";
+      string query = _queryProvider.GetQuery("connection:get-value-from-hash", () =>
+        $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key AND ""field"" = @Field");
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Field = name })

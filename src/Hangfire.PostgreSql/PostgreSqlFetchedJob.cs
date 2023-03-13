@@ -51,23 +51,22 @@ namespace Hangfire.PostgreSql
 
     public void RemoveFromQueue()
     {
-      _storage.UseConnection(null, connection => connection.Execute($@"
-        DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id;
-      ",
-        new { Id }));
+      string query = QueryProvider.Instance.GetQuery("fetched-job:remove-from-queue", () =>
+        $@"DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id;");
 
+      _storage.UseConnection(null, connection => connection.Execute(query, new { Id }));
       _removedFromQueue = true;
     }
 
     public void Requeue()
     {
-      _storage.UseConnection(null, connection => connection.Execute($@"
+      string query = QueryProvider.Instance.GetQuery("fetched-job:requeue", () => $@"
         UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
         SET ""fetchedat"" = NULL 
         WHERE ""id"" = @Id;
-      ",
-      new { Id }));
+      ");
 
+      _storage.UseConnection(null, connection => connection.Execute(query, new { Id }));
       _requeued = true;
     }
 

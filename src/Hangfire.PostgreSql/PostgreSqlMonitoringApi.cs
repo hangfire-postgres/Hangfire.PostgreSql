@@ -37,6 +37,7 @@ namespace Hangfire.PostgreSql
   {
     private readonly PersistentJobQueueProviderCollection _queueProviders;
     private readonly PostgreSqlStorage _storage;
+    private readonly QueryProvider _queryProvider;
 
     public PostgreSqlMonitoringApi(
       PostgreSqlStorage storage,
@@ -44,6 +45,7 @@ namespace Hangfire.PostgreSql
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       _queueProviders = queueProviders ?? throw new ArgumentNullException(nameof(queueProviders));
+      _queryProvider = QueryProvider.Instance;
     }
 
     public long ScheduledCount()
@@ -112,7 +114,8 @@ namespace Hangfire.PostgreSql
     public IList<ServerDto> Servers()
     {
       return UseConnection(connection => {
-        List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>($@"SELECT * FROM ""{_storage.Options.SchemaName}"".""server""")
+        string query = _queryProvider.GetQuery("monitoring-api:get-servers", () => $@"SELECT * FROM ""{_storage.Options.SchemaName}"".""server""");
+        List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>(query)
           .AsEnumerable()
           .Select(server => (server, SerializationHelper.Deserialize<ServerData>(server.Data)))
           .ToList();
@@ -225,7 +228,7 @@ namespace Hangfire.PostgreSql
     public JobDetailsDto JobDetails(string jobId)
     {
       return UseConnection(connection => {
-        string sql = $@"
+        string query = _queryProvider.GetQuery("monitoring-api:get-job-details", () => $@"
           SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt"" 
           FROM ""{_storage.Options.SchemaName}"".""job"" 
           WHERE ""id"" = @Id;
@@ -238,8 +241,8 @@ namespace Hangfire.PostgreSql
           FROM ""{_storage.Options.SchemaName}"".""state"" 
           WHERE ""jobid"" = @Id 
           ORDER BY ""id"" DESC;
-        ";
-        using SqlMapper.GridReader multi = connection.QueryMultiple(sql, new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) });
+        ");
+        using SqlMapper.GridReader multi = connection.QueryMultiple(query, new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) });
         SqlJob job = multi.Read<SqlJob>().SingleOrDefault();
         if (job == null)
         {
@@ -282,7 +285,7 @@ namespace Hangfire.PostgreSql
     public StatisticsDto GetStatistics()
     {
       return UseConnection(connection => {
-        string sql = $@"
+        string query = _queryProvider.GetQuery("monitoring-api:get-statistics", () => $@"
           SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
           FROM ""{_storage.Options.SchemaName}"".""job""
           WHERE ""statename"" IS NOT NULL
@@ -312,10 +315,10 @@ namespace Hangfire.PostgreSql
           SELECT COUNT(*) 
           FROM ""{_storage.Options.SchemaName}"".""set"" 
           WHERE ""key"" = 'recurring-jobs';
-        ";
+        ");
 
         StatisticsDto stats = new();
-        using (SqlMapper.GridReader multi = connection.QueryMultiple(sql))
+        using (SqlMapper.GridReader multi = connection.QueryMultiple(query))
         {
           Dictionary<string, long> countByStates = multi.Read<(string StateName, long Count)>()
             .ToDictionary(x => x.StateName, x => x.Count);
@@ -379,12 +382,12 @@ namespace Hangfire.PostgreSql
 
     private Dictionary<DateTime, long> GetTimelineStats(IDictionary<string, DateTime> keyMaps)
     {
-      string query = $@"
+      string query = _queryProvider.GetQuery("monitoring-api:get-timeline-stats", () => $@"
         SELECT ""key"", COUNT(""value"") AS ""count"" 
         FROM ""{_storage.Options.SchemaName}"".""counter""
         WHERE ""key"" = ANY (@Keys)
         GROUP BY ""key"";
-      ";
+      ");
 
       Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<(string Key, long Count)>(query,
           new { Keys = keyMaps.Keys.ToList() })
@@ -419,7 +422,7 @@ namespace Hangfire.PostgreSql
 
     private JobList<EnqueuedJobDto> EnqueuedJobs(IEnumerable<long> jobIds)
     {
-      string enqueuedJobsSql = $@"
+      string query = _queryProvider.GetQuery("monitoring-api:get-enqueued-jobs", () => $@"
         SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
           ""j"".""expireat"" ""ExpireAt"", ""s"".""name"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
@@ -427,9 +430,9 @@ namespace Hangfire.PostgreSql
         LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
         AND ""jq"".""fetchedat"" IS NULL;
-      ";
+      ");
 
-      List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(enqueuedJobsSql,
+      List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query,
           new { JobIds = jobIds.ToList() })
         .ToList());
 
@@ -445,9 +448,10 @@ namespace Hangfire.PostgreSql
 
     private long GetNumberOfJobsByStateName(string stateName)
     {
-      string sqlQuery = $@"SELECT COUNT(""id"") FROM ""{_storage.Options.SchemaName}"".""job"" WHERE ""statename"" = @StateName;";
+      string query = _queryProvider.GetQuery("monitoring-api:get-number-of-jobs-by-state-name", () =>
+        $@"SELECT COUNT(""id"") FROM ""{_storage.Options.SchemaName}"".""job"" WHERE ""statename"" = @StateName;");
 
-      return UseConnection(connection => connection.QuerySingle<long>(sqlQuery,
+      return UseConnection(connection => connection.QuerySingle<long>(query,
         new { StateName = stateName }));
     }
 
@@ -468,7 +472,7 @@ namespace Hangfire.PostgreSql
 
     private JobList<TDto> GetJobs<TDto>(int from, int count, string stateName, Func<SqlJob, Job, Dictionary<string, string>, TDto> selector)
     {
-      string jobsSql = $@"
+      string query = _queryProvider.GetQuery("monitoring-api:get-jobs", () => $@"
         SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
           ""j"".""expireat"" ""ExpireAt"", NULL ""FetchedAt"", ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
@@ -476,9 +480,9 @@ namespace Hangfire.PostgreSql
         WHERE ""j"".""statename"" = @StateName 
         ORDER BY ""j"".""id"" DESC
         LIMIT @Limit OFFSET @Offset;
-      ";
+      ");
 
-      List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(jobsSql,
+      List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query,
           new { StateName = stateName, Limit = count, Offset = from })
         .ToList());
 
@@ -511,10 +515,9 @@ namespace Hangfire.PostgreSql
       return new JobList<TDto>(result);
     }
 
-    private JobList<FetchedJobDto> FetchedJobs(
-      IEnumerable<long> jobIds)
+    private JobList<FetchedJobDto> FetchedJobs(IEnumerable<long> jobIds)
     {
-      string fetchedJobsSql = $@"
+      string query = _queryProvider.GetQuery("monitoring-api:get-fetched-jobs", () => $@"
         SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", 
           ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"", 
           ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
@@ -523,9 +526,9 @@ namespace Hangfire.PostgreSql
         LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
         AND ""jq"".""fetchedat"" IS NOT NULL;
-      ";
+      ");
 
-      List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(fetchedJobsSql,
+      List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query,
           new { JobIds = jobIds.ToList() })
         .ToList());
 

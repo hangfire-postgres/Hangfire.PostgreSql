@@ -169,7 +169,10 @@ namespace Hangfire.PostgreSql
 
           DateTime timeout = onlyExpired ? DateTime.UtcNow - options.DistributedLockTimeout : DateTime.MaxValue;
 
-          int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
+          string query = QueryProvider.Instance.GetQuery("distributed-lock:remove-lock", () =>
+            $@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout");
+
+          int rowsAffected = connection.Execute(query,
             new {
               Resource = resource,
               Timeout = timeout,
@@ -200,15 +203,17 @@ namespace Hangfire.PostgreSql
         {
           trx = BeginTransactionIfNotPresent(connection);
 
-          int rowsAffected = connection.Execute($@"
-                INSERT INTO ""{schemaName}"".""lock""(""resource"", ""acquired"") 
-                SELECT @Resource, @Acquired
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM ""{schemaName}"".""lock"" 
-                    WHERE ""resource"" = @Resource
-                )
-                ON CONFLICT DO NOTHING;
-              ",
+          string query = QueryProvider.Instance.GetQuery("distributed-lock:lock-with-transaction", () => $@"
+            INSERT INTO ""{schemaName}"".""lock""(""resource"", ""acquired"") 
+            SELECT @Resource, @Acquired
+            WHERE NOT EXISTS (
+                SELECT 1 FROM ""{schemaName}"".""lock"" 
+                WHERE ""resource"" = @Resource
+            )
+            ON CONFLICT DO NOTHING;
+          ");
+
+          int rowsAffected = connection.Execute(query,
             new {
               Resource = resource,
               Acquired = DateTime.UtcNow,
@@ -236,15 +241,17 @@ namespace Hangfire.PostgreSql
     {
       public static bool TryLock(IDbConnection connection, string schemaName, string resource)
       {
-        connection.Execute($@"
-              INSERT INTO ""{schemaName}"".""lock""(""resource"", ""updatecount"", ""acquired"") 
-              SELECT @Resource, 0, @Acquired
-              WHERE NOT EXISTS (
-                  SELECT 1 FROM ""{schemaName}"".""lock"" 
-                  WHERE ""resource"" = @Resource
-              )
-              ON CONFLICT DO NOTHING;
-            ", new {
+        string query = QueryProvider.Instance.GetQuery("distributed-lock:lock-with-updatecount", () => $@"
+          INSERT INTO ""{schemaName}"".""lock""(""resource"", ""updatecount"", ""acquired"") 
+          SELECT @Resource, 0, @Acquired
+          WHERE NOT EXISTS (
+              SELECT 1 FROM ""{schemaName}"".""lock"" 
+              WHERE ""resource"" = @Resource
+          )
+          ON CONFLICT DO NOTHING;
+        ");
+
+        connection.Execute(query, new {
           Resource = resource,
           Acquired = DateTime.UtcNow,
         });

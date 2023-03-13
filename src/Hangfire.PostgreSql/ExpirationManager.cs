@@ -55,6 +55,7 @@ namespace Hangfire.PostgreSql
 
     private readonly TimeSpan _checkInterval;
     private readonly PostgreSqlStorage _storage;
+    private readonly QueryProvider _queryProvider;
 
     public ExpirationManager(PostgreSqlStorage storage)
       : this(storage ?? throw new ArgumentNullException(nameof(storage)), storage.Options.JobExpirationCheckInterval) { }
@@ -63,6 +64,7 @@ namespace Hangfire.PostgreSql
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       _checkInterval = checkInterval;
+      _queryProvider = QueryProvider.Instance;
     }
 
     public void Execute(BackgroundProcessContext context)
@@ -79,16 +81,17 @@ namespace Hangfire.PostgreSql
         UseConnectionDistributedLock(_storage, connection => {
           using IDbTransaction transaction = connection.BeginTransaction();
           int removedCount;
+          string query = _queryProvider.GetQuery($"expiration-manager:remove-expired-records:{table}", () => $@"
+            DELETE FROM ""{_storage.Options.SchemaName}"".""{table}"" 
+            WHERE ""id"" IN (
+                SELECT ""id"" 
+                FROM ""{_storage.Options.SchemaName}"".""{table}"" 
+                WHERE ""expireat"" < NOW() 
+                LIMIT {_storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)}
+            )");
           do
           {
-            removedCount = connection.Execute($@"
-                DELETE FROM ""{_storage.Options.SchemaName}"".""{table}"" 
-                WHERE ""id"" IN (
-                    SELECT ""id"" 
-                    FROM ""{_storage.Options.SchemaName}"".""{table}"" 
-                    WHERE ""expireat"" < NOW() 
-                    LIMIT {_storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)}
-                )", transaction: transaction);
+            removedCount = connection.Execute(query, transaction: transaction);
 
             if (removedCount <= 0)
             {
@@ -119,8 +122,8 @@ namespace Hangfire.PostgreSql
     {
       foreach (string processedCounter in _processedCounters)
       {
-        AggregateCounter(processedCounter);
         cancellationToken.ThrowIfCancellationRequested();
+        AggregateCounter(processedCounter);
       }
     }
 
@@ -128,23 +131,24 @@ namespace Hangfire.PostgreSql
     {
       UseConnectionDistributedLock(_storage, connection => {
         using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-        string aggregateQuery = $@"
-            WITH ""counters"" AS (
-              DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
-              WHERE ""key"" = @Key
-              AND ""expireat"" IS NULL
-              RETURNING *
-            )
+        string aggregateQuery = _queryProvider.GetQuery("expiration-manager:aggregate-counter", () => $@"
+          WITH ""counters"" AS (
+            DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
+            WHERE ""key"" = @Key
+            AND ""expireat"" IS NULL
+            RETURNING *
+          )
 
-            SELECT SUM(""value"") FROM ""counters"";
-          ";
+          SELECT SUM(""value"") FROM ""counters"";
+        ");
 
         long aggregatedValue = connection.ExecuteScalar<long>(aggregateQuery, new { Key = counterName }, transaction);
         transaction.Commit();
 
         if (aggregatedValue > 0)
         {
-          string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@Key, @Value);";
+          string insertQuery = _queryProvider.GetQuery("expiration-manager:insert-counter", () =>
+            $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@Key, @Value);");
           connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
         }
       });

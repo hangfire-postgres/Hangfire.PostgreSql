@@ -29,16 +29,19 @@ namespace Hangfire.PostgreSql
   internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
   {
     private readonly PostgreSqlStorage _storage;
+    private readonly QueryProvider _queryProvider;
 
     public PostgreSqlJobQueueMonitoringApi(PostgreSqlStorage storage)
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+      _queryProvider = QueryProvider.Instance;
     }
 
     public IEnumerable<string> GetQueues()
     {
-      string sqlQuery = $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""jobqueue""";
-      return _storage.UseConnection(null, connection => connection.Query<string>(sqlQuery).ToList());
+      string query = _queryProvider.GetQuery("job-queue-monitoring-api:get-queues", () =>
+        $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""jobqueue""");
+      return _storage.UseConnection(null, connection => connection.Query<string>(query).ToList());
     }
 
     public IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage)
@@ -53,7 +56,7 @@ namespace Hangfire.PostgreSql
 
     public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
     {
-      string sqlQuery = $@"
+      string query = _queryProvider.GetQuery("job-queue-monitoring-api:get-enqueued-and-fetched-count", () => $@"
         SELECT (
             SELECT COUNT(*) 
             FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
@@ -66,10 +69,10 @@ namespace Hangfire.PostgreSql
           WHERE ""fetchedat"" IS NOT NULL 
           AND ""queue"" = @Queue
         ) ""FetchedCount"";
-      ";
+      ");
 
-      (long enqueuedCount, long fetchedCount) = _storage.UseConnection(null, connection => 
-        connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(sqlQuery, new { Queue = queue }));
+      (long enqueuedCount, long fetchedCount) = _storage.UseConnection(null, connection =>
+        connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(query, new { Queue = queue }));
 
       return new EnqueuedAndFetchedCountDto {
         EnqueuedCount = enqueuedCount,
@@ -79,7 +82,7 @@ namespace Hangfire.PostgreSql
 
     private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
     {
-      string sqlQuery = $@"
+      string query = _queryProvider.GetQuery($"job-queue-monitoring-api:get-queued-or-fetched-job-ids:fetched-{fetched}", () => $@"
         SELECT j.""id"" 
         FROM ""{_storage.Options.SchemaName}"".""jobqueue"" jq
         LEFT JOIN ""{_storage.Options.SchemaName}"".""job"" j ON jq.""jobid"" = j.""id""
@@ -88,9 +91,9 @@ namespace Hangfire.PostgreSql
         AND j.""id"" IS NOT NULL
         ORDER BY jq.""fetchedat"", jq.""jobid""
         LIMIT @Limit OFFSET @Offset;
-      ";
+      ");
 
-      return _storage.UseConnection(null, connection => connection.Query<long>(sqlQuery,
+      return _storage.UseConnection(null, connection => connection.Query<long>(query,
           new { Queue = queue, Offset = from, Limit = perPage })
         .ToList());
     }
