@@ -68,20 +68,20 @@ namespace Hangfire.PostgreSql
 
           if (!VersionAlreadyApplied(connection, schemaName, version))
           {
+            string commandText = $@"{script}; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
             using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-            using NpgsqlCommand command = new(script, connection, transaction);
-            command.CommandTimeout = 120;
+            using NpgsqlCommand command = new(commandText, connection, transaction)
+            {
+              CommandTimeout = 120,
+              Parameters =
+              {
+                new NpgsqlParameter("Version", version),
+                new NpgsqlParameter("PreviousVersion", previousVersion),
+              },
+            };
             try
             {
-#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
-              command.CommandText += $@"; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
-#pragma warning restore CA2100 // Review SQL queries for security vulnerabilities
-              command.Parameters.AddWithValue("Version", version);
-              command.Parameters.AddWithValue("PreviousVersion", previousVersion);
-
               command.ExecuteNonQuery();
-
               transaction.Commit();
             }
             catch (PostgresException ex)
@@ -112,8 +112,8 @@ namespace Hangfire.PostgreSql
     {
       try
       {
-        using NpgsqlCommand command = new($@"SELECT true :: boolean ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version""::integer >= @Version", connection);
-        command.Parameters.AddWithValue("Version", version);
+        using NpgsqlCommand command = new($@"SELECT true ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version"" >= $1", connection);
+        command.Parameters.Add(new NpgsqlParameter { Value = version });
         object result = command.ExecuteScalar();
         if (true.Equals(result))
         {

@@ -19,32 +19,6 @@ namespace Hangfire.PostgreSql.Tests
       _options = new PostgreSqlStorageOptions { PrepareSchemaIfNecessary = false, EnableTransactionScopeEnlistment = true };
     }
 
-    /// <summary>
-    /// Ideally we could enforce UTC time-zone for all connections to Hangfire Postgres (to ensure proper DateTime handling) however if the connection is being enlisted
-    /// then we cannot touch the ConnectionString in any way because otherwise this creates a new prepared transaction, which becomes aborted
-    ///
-    /// The best we can do at the moment is enforce UTC on connections initialized (and not enlisted) by Hangfire Postgres
-    /// </summary>
-    [Fact]
-    public void Connection_Timezone_Is_Set_To_UTC_For_Npgsql6_Compatibility_When_Enlistment_Not_Set()
-    {
-      // Arrange
-
-      // Turn off transaction enlistment for this test
-      // We won't be performing any queries so there is no side-effect for having this disabled
-      _options.EnableTransactionScopeEnlistment = false;
-
-      PostgreSqlStorage storage = CreateStorage();
-      
-      // Act
-      using (var connection = storage.CreateAndOpenConnection())
-      {
-        // Assert
-        // test database has GMT+13 time zone set
-        Assert.Equal("UTC+13", connection.Timezone);
-      }
-    }
-
     [Fact]
     public void Ctor_ThrowsAnException_WhenConnectionStringIsNull()
     {

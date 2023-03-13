@@ -124,8 +124,8 @@ namespace Hangfire.PostgreSql
       return _storage.UseTransaction(_dedicatedConnection, (connection, transaction) => {
         string jobId = connection.QuerySingle<long>(createJobSql,
           new {
-            InvocationData = SerializationHelper.Serialize(invocationData),
-            invocationData.Arguments,
+            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
+            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
             CreatedAt = createdAt,
             ExpireAt = createdAt.Add(expireIn),
           }).ToString(CultureInfo.InvariantCulture);
@@ -443,7 +443,7 @@ namespace Hangfire.PostgreSql
       ";
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute(sql, new { Id = serverId, Data = SerializationHelper.Serialize(data) }));
+        .Execute(sql, new { Id = serverId, Data = new JsonParameter(SerializationHelper.Serialize(data)) }));
     }
 
     public override void RemoveServer(string serverId)

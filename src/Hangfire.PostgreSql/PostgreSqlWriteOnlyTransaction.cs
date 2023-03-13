@@ -106,7 +106,7 @@ namespace Hangfire.PostgreSql
           state.Name,
           state.Reason,
           CreatedAt = DateTime.UtcNow,
-          Data = SerializationHelper.Serialize(state.SerializeData()),
+          Data = new JsonParameter(SerializationHelper.Serialize(state.SerializeData())),
           Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
         }));
     }
@@ -124,7 +124,7 @@ namespace Hangfire.PostgreSql
           state.Name,
           state.Reason,
           CreatedAt = DateTime.UtcNow,
-          Data = SerializationHelper.Serialize(state.SerializeData()),
+          Data = new JsonParameter(SerializationHelper.Serialize(state.SerializeData())),
         }));
     }
 
