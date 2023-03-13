@@ -36,8 +36,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = SerializationHelper.Serialize(invocationData),
-            invocationData.Arguments,
+            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
+            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
           });
 
         Mock<IState> state = new();

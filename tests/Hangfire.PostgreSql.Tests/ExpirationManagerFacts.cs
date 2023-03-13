@@ -125,7 +125,7 @@ namespace Hangfire.PostgreSql.Tests
         // Arrange
         string createSql = $@"
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"") 
-          VALUES ('', '', NOW(), @ExpireAt)
+          VALUES ('{{}}', '[]', NOW(), @ExpireAt)
         ";
         connection.Execute(createSql, new { ExpireAt = DateTime.UtcNow.AddMonths(-1) });
 

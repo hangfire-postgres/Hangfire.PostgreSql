@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
@@ -36,7 +37,7 @@ namespace Hangfire.PostgreSql.Tests
     [Fact]
     public void Ctor_ThrowsAnException_IfDedicatedConnectionFuncIsNull()
     {
-      PostgreSqlStorageOptions options = new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true };
+      PostgreSqlStorageOptions options = new() { EnableTransactionScopeEnlistment = true };
       ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
         new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(ConnectionUtils.CreateConnection(), options), null));
 
@@ -50,7 +51,7 @@ namespace Hangfire.PostgreSql.Tests
 
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', @When) RETURNING ""id""
+        VALUES ('{{}}', '[]', @When) RETURNING ""id""
       ";
 
       UseConnection(connection => {
@@ -74,7 +75,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-        VALUES ('', '', NOW(), NOW()) RETURNING ""id""
+        VALUES ('{{}}', '[]', NOW(), NOW()) RETURNING ""id""
       ";
 
       UseConnection(connection => {
@@ -97,13 +98,13 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW()) RETURNING ""id""";
+        VALUES ('{{}}', '[]', NOW()) RETURNING ""id""";
 
       UseConnection(connection => {
         dynamic jobId = connection.Query(arrangeSql).Single().id.ToString();
         dynamic anotherJobId = connection.Query(arrangeSql).Single().id.ToString();
 
-        Mock<IState> state = new Mock<IState>();
+        Mock<IState> state = new();
         state.Setup(x => x.Name).Returns("State");
         state.Setup(x => x.Reason).Returns("Reason");
         state.Setup(x => x.SerializeData())
@@ -125,7 +126,11 @@ namespace Hangfire.PostgreSql.Tests
         Assert.Equal("State", jobState.name);
         Assert.Equal("Reason", jobState.reason);
         Assert.NotNull(jobState.createdat);
-        Assert.Equal("{\"Name\":\"Value\"}", jobState.data);
+
+        Dictionary<string, string> data = JsonSerializer.Deserialize<Dictionary<string, string>>(jobState.data);
+        KeyValuePair<string, string> value = Assert.Single(data);
+        Assert.Equal("Name", value.Key);
+        Assert.Equal("Value", value.Value);
       });
     }
 
@@ -137,7 +142,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       TransactionScope CreateTransactionScope(IsolationLevel isolationLevel = IsolationLevel.RepeatableRead)
       {
-        TransactionOptions transactionOptions = new TransactionOptions() {
+        TransactionOptions transactionOptions = new() {
           IsolationLevel = isolationLevel,
           Timeout = TransactionManager.MaximumTimeout,
         };
@@ -147,7 +152,7 @@ namespace Hangfire.PostgreSql.Tests
 
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW()) RETURNING ""id""";
+        VALUES ('{{}}', '[]', NOW()) RETURNING ""id""";
 
 
       string jobId = null;
@@ -160,7 +165,7 @@ namespace Hangfire.PostgreSql.Tests
       using (TransactionScope scope = CreateTransactionScope())
       {
         UseConnection(connection => {
-          Mock<IState> state = new Mock<IState>();
+          Mock<IState> state = new();
           state.Setup(x => x.Name).Returns("State");
           state.Setup(x => x.Reason).Returns("Reason");
           state.Setup(x => x.SerializeData())
@@ -186,7 +191,11 @@ namespace Hangfire.PostgreSql.Tests
           Assert.Equal("State", jobState.name);
           Assert.Equal("Reason", jobState.reason);
           Assert.NotNull(jobState.createdat);
-          Assert.Equal("{\"Name\":\"Value\"}", jobState.data);
+
+          Dictionary<string, string> data = JsonSerializer.Deserialize<Dictionary<string, string>>(jobState.data);
+          KeyValuePair<string, string> value = Assert.Single(data);
+          Assert.Equal("Name", value.Key);
+          Assert.Equal("Value", value.Value);
         }
         else
         {
@@ -208,18 +217,19 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES ('', '', NOW())
+        VALUES ('{{}}', '[]', NOW())
         RETURNING ""id""
       ";
+
+      Dictionary<string, string> expectedData = new() { { "Name", "Value" } };
 
       UseConnection(connection => {
         dynamic jobId = connection.Query(arrangeSql).Single().id.ToString(CultureInfo.InvariantCulture);
 
-        Mock<IState> state = new Mock<IState>();
+        Mock<IState> state = new();
         state.Setup(x => x.Name).Returns("State");
         state.Setup(x => x.Reason).Returns("Reason");
-        state.Setup(x => x.SerializeData())
-          .Returns(new Dictionary<string, string> { { "Name", "Value" } });
+        state.Setup(x => x.SerializeData()).Returns(expectedData);
 
         Commit(connection, x => x.AddJobState(jobId, state.Object));
 
@@ -232,7 +242,11 @@ namespace Hangfire.PostgreSql.Tests
         Assert.Equal("State", jobState.name);
         Assert.Equal("Reason", jobState.reason);
         Assert.NotNull(jobState.createdat);
-        Assert.Equal("{\"Name\":\"Value\"}", jobState.data);
+
+        Dictionary<string, string> data = JsonSerializer.Deserialize<Dictionary<string, string>>(jobState.data);
+        KeyValuePair<string, string> value = Assert.Single(data);
+        Assert.Equal("Name", value.Key);
+        Assert.Equal("Value", value.Value);
       });
     }
 
@@ -241,8 +255,8 @@ namespace Hangfire.PostgreSql.Tests
     public void AddToQueue_CallsEnqueue_OnTargetPersistentQueue()
     {
       UseConnection(connection => {
-        Mock<IPersistentJobQueue> correctJobQueue = new Mock<IPersistentJobQueue>();
-        Mock<IPersistentJobQueueProvider> correctProvider = new Mock<IPersistentJobQueueProvider>();
+        Mock<IPersistentJobQueue> correctJobQueue = new();
+        Mock<IPersistentJobQueueProvider> correctProvider = new();
         correctProvider.Setup(x => x.GetJobQueue())
           .Returns(correctJobQueue.Object);
 
@@ -813,7 +827,7 @@ namespace Hangfire.PostgreSql.Tests
     public void AddRangeToSet_AddsAllItems_ToAGivenSet()
     {
       UseConnection(connection => {
-        List<string> items = new List<string> { "1", "2", "3" };
+        List<string> items = new() { "1", "2", "3" };
 
         Commit(connection, x => x.AddRangeToSet("my-set", items));
 
@@ -1138,7 +1152,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private void CommitDisposable(NpgsqlConnection connection, Action<PostgreSqlWriteOnlyTransaction> action)
     {
-      PostgreSqlStorage storage = new PostgreSqlStorage(connection, new PostgreSqlStorageOptions {
+      PostgreSqlStorage storage = new(connection, new PostgreSqlStorageOptions {
         EnableTransactionScopeEnlistment = true,
         SchemaName = GetSchemaName(),
       });

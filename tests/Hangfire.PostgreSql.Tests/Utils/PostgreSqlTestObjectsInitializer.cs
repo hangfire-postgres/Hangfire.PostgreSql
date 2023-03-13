@@ -33,8 +33,7 @@ namespace Hangfire.PostgreSql.Tests.Utils
     {
       if (connection == null) throw new ArgumentNullException(nameof(connection));
 
-      string script = null;
-      script = GetStringResource(typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
+      string script = GetStringResource(typeof(PostgreSqlTestObjectsInitializer).GetTypeInfo().Assembly,
         "Hangfire.PostgreSql.Tests.Scripts.Clean.sql").Replace("'hangfire'", $"'{ConnectionUtils.GetSchemaName()}'");
 
       using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
