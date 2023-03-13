@@ -125,7 +125,7 @@ namespace Hangfire.PostgreSql
         string jobId = connection.QuerySingle<long>(createJobSql,
           new {
             InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-            Arguments = new JsonParameter(invocationData.Arguments),
+            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
             CreatedAt = createdAt,
             ExpireAt = createdAt.Add(expireIn),
           }).ToString(CultureInfo.InvariantCulture);

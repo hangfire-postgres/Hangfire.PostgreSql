@@ -202,7 +202,7 @@ namespace Hangfire.PostgreSql.Tests
           new {
             InvocationData = new JsonParameter(SerializationHelper.Serialize(InvocationData.SerializeJob(job))),
             StateName = "Succeeded",
-            Arguments = new JsonParameter("[\"\\\"Arguments\\\"\"]"),
+            Arguments = new JsonParameter("[\"\\\"Arguments\\\"\"]", JsonParameter.ValueType.Array),
           });
 
         JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
