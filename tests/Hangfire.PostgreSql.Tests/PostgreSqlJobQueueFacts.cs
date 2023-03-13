@@ -256,7 +256,7 @@ namespace Hangfire.PostgreSql.Tests
             Queue = "default",
             FetchedAt = DateTime.UtcNow.AddDays(-1),
             InvocationData = new JsonParameter(""),
-            Arguments = new JsonParameter(""),
+            Arguments = new JsonParameter("", JsonParameter.ValueType.Array),
           });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
