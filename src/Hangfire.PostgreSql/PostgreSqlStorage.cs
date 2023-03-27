@@ -41,6 +41,7 @@ namespace Hangfire.PostgreSql
     private readonly Action<NpgsqlConnection> _connectionSetup;
     private readonly NpgsqlConnectionStringBuilder _connectionStringBuilder;
     private readonly NpgsqlConnection _existingConnection;
+    public NotificationManager NotificationManager { get; }
 
     public PostgreSqlStorage(string connectionString)
       : this(connectionString, new PostgreSqlStorageOptions()) { }
@@ -52,7 +53,7 @@ namespace Hangfire.PostgreSql
     {
       _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
       Options = options ?? throw new ArgumentNullException(nameof(options));
-
+      
       if (options.PrepareSchemaIfNecessary)
       {
         using NpgsqlConnection connection = CreateAndOpenConnection();
@@ -96,6 +97,8 @@ namespace Hangfire.PostgreSql
         using NpgsqlConnection connection = CreateAndOpenConnection();
         PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
       }
+
+      NotificationManager = new NotificationManager(this);
 
       InitializeQueueProviders();
     }
@@ -155,6 +158,7 @@ namespace Hangfire.PostgreSql
     {
       yield return new ExpirationManager(this);
       yield return new CountersAggregator(this, Options.CountersAggregateInterval);
+      yield return NotificationManager;
     }
 
     public override void WriteOptionsToLog(ILog logger)
