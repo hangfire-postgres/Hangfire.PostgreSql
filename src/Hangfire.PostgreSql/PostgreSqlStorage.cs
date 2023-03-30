@@ -41,6 +41,13 @@ namespace Hangfire.PostgreSql
     private readonly Action<NpgsqlConnection> _connectionSetup;
     private readonly NpgsqlConnectionStringBuilder _connectionStringBuilder;
     private readonly NpgsqlConnection _existingConnection;
+    
+    private readonly Dictionary<string, bool> _features =
+      new(StringComparer.OrdinalIgnoreCase)
+      {
+        { JobStorageFeatures.JobQueueProperty, true },
+      };
+
 
     public PostgreSqlStorage(string connectionString)
       : this(connectionString, new PostgreSqlStorageOptions()) { }
@@ -419,6 +426,15 @@ namespace Hangfire.PostgreSql
       }
 
       return builder;
+    }
+
+    public override bool HasFeature(string featureId)
+    {
+      if (featureId == null) throw new ArgumentNullException(nameof(featureId));
+
+      return _features.TryGetValue(featureId, out bool isSupported) 
+        ? isSupported
+        : base.HasFeature(featureId);
     }
   }
 }
