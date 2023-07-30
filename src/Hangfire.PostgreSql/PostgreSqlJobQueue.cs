@@ -24,19 +24,16 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Dapper;
 using Hangfire.PostgreSql.Properties;
-using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
+
 using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
   public class PostgreSqlJobQueue : IPersistentJobQueue
   {
-    private const string JobNotificationChannel = "new_job";
-
     internal static readonly AutoResetEvent _newItemInQueueEvent = new(true);
     private readonly PostgreSqlStorage _storage;
 
@@ -44,51 +41,16 @@ namespace Hangfire.PostgreSql
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       SignalDequeue = new AutoResetEvent(false);
-      JobQueueNotification = new AutoResetEvent(false);
     }
 
     private AutoResetEvent SignalDequeue { get; }
-    private AutoResetEvent JobQueueNotification { get; }
 
     [NotNull]
     public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
     {
-      Task listenTask = null;
-      CancellationTokenSource cancelListenSource = null;
-
-      if (_storage.Options.EnableLongPolling)
-      {
-        cancelListenSource = new CancellationTokenSource();
-        listenTask = ListenForNotificationsAsync(cancelListenSource.Token);
-      }
-
-      try
-      {
-        return _storage.Options.UseNativeDatabaseTransactions
-          ? Dequeue_Transaction(queues, cancellationToken)
-          : Dequeue_UpdateCount(queues, cancellationToken);
-      }
-      finally
-      {
-        try
-        {
-          cancelListenSource?.Cancel();
-          listenTask?.Wait();
-        }
-        catch (AggregateException ex)
-        {
-          if (ex.InnerException is not TaskCanceledException)
-          {
-            throw;
-          }
-
-          // Otherwise do nothing, cancel exception is expected.
-        }
-        finally
-        {
-          cancelListenSource?.Dispose();
-        }
-      }
+      return _storage.Options.UseNativeDatabaseTransactions
+        ? Dequeue_Transaction(queues, cancellationToken)
+        : Dequeue_UpdateCount(queues, cancellationToken);
     }
 
     public void Enqueue(IDbConnection connection, string queue, string jobId)
@@ -101,10 +63,7 @@ namespace Hangfire.PostgreSql
       connection.Execute(enqueueJobSql,
         new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue });
 
-      if (_storage.Options.EnableLongPolling)
-      {
-        connection.Execute($"NOTIFY {JobNotificationChannel}");
-      }
+      _storage.NotificationManager.NotifyNewJob(connection);
     }
 
     /// <summary>
@@ -153,6 +112,7 @@ namespace Hangfire.PostgreSql
       };
 
       int fetchConditionsIndex = 0;
+
       do
       {
         cancellationToken.ThrowIfCancellationRequested();
@@ -193,7 +153,7 @@ namespace Hangfire.PostgreSql
               cancellationToken.WaitHandle,
               _newItemInQueueEvent,
               SignalDequeue,
-              JobQueueNotification,
+              _storage.NotificationManager.NewJob,
             },
             _storage.Options.QueuePollInterval);
 
@@ -269,7 +229,7 @@ namespace Hangfire.PostgreSql
             WaitHandle.WaitAny(new[] {
                 cancellationToken.WaitHandle,
                 SignalDequeue,
-                JobQueueNotification,
+                _storage.NotificationManager.NewJob,
               },
               _storage.Options.QueuePollInterval);
 
@@ -291,55 +251,6 @@ namespace Hangfire.PostgreSql
         markJobAsFetched.Id,
         markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
         markJobAsFetched.Queue);
-    }
-
-    private Task ListenForNotificationsAsync(CancellationToken cancellationToken)
-    {
-      NpgsqlConnection connection = _storage.CreateAndOpenConnection();
-
-      try
-      {
-        if (!connection.SupportsNotifications())
-        {
-          return Task.CompletedTask;
-        }
-
-        // CreateAnOpenConnection can return the same connection over and over if an existing connection
-        //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
-        //  connection to listen for notifications.
-        NpgsqlConnection clonedConnection = connection.CloneWith(connection.ConnectionString);
-
-        return Task.Run(async () => {
-          try
-          {
-            if (clonedConnection.State != ConnectionState.Open)
-            {
-              await clonedConnection.OpenAsync(cancellationToken); // Open so that Dapper doesn't auto-close.
-            }
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-              await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
-              await clonedConnection.WaitAsync(cancellationToken);
-              JobQueueNotification.Set();
-            }
-          }
-          catch (TaskCanceledException)
-          {
-            // Do nothing, cancellation requested so just end.
-          }
-          finally
-          {
-            _storage.ReleaseConnection(clonedConnection);
-          }
-
-        }, cancellationToken);
-
-      }
-      finally
-      {
-        _storage.ReleaseConnection(connection);
-      }
     }
 
     [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
