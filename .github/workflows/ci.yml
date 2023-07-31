@@ -8,9 +8,10 @@ on:
       - "src/**"
       - "test/**"
 
+permissions: write-all
+
 jobs:
   build-and-test:
-    permissions: write-all
     runs-on: ubuntu-latest
 
     services:
