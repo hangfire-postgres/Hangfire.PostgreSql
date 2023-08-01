@@ -35,10 +35,10 @@ namespace Hangfire.PostgreSql
 {
   public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
   {
-    private readonly Queue<Action<IDbConnection>> _commandQueue = new();
-    private readonly Func<DbConnection> _dedicatedConnectionFunc;
-
     private readonly PostgreSqlStorage _storage;
+    private readonly Func<DbConnection> _dedicatedConnectionFunc;
+    private readonly QueryProvider _queryProvider;
+    private readonly Queue<Action<IDbConnection>> _commandQueue = new();
 
     public PostgreSqlWriteOnlyTransaction(
       PostgreSqlStorage storage,
@@ -46,6 +46,7 @@ namespace Hangfire.PostgreSql
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       _dedicatedConnectionFunc = dedicatedConnectionFunc ?? throw new ArgumentNullException(nameof(dedicatedConnectionFunc));
+      _queryProvider = QueryProvider.Instance;
     }
 
     public override void Commit()
@@ -65,31 +66,31 @@ namespace Hangfire.PostgreSql
 
     public override void ExpireJob(string jobId, TimeSpan expireIn)
     {
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:expire-job", () => $@"
         UPDATE ""{_storage.Options.SchemaName}"".""job""
         SET ""expireat"" = NOW() + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS'
         WHERE ""id"" = @Id;
-      ";
+      ");
 
-      QueueCommand(con => con.Execute(sql,
+      QueueCommand(con => con.Execute(query,
         new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) }));
     }
 
     public override void PersistJob(string jobId)
     {
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:persist-job", () => $@"
         UPDATE ""{_storage.Options.SchemaName}"".""job"" 
         SET ""expireat"" = NULL 
         WHERE ""id"" = @Id;
-      ";
+      ");
 
-      QueueCommand(con => con.Execute(sql,
+      QueueCommand(con => con.Execute(query,
         new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) }));
     }
 
     public override void SetJobState(string jobId, IState state)
     {
-      string addAndSetStateSql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:set-job-state", () => $@"
         WITH ""s"" AS (
             INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
             VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data) RETURNING ""id""
@@ -98,9 +99,9 @@ namespace Hangfire.PostgreSql
         SET ""stateid"" = s.""id"", ""statename"" = @Name
         FROM ""s""
         WHERE ""j"".""id"" = @Id;
-      ";
+      ");
 
-      QueueCommand(con => con.Execute(addAndSetStateSql,
+      QueueCommand(con => con.Execute(query,
         new {
           JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
           state.Name,
@@ -113,12 +114,12 @@ namespace Hangfire.PostgreSql
 
     public override void AddJobState(string jobId, IState state)
     {
-      string addStateSql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:add-job-state", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
         VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data);
-      ";
+      ");
 
-      QueueCommand(con => con.Execute(addStateSql,
+      QueueCommand(con => con.Execute(query,
         new {
           JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
           state.Name,
@@ -138,41 +139,38 @@ namespace Hangfire.PostgreSql
 
     public override void IncrementCounter(string key)
     {
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:increment-counter:without-expiration", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""counter"" (""key"", ""value"") 
         VALUES (@Key, @Value);
-      ";
-      QueueCommand(con => con.Execute(sql,
-        new { Key = key, Value = +1 }));
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = +1 }));
     }
 
     public override void IncrementCounter(string key, TimeSpan expireIn)
     {
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:increment-counter:with-expiration", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
-        VALUES (@Key, @Value, NOW() + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS');
-      ";
-      QueueCommand(con => con.Execute(sql,
-        new { Key = key, Value = +1 }));
+        VALUES (@Key, @Value, NOW() + @Interval);
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = +1, Interval = expireIn }));
     }
 
     public override void DecrementCounter(string key)
     {
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:decrement-counter:without-expiration", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""counter"" (""key"", ""value"") 
         VALUES (@Key, @Value);
-      ";
-      QueueCommand(con => con.Execute(sql,
-        new { Key = key, Value = -1 }));
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = -1 }));
     }
 
     public override void DecrementCounter(string key, TimeSpan expireIn)
     {
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:decrement-counter:with-expiration", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
-        VALUES (@Key, @Value, NOW() + INTERVAL '{((long)expireIn.TotalSeconds).ToString(CultureInfo.InvariantCulture)} SECONDS');
-      ";
-      QueueCommand(con => con.Execute(sql, new { Key = key, Value = -1 }));
+        VALUES (@Key, @Value, NOW() + @Interval);
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = -1, Interval = expireIn }));
     }
 
     public override void AddToSet(string key, string value)
@@ -182,47 +180,47 @@ namespace Hangfire.PostgreSql
 
     public override void AddToSet(string key, string value, double score)
     {
-      string addSql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:add-to-set", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""set""(""key"", ""value"", ""score"")
         VALUES(@Key, @Value, @Score)
         ON CONFLICT (""key"", ""value"")
         DO UPDATE SET ""score"" = EXCLUDED.""score""
-      ";
-      QueueCommand(con => con.Execute(addSql,
-        new { Key = key, Value = value, Score = score }));
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = value, Score = score }));
     }
 
     public override void RemoveFromSet(string key, string value)
     {
-      QueueCommand(con => con.Execute($@"
+      string query = _queryProvider.GetQuery("write-only-transaction:remove-from-set", () => $@"
         DELETE FROM ""{_storage.Options.SchemaName}"".""set"" 
         WHERE ""key"" = @Key 
         AND ""value"" = @Value;
-      ",
-      new { Key = key, Value = value }));
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = value }));
     }
 
     public override void InsertToList(string key, string value)
     {
-      QueueCommand(con => con.Execute($@"
+      string query = _queryProvider.GetQuery("write-only-transaction:insert-to-list", () => $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""list"" (""key"", ""value"") 
         VALUES (@Key, @Value);
-      ",
-      new { Key = key, Value = value }));
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = value }));
     }
 
     public override void RemoveFromList(string key, string value)
     {
-      QueueCommand(con => con.Execute($@"
+      string query = _queryProvider.GetQuery("write-only-transaction:remove-from-list", () => $@"
         DELETE FROM ""{_storage.Options.SchemaName}"".""list"" 
         WHERE ""key"" = @Key 
         AND ""value"" = @Value;
-      ", new { Key = key, Value = value }));
+      ");
+      QueueCommand(con => con.Execute(query, new { Key = key, Value = value }));
     }
 
     public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
     {
-      string trimSql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:trim-list", () => $@"
         DELETE FROM ""{_storage.Options.SchemaName}"".""list"" AS source
         WHERE ""key"" = @Key
         AND ""id"" NOT IN (
@@ -232,10 +230,9 @@ namespace Hangfire.PostgreSql
             ORDER BY ""id"" 
             OFFSET @Offset LIMIT @Limit
         );
-      ";
+      ");
 
-      QueueCommand(con => con.Execute(trimSql,
-        new { Key = key, Offset = keepStartingFrom, Limit = keepEndingAt - keepStartingFrom + 1 }));
+      QueueCommand(con => con.Execute(query, new { Key = key, Offset = keepStartingFrom, Limit = keepEndingAt - keepStartingFrom + 1 }));
     }
 
     public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -250,7 +247,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(keyValuePairs));
       }
 
-      string sql = $@"
+      string query = _queryProvider.GetQuery("write-only-transaction:set-range-in-hash", () => $@"
         WITH ""inputvalues"" AS (
 	        SELECT @Key ""key"", @Field ""field"", @Value ""value""
         ), ""updatedrows"" AS ( 
@@ -270,11 +267,11 @@ namespace Hangfire.PostgreSql
 	        WHERE ""updatedrows"".""key"" = ""insertvalues"".""key"" 
 	        AND ""updatedrows"".""field"" = ""insertvalues"".""field""
         );
-      ";
+      ");
       foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
       {
         KeyValuePair<string, string> pair = keyValuePair;
-        QueueCommand(con => con.Execute(sql, new { Key = key, Field = pair.Key, pair.Value }));
+        QueueCommand(con => con.Execute(query, new { Key = key, Field = pair.Key, pair.Value }));
       }
     }
 
@@ -285,9 +282,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
-      QueueCommand(con => con.Execute(sql,
-        new { Key = key }));
+      string query = _queryProvider.GetQuery("write-only-transaction:remove-hash", () =>
+        $@"DELETE FROM ""{_storage.Options.SchemaName}"".""hash"" WHERE ""key"" = @Key");
+      QueueCommand(con => con.Execute(query, new { Key = key }));
     }
 
     public override void ExpireSet(string key, TimeSpan expireIn)
@@ -297,10 +294,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql,
-        new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
+      string query = _queryProvider.GetQuery("write-only-transaction:expire-set", () =>
+        $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
     }
 
     public override void ExpireList(string key, TimeSpan expireIn)
@@ -310,10 +306,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql,
-        new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
+      string query = _queryProvider.GetQuery("write-only-transaction:expire-list", () =>
+        $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
     }
 
     public override void ExpireHash(string key, TimeSpan expireIn)
@@ -323,10 +318,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = @ExpireAt WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql,
-        new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
+      string query = _queryProvider.GetQuery("write-only-transaction:expire-hash", () =>
+        $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = @ExpireAt WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
     }
 
     public override void PersistSet(string key)
@@ -336,9 +330,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql, new { Key = key }));
+      string query = _queryProvider.GetQuery("write-only-transaction:persist-set", () =>
+        $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key }));
     }
 
     public override void PersistList(string key)
@@ -348,9 +342,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql, new { Key = key }));
+      string query = _queryProvider.GetQuery("write-only-transaction:persist-list", () =>
+        $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key }));
     }
 
     public override void PersistHash(string key)
@@ -360,10 +354,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql,
-        new { Key = key }));
+      string query = _queryProvider.GetQuery("write-only-transaction:persist-hash", () =>
+        $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key }));
     }
 
     public override void AddRangeToSet(string key, IList<string> items)
@@ -378,10 +371,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(items));
       }
 
-      string sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)";
-
-      QueueCommand(connection => connection.Execute(sql,
-        items.Select(value => new { Key = key, Value = value }).ToList()));
+      string query = _queryProvider.GetQuery("write-only-transaction:add-range-to-set", () =>
+        $@"INSERT INTO ""{_storage.Options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)");
+      QueueCommand(connection => connection.Execute(query, items.Select(value => new { Key = key, Value = value }).ToList()));
     }
 
     public override void RemoveSet(string key)
@@ -391,9 +383,9 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""set"" WHERE ""key"" = @Key";
-
-      QueueCommand(connection => connection.Execute(sql, new { Key = key }));
+      string query = _queryProvider.GetQuery("write-only-transaction:remove-set", () =>
+        $@"DELETE FROM ""{_storage.Options.SchemaName}"".""set"" WHERE ""key"" = @Key");
+      QueueCommand(connection => connection.Execute(query, new { Key = key }));
     }
 
     internal void QueueCommand(Action<IDbConnection> action)

@@ -42,11 +42,13 @@ namespace Hangfire.PostgreSql
     private readonly ILog _logger = LogProvider.For<CountersAggregator>();
     private readonly TimeSpan _interval;
     private readonly PostgreSqlStorage _storage;
+    private readonly QueryProvider _queryProvider;
 
     public CountersAggregator(PostgreSqlStorage storage, TimeSpan interval)
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
       _interval = interval;
+      _queryProvider = QueryProvider.Instance;
     }
 
     public void Execute(CancellationToken cancellationToken)
@@ -54,7 +56,7 @@ namespace Hangfire.PostgreSql
       _logger.Debug("Aggregating records in 'Counter' table...");
 
       int removedCount = 0;
-      
+
       do
       {
         _storage.UseConnection(null, connection => {
@@ -81,29 +83,25 @@ namespace Hangfire.PostgreSql
     private string GetAggregationQuery()
     {
       string schemaName = _storage.Options.SchemaName;
-      return
+      return _queryProvider.GetQuery("counters-aggregator:aggregate", () =>
         $@"BEGIN;
 
-INSERT INTO ""{schemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
-      SELECT
-      ""key"",
-      SUM(""value""),
-      MAX(""expireat"")
-      FROM ""{schemaName}"".""counter""
-      GROUP BY
-      ""key""
-      ON CONFLICT(""key"") DO
-        UPDATE
-          SET
-      ""value"" = ""aggregatedcounter"".""value"" + EXCLUDED.""value"",
-      ""expireat"" = EXCLUDED.""expireat"";
+        INSERT INTO ""{schemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
+        SELECT
+          ""key"",
+          SUM(""value""),
+          MAX(""expireat"")
+        FROM ""{schemaName}"".""counter""
+        GROUP BY ""key""
+        ON CONFLICT(""key"") DO UPDATE SET
+          ""value"" = ""aggregatedcounter"".""value"" + EXCLUDED.""value"",
+          ""expireat"" = EXCLUDED.""expireat"";
 
-      DELETE FROM ""{schemaName}"".""counter""
-        WHERE
-      ""key"" IN (SELECT ""key"" FROM ""{schemaName}"".""aggregatedcounter"" );
+        DELETE FROM ""{schemaName}"".""counter""
+        WHERE ""key"" IN (SELECT ""key"" FROM ""{schemaName}"".""aggregatedcounter"" );
 
-      COMMIT;
-      ";
+        COMMIT;
+      ");
     }
   }
 }
