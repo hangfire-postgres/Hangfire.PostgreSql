@@ -37,6 +37,7 @@ namespace Hangfire.PostgreSql
   {
     private readonly Queue<Action<IDbConnection>> _commandQueue = new();
     private readonly Func<DbConnection> _dedicatedConnectionFunc;
+    private readonly List<string> _queuesWithAddedJobs = new();
 
     private readonly PostgreSqlStorage _storage;
 
@@ -56,6 +57,10 @@ namespace Hangfire.PostgreSql
           command(connection);
         }
       }, CreateTransactionScope);
+      
+      // Triggers signals for all queues to which jobs have been added in this transaction
+      _queuesWithAddedJobs.ForEach(PostgreSqlJobQueue._newItemInEvents.Set);
+      _queuesWithAddedJobs.Clear();
     }
 
     private TransactionScope CreateTransactionScope()
@@ -134,6 +139,8 @@ namespace Hangfire.PostgreSql
       IPersistentJobQueue persistentQueue = provider.GetJobQueue();
 
       QueueCommand(con => persistentQueue.Enqueue(con, queue, jobId));
+      
+      _queuesWithAddedJobs.Add(queue);
     }
 
     public override void IncrementCounter(string key)
