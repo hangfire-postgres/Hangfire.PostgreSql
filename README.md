@@ -25,6 +25,7 @@ app.UseHangfireDashboard();
 
 First, NuGet package needs installation.
 
+- Hangfire.AspNetCore
 - Hangfire.PostgreSql (Uses Npgsql 6)
 - Hangfire.PostgreSql.Npgsql5 (Uses Npgsql 5)
 
