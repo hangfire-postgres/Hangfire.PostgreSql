@@ -6,7 +6,10 @@ on:
     types:
       - completed
 
-permissions: write-all
+permissions:
+  id-token: write
+  contents: read
+  checks: write
 
 jobs:
   report:
