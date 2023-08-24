@@ -20,15 +20,8 @@ namespace Hangfire.PostgreSql.Utils
     {
       foreach (string eventKey in eventKeys)
       {
-        if (_events.TryGetValue(eventKey, out AutoResetEvent handle))
-        {
-          yield return handle;
-        }
-        else
-        {
-          AutoResetEvent newHandle = _events.GetOrAdd(eventKey, new AutoResetEvent(false));
+          AutoResetEvent newHandle = _events.GetOrAdd(eventKey, _ => new AutoResetEvent(false));
           yield return newHandle;
-        }
       }
     }
 
