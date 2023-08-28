@@ -320,20 +320,10 @@ namespace Hangfire.PostgreSql
 
         T result = func(connection, null);
 
-        // TransactionCompleted event is required here, because if this TransactionScope is enlisted within an ambient TransactionScope, the ambient TransactionScope controls when the TransactionScope completes.
-        Transaction.Current.TransactionCompleted += Current_TransactionCompleted;
         transaction.Complete();
 
         return result;
       });
-    }
-
-    private static void Current_TransactionCompleted(object sender, TransactionEventArgs e)
-    {
-      if (e.Transaction.TransactionInformation.Status == TransactionStatus.Committed)
-      {
-        PostgreSqlJobQueue._newItemInQueueEvent.Set();
-      }
     }
 
     internal TransactionScope CreateTransactionScope(IsolationLevel? isolationLevel, TimeSpan? timeout = null)

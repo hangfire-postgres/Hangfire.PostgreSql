@@ -37,7 +37,7 @@ namespace Hangfire.PostgreSql
   {
     private const string JobNotificationChannel = "new_job";
 
-    internal static readonly AutoResetEvent _newItemInQueueEvent = new(true);
+    internal static readonly AutoResetEventRegistry _queueEventRegistry = new();
     private readonly PostgreSqlStorage _storage;
 
     public PostgreSqlJobQueue(PostgreSqlStorage storage)
@@ -147,6 +147,12 @@ namespace Hangfire.PostgreSql
         RETURNING ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"";
       ";
 
+      WaitHandle[] nextFetchIterationWaitHandles = new[] {
+        cancellationToken.WaitHandle,
+        SignalDequeue,
+        JobQueueNotification,
+      }.Concat(_queueEventRegistry.GetWaitHandles(queues)).ToArray();
+
       do
       {
         cancellationToken.ThrowIfCancellationRequested();
@@ -181,15 +187,7 @@ namespace Hangfire.PostgreSql
 
         if (fetchedJob == null)
         {
-          WaitHandle.WaitAny(new[] {
-              cancellationToken.WaitHandle,
-              _newItemInQueueEvent,
-              SignalDequeue,
-              JobQueueNotification,
-            },
-            _storage.Options.QueuePollInterval);
-
-          cancellationToken.ThrowIfCancellationRequested();
+          WaitHandle.WaitAny(nextFetchIterationWaitHandles, _storage.Options.QueuePollInterval);
         }
       }
       while (fetchedJob == null);
