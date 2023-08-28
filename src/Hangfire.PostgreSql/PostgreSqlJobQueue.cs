@@ -37,7 +37,7 @@ namespace Hangfire.PostgreSql
   {
     private const string JobNotificationChannel = "new_job";
 
-    internal static readonly AutoResetEventRegistry _newItemInEvents = new();
+    internal static readonly AutoResetEventRegistry _queueEventRegistry = new();
     private readonly PostgreSqlStorage _storage;
 
     public PostgreSqlJobQueue(PostgreSqlStorage storage)
@@ -151,7 +151,7 @@ namespace Hangfire.PostgreSql
         cancellationToken.WaitHandle,
         SignalDequeue,
         JobQueueNotification,
-      }.Concat(_newItemInEvents.GetWaitHandles(queues)).ToArray();
+      }.Concat(_queueEventRegistry.GetWaitHandles(queues)).ToArray();
 
       do
       {

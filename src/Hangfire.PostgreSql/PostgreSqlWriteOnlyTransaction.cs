@@ -59,7 +59,7 @@ namespace Hangfire.PostgreSql
       }, CreateTransactionScope);
       
       // Triggers signals for all queues to which jobs have been added in this transaction
-      _queuesWithAddedJobs.ForEach(PostgreSqlJobQueue._newItemInEvents.Set);
+      _queuesWithAddedJobs.ForEach(PostgreSqlJobQueue._queueEventRegistry.Set);
       _queuesWithAddedJobs.Clear();
     }
 
