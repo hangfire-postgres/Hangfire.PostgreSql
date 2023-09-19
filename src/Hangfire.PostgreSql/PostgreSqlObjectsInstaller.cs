@@ -70,15 +70,10 @@ namespace Hangfire.PostgreSql
           {
             string commandText = $@"{script}; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
             using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-            using NpgsqlCommand command = new(commandText, connection, transaction)
-            {
-              CommandTimeout = 120,
-              Parameters =
-              {
-                new NpgsqlParameter("Version", version),
-                new NpgsqlParameter("PreviousVersion", previousVersion),
-              },
-            };
+            using NpgsqlCommand command = new(commandText, connection, transaction);
+            command.CommandTimeout = 120;
+            command.Parameters.Add(new NpgsqlParameter("Version", version));
+            command.Parameters.Add(new NpgsqlParameter("PreviousVersion", previousVersion));
             try
             {
               command.ExecuteNonQuery();

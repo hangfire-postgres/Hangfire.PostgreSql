@@ -27,6 +27,7 @@ using System.Text;
 using System.Transactions;
 using Hangfire.Annotations;
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Factories;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -38,9 +39,6 @@ namespace Hangfire.PostgreSql
   public class PostgreSqlStorage : JobStorage
   {
     private readonly IConnectionFactory _connectionFactory;
-    private readonly Action<NpgsqlConnection> _connectionSetup;
-    private readonly NpgsqlConnectionStringBuilder _connectionStringBuilder;
-    private readonly NpgsqlConnection _existingConnection;
     
     private readonly Dictionary<string, bool> _features =
       new(StringComparer.OrdinalIgnoreCase)
@@ -48,26 +46,11 @@ namespace Hangfire.PostgreSql
         { JobStorageFeatures.JobQueueProperty, true },
       };
 
+    [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
+    public PostgreSqlStorage(string connectionString) : this(connectionString, new PostgreSqlStorageOptions()) { }
 
-    public PostgreSqlStorage(string connectionString)
-      : this(connectionString, new PostgreSqlStorageOptions()) { }
-
-    public PostgreSqlStorage(string connectionString, PostgreSqlStorageOptions options)
-      : this(connectionString, null, options) { }
-
-    public PostgreSqlStorage(IConnectionFactory connectionFactory, PostgreSqlStorageOptions options)
-    {
-      _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-      Options = options ?? throw new ArgumentNullException(nameof(options));
-
-      if (options.PrepareSchemaIfNecessary)
-      {
-        using NpgsqlConnection connection = CreateAndOpenConnection();
-        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
-      }
-
-      InitializeQueueProviders();
-    }
+    [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
+    public PostgreSqlStorage(string connectionString, PostgreSqlStorageOptions options) : this(connectionString, null, options) { }
 
     /// <summary>
     ///   Initializes PostgreSqlStorage from the provided PostgreSqlStorageOptions and either the provided connection string.
@@ -78,34 +61,11 @@ namespace Hangfire.PostgreSql
     /// <exception cref="ArgumentNullException"><paramref name="connectionString" /> argument is null.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="options" /> argument is null.</exception>
     /// <exception cref="ArgumentException"><paramref name="connectionString" /> argument not a valid PostgreSQL connection string config file.</exception>
-    public PostgreSqlStorage(
-      string connectionString,
-      Action<NpgsqlConnection> connectionSetup,
-      PostgreSqlStorageOptions options)
-    {
-      if (connectionString == null)
-      {
-        throw new ArgumentNullException(nameof(connectionString));
-      }
+    [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
+    public PostgreSqlStorage(string connectionString, Action<NpgsqlConnection> connectionSetup, PostgreSqlStorageOptions options) : this(new NewNpgsqlConnectionFactory(connectionString, options, connectionSetup), options) { }
 
-      Options = options ?? throw new ArgumentNullException(nameof(options));
-
-      if (!TryCreateConnectionStringBuilder(connectionString, out NpgsqlConnectionStringBuilder builder))
-      {
-        throw new ArgumentException($"Connection string [{connectionString}] is not valid", nameof(connectionString));
-      }
-
-      _connectionStringBuilder = SetupConnectionStringBuilderParameters(builder);
-      _connectionSetup = connectionSetup;
-
-      if (options.PrepareSchemaIfNecessary)
-      {
-        using NpgsqlConnection connection = CreateAndOpenConnection();
-        PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
-      }
-
-      InitializeQueueProviders();
-    }
+    [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
+    public PostgreSqlStorage(NpgsqlConnection existingConnection) : this(existingConnection, new PostgreSqlStorageOptions()) { }
 
     /// <summary>
     ///   Initializes a new instance of the <see cref="PostgreSqlStorage" /> class with
@@ -114,32 +74,33 @@ namespace Hangfire.PostgreSql
     /// </summary>
     /// <param name="existingConnection">Existing connection</param>
     /// <param name="options">PostgreSqlStorageOptions</param>
-    public PostgreSqlStorage(NpgsqlConnection existingConnection, PostgreSqlStorageOptions options)
+    [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
+    public PostgreSqlStorage(NpgsqlConnection existingConnection, PostgreSqlStorageOptions options) : this(new ExistingNpgsqlConnectionFactory(existingConnection, options), options) { }
+
+    public PostgreSqlStorage(IConnectionFactory connectionFactory) : this(connectionFactory, new PostgreSqlStorageOptions()) { }
+
+    public PostgreSqlStorage(IConnectionFactory connectionFactory, PostgreSqlStorageOptions options)
     {
-      if (existingConnection == null)
-      {
-        throw new ArgumentNullException(nameof(existingConnection));
-      }
+      _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+      Options = options ?? throw new ArgumentNullException(nameof(options));
 
-      if (options == null)
+      if (options.PrepareSchemaIfNecessary)
       {
-        throw new ArgumentNullException(nameof(options));
+        NpgsqlConnection connection = CreateAndOpenConnection();
+        try
+        {
+          PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
+        }
+        finally
+        {
+          if (connectionFactory is not ExistingNpgsqlConnectionFactory)
+          {
+            connection.Dispose();
+          }
+        }
       }
-
-      NpgsqlConnectionStringBuilder connectionStringBuilder = new(existingConnection.ConnectionString);
-      if (!options.EnableTransactionScopeEnlistment && connectionStringBuilder.Enlist)
-      {
-        throw new ArgumentException($"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(options.EnableTransactionScopeEnlistment)} to `true`.");
-      }
-
-      _existingConnection = existingConnection;
-      Options = options;
 
       InitializeQueueProviders();
-    }
-
-    public PostgreSqlStorage(NpgsqlConnection existingConnection) : this(existingConnection, new PostgreSqlStorageOptions())
-    {
     }
 
     public PersistentJobQueueProviderCollection QueueProviders { get; internal set; }
@@ -179,16 +140,20 @@ namespace Hangfire.PostgreSql
       {
         StringBuilder builder = new();
 
-        builder.Append("Host: ");
-        builder.Append(_connectionStringBuilder.Host);
-        builder.Append(", DB: ");
-        builder.Append(_connectionStringBuilder.Database);
-        builder.Append(", Schema: ");
+        if (_connectionFactory is NpgsqlInstanceConnectionFactoryBase connectionFactory)
+        {
+          NpgsqlConnectionStringBuilder connectionStringBuilder = connectionFactory.ConnectionString;
+          builder.Append("Host: ");
+          builder.Append(connectionStringBuilder.Host);
+          builder.Append(", DB: ");
+          builder.Append(connectionStringBuilder.Database);
+          builder.Append(", ");
+        }
+
+        builder.Append("Schema: ");
         builder.Append(Options.SchemaName);
 
-        return builder.Length != 0
-          ? $"PostgreSQL Server: {builder}"
-          : canNotParseMessage;
+        return builder.Length != 0 ? $"PostgreSQL Server: {builder}" : canNotParseMessage;
       }
       catch (Exception)
       {
@@ -198,27 +163,7 @@ namespace Hangfire.PostgreSql
 
     internal NpgsqlConnection CreateAndOpenConnection()
     {
-      NpgsqlConnection connection;
-
-      if (_connectionFactory is not null)
-      {
-        connection = _connectionFactory.GetOrCreateConnection();
-
-        if (!Options.EnableTransactionScopeEnlistment && connection.Settings.Enlist)
-        {
-          throw new ArgumentException($"TransactionScope enlistment must be enabled by setting {nameof(PostgreSqlStorageOptions)}.{nameof(Options.EnableTransactionScopeEnlistment)} to `true`.");
-        }
-
-      }
-      else
-      {
-        connection = _existingConnection;
-        if (connection == null)
-        {
-          connection = new NpgsqlConnection(_connectionStringBuilder.ToString());
-          _connectionSetup?.Invoke(connection);
-        }
-      }
+      NpgsqlConnection connection = _connectionFactory.GetOrCreateConnection();
 
       try
       {
@@ -382,7 +327,7 @@ namespace Hangfire.PostgreSql
 
     private bool IsExistingConnection(IDbConnection connection)
     {
-      return connection != null && ReferenceEquals(connection, _existingConnection);
+      return connection != null && _connectionFactory is ExistingNpgsqlConnectionFactory && ReferenceEquals(connection, _connectionFactory.GetOrCreateConnection());
     }
 
     private void InitializeQueueProviders()
@@ -391,36 +336,12 @@ namespace Hangfire.PostgreSql
       QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
     }
 
-    private bool TryCreateConnectionStringBuilder(string connectionString, out NpgsqlConnectionStringBuilder builder)
-    {
-      try
-      {
-        builder = new NpgsqlConnectionStringBuilder(connectionString);
-        return true;
-      }
-      catch (ArgumentException)
-      {
-        builder = null;
-        return false;
-      }
-    }
-
-    private NpgsqlConnectionStringBuilder SetupConnectionStringBuilderParameters(NpgsqlConnectionStringBuilder builder)
-    {
-      // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
-      // prepared transactions and probably fail when other statements (outside of hangfire) ran within the same
-      // transaction. Also see #248.
-      if (!Options.EnableTransactionScopeEnlistment)
-      {
-        builder.Enlist = false;
-      }
-
-      return builder;
-    }
-
     public override bool HasFeature(string featureId)
     {
-      if (featureId == null) throw new ArgumentNullException(nameof(featureId));
+      if (featureId == null)
+      {
+        throw new ArgumentNullException(nameof(featureId));
+      }
 
       return _features.TryGetValue(featureId, out bool isSupported) 
         ? isSupported

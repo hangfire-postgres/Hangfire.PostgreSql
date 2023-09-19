@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Linq;
 using Dapper;
 using Hangfire.PostgreSql.Tests.Utils;
@@ -14,7 +15,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       Exception ex = Record.Exception(() => {
         UseConnection(connection => {
-          string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
+          string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower(CultureInfo.InvariantCulture);
 
           PostgreSqlObjectsInstaller.Install(connection, schemaName);
 
@@ -33,7 +34,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       Exception ex = Record.Exception(() => {
         UseConnection(connection => {
-          string schemaName = "Hangfire_Tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower();
+          string schemaName = "Hangfire_Tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower(CultureInfo.InvariantCulture);
 
           PostgreSqlObjectsInstaller.Install(connection, schemaName);
 

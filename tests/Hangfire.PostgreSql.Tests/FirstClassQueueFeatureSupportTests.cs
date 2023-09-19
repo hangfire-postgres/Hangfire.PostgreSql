@@ -1,4 +1,5 @@
 using System.Threading;
+using Hangfire.PostgreSql.Tests.Entities;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
@@ -10,7 +11,7 @@ public class FirstClassQueueFeatureSupportTests
 {
   public FirstClassQueueFeatureSupportTests()
   {
-    JobStorage.Current = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
+    JobStorage.Current = new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory());
   }
 
   [Fact]
@@ -27,7 +28,7 @@ public class FirstClassQueueFeatureSupportTests
     BackgroundJob.Enqueue<TestJobs>("critical", job => job.Run("critical"));
     BackgroundJob.Enqueue<TestJobs>("offline", job => job.Run("offline"));
 
-    BackgroundJobServer server = new(new BackgroundJobServerOptions() {
+    BackgroundJobServer unused = new(new BackgroundJobServerOptions() {
       Queues = new[] { "critical" },
     });
 

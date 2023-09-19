@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Globalization;
 using Dapper;
+using Hangfire.PostgreSql.Tests.Entities;
 
 namespace Hangfire.PostgreSql.Tests.Utils
 {

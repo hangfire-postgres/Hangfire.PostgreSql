@@ -16,7 +16,7 @@ namespace Hangfire.PostgreSql.Tests
 
     public PostgreSqlFetchedJobFacts()
     {
-      _storage = new PostgreSqlStorage(ConnectionUtils.GetConnectionString());
+      _storage = new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory());
     }
 
     [Fact]

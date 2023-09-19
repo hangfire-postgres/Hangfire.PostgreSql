@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Globalization;
+using Hangfire.Annotations;
+using Hangfire.PostgreSql.Factories;
 using Npgsql;
 
 namespace Hangfire.PostgreSql.Tests.Utils
@@ -35,6 +37,11 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public static string GetConnectionString()
     {
       return string.Format(CultureInfo.InvariantCulture, GetConnectionStringTemplate(), GetDatabaseName());
+    }
+
+    public static NewNpgsqlConnectionFactory GetDefaultConnectionFactory([CanBeNull] PostgreSqlStorageOptions options = null)
+    {
+      return new NewNpgsqlConnectionFactory(GetConnectionString(), options ?? new PostgreSqlStorageOptions());
     }
 
     private static string GetConnectionStringTemplate()
