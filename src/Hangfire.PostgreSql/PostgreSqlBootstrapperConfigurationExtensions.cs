@@ -33,6 +33,7 @@ namespace Hangfire.PostgreSql
     /// </summary>
     /// <param name="configuration">Configuration</param>
     /// <param name="connectionString">Connection string</param>
+    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>) overload.")]
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
       string connectionString)
@@ -48,6 +49,7 @@ namespace Hangfire.PostgreSql
     /// <param name="configuration">Configuration</param>
     /// <param name="connectionString">Connection string</param>
     /// <param name="options">Advanced options</param>
+    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>) overload.")]
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
       string connectionString,
@@ -65,15 +67,14 @@ namespace Hangfire.PostgreSql
     /// <param name="connectionString">Connection string</param>
     /// <param name="connectionSetup">Optional setup action to apply to created connections</param>
     /// <param name="options">Advanced options</param>
+    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>, PostgreSqlStorageOptions) overload.")]
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
       string connectionString,
       Action<NpgsqlConnection> connectionSetup,
       PostgreSqlStorageOptions options)
     {
-      PostgreSqlStorage storage = new(connectionString, connectionSetup, options);
-
-      return configuration.UseStorage(storage);
+      return configuration.UsePostgreSqlStorage(configure => configure.UseNpgsqlConnection(connectionString, connectionSetup), options);
     }
 
     /// <summary>
@@ -84,14 +85,13 @@ namespace Hangfire.PostgreSql
     /// <param name="configuration">Configuration</param>
     /// <param name="connectionFactory">Connection factory</param>
     /// <param name="options">Advanced options</param>
+    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>, PostgreSqlStorageOptions) overload.")]
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
       IConnectionFactory connectionFactory,
       PostgreSqlStorageOptions options)
     {
-      PostgreSqlStorage storage = new(connectionFactory, options);
-
-      return configuration.UseStorage(storage);
+      return configuration.UsePostgreSqlStorage(configure => configure.UseConnectionFactory(connectionFactory), options);
     }
 
     /// <summary>
@@ -101,12 +101,50 @@ namespace Hangfire.PostgreSql
     /// </summary>
     /// <param name="configuration">Configuration</param>
     /// <param name="connectionFactory">Connection factory</param>
+    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>) overload.")]
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
       IConnectionFactory connectionFactory)
     {
-      PostgreSqlStorage storage = new(connectionFactory, new PostgreSqlStorageOptions());
+      return configuration.UsePostgreSqlStorage(connectionFactory, new PostgreSqlStorageOptions());
+    }
 
+    /// <summary>
+    /// Tells the bootstrapper to use PostgreSQL as the job storage with the default storage options.
+    /// </summary>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <param name="configure">Bootstrapper configuration action.</param>
+    /// <returns><see cref="IGlobalConfiguration{T}"/> instance whose generic type argument is <see cref="PostgreSqlStorage"/>.</returns>
+    public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(this IGlobalConfiguration configuration, Action<PostgreSqlBootstrapperOptions> configure)
+    {
+      return configuration.UsePostgreSqlStorage(configure, new PostgreSqlStorageOptions());
+    }
+
+    /// <summary>
+    /// Tells the bootstrapper to use PostgreSQL as the job storage with the specified storage options.
+    /// </summary>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <param name="configure">Bootstrapper configuration action.</param>
+    /// <param name="options">Storage options.</param>
+    /// <returns><see cref="IGlobalConfiguration{T}"/> instance whose generic type argument is <see cref="PostgreSqlStorage"/>.</returns>
+    /// <exception cref="InvalidOperationException">Throws if <see cref="IConnectionFactory"/> is not set up in the <paramref name="configure"/> action.</exception>
+    public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(this IGlobalConfiguration configuration, Action<PostgreSqlBootstrapperOptions> configure, PostgreSqlStorageOptions options)
+    {
+      if (options == null)
+      {
+        throw new ArgumentNullException(nameof(options));
+      }
+
+      PostgreSqlBootstrapperOptions bootstrapperOptions = new(options);
+      configure(bootstrapperOptions);
+
+      IConnectionFactory connectionFactory = bootstrapperOptions.ConnectionFactory;
+      if (connectionFactory == null)
+      {
+        throw new InvalidOperationException("Connection factory is not specified");
+      }
+
+      PostgreSqlStorage storage = new(connectionFactory, options);
       return configuration.UseStorage(storage);
     }
   }

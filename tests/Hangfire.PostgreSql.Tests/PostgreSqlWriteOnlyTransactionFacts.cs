@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
 using Hangfire.Common;
+using Hangfire.PostgreSql.Factories;
+using Hangfire.PostgreSql.Tests.Entities;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.States;
 using Hangfire.Storage;
@@ -39,7 +41,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       PostgreSqlStorageOptions options = new() { EnableTransactionScopeEnlistment = true };
       ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
-        new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(ConnectionUtils.CreateConnection(), options), null));
+        new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(ConnectionUtils.CreateConnection(), options), options), null));
 
       Assert.Equal("dedicatedConnectionFunc", exception.ParamName);
     }
@@ -1086,19 +1088,20 @@ namespace Hangfire.PostgreSql.Tests
     {
       string jobId;
 
-      using (var transactionScope = new TransactionScope(TransactionScopeOption.Required,
+      using (TransactionScope transactionScope = new TransactionScope(TransactionScopeOption.Required,
                new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
                TransactionScopeAsyncFlowOption.Enabled))
       {
         // Need to run a query within that transaction. If PostgreSqlStorage modifies the connection string, TransactionAbortedExceptions appear
         // because of prepared transactions.
-        var connectionString = ConnectionUtils.GetConnectionString();
-        using (var connection = new NpgsqlConnection(connectionString))
+        string connectionString = ConnectionUtils.GetConnectionString();
+        using (NpgsqlConnection connection = new NpgsqlConnection(connectionString))
         {
-          var _ = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").FirstOrDefault();
+          dynamic _ = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").FirstOrDefault();
         }
 
-        var storage = new PostgreSqlStorage(connectionString, new PostgreSqlStorageOptions { EnableTransactionScopeEnlistment = true });
+        PostgreSqlStorageOptions options = new() { EnableTransactionScopeEnlistment = true };
+        PostgreSqlStorage storage = new(new NpgsqlConnectionFactory(connectionString, options), options);
         using (IStorageConnection storageConnection = storage.GetConnection())
         {
           using (IWriteOnlyTransaction writeTransaction = storageConnection.CreateWriteTransaction())
@@ -1152,10 +1155,11 @@ namespace Hangfire.PostgreSql.Tests
 
     private void CommitDisposable(NpgsqlConnection connection, Action<PostgreSqlWriteOnlyTransaction> action)
     {
-      PostgreSqlStorage storage = new(connection, new PostgreSqlStorageOptions {
+      PostgreSqlStorageOptions options = new() {
         EnableTransactionScopeEnlistment = true,
         SchemaName = GetSchemaName(),
-      });
+      };
+      PostgreSqlStorage storage = new(new ExistingNpgsqlConnectionFactory(connection, options), options);
       using (IWriteOnlyTransaction transaction = storage.GetConnection().CreateWriteTransaction())
       {
         action(transaction as PostgreSqlWriteOnlyTransaction);

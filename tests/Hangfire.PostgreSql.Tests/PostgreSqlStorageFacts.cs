@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Transactions;
+using Hangfire.PostgreSql.Factories;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -20,35 +21,11 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
-    public void Ctor_ThrowsAnException_WhenConnectionStringIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlStorage(connectionString: null));
-
-      Assert.Equal("connectionString", exception.ParamName);
-    }
-
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenConnectionStringIsInvalid()
-    {
-      ArgumentException exception = Assert.Throws<ArgumentException>(() => new PostgreSqlStorage("hello", new PostgreSqlStorageOptions()));
-
-      Assert.Equal("connectionString", exception.ParamName);
-    }
-
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenOptionsValueIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlStorage("hello", null));
-
-      Assert.Equal("options", exception.ParamName);
-    }
-
-    [Fact]
     [CleanDatabase]
     public void Ctor_CanCreateSqlServerStorage_WithExistingConnection()
     {
       NpgsqlConnection connection = ConnectionUtils.CreateConnection();
-      PostgreSqlStorage storage = new(connection, _options);
+      PostgreSqlStorage storage = new(new ExistingNpgsqlConnectionFactory(connection, _options), _options);
 
       Assert.NotNull(storage);
     }
@@ -80,7 +57,9 @@ namespace Hangfire.PostgreSql.Tests
     {
       PostgreSqlStorage storage = CreateStorage();
 
+#pragma warning disable CS0618 // Type or member is obsolete
       IEnumerable<IServerComponent> components = storage.GetComponents();
+#pragma warning restore CS0618 // Type or member is obsolete
 
       Type[] componentTypes = components.Select(x => x.GetType()).ToArray();
       Assert.Contains(typeof(ExpirationManager), componentTypes);
@@ -117,8 +96,7 @@ namespace Hangfire.PostgreSql.Tests
         EnableTransactionScopeEnlistment = false,
         PrepareSchemaIfNecessary = false,
       };
-      PostgreSqlStorage storage = new(new DefaultConnectionFactory(), option);
-      Assert.Throws<ArgumentException>(() => storage.CreateAndOpenConnection());
+      Assert.Throws<ArgumentException>(() => new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory(option), option));
     }
 
     [Fact]
@@ -137,7 +115,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private PostgreSqlStorage CreateStorage()
     {
-      return new PostgreSqlStorage(ConnectionUtils.GetConnectionString(), _options);
+      return new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory(), _options);
     }
   }
 }

@@ -83,7 +83,7 @@ namespace Hangfire.PostgreSql
         ProcessingState.StateName,
         (_, job, stateData) => new ProcessingJobDto {
           Job = job,
-          ServerId = stateData.ContainsKey("ServerId") ? stateData["ServerId"] : stateData["ServerName"],
+          ServerId = stateData.TryGetValue("ServerId", out string serverId) ? serverId : stateData["ServerName"],
           StartedAt = JobHelper.DeserializeDateTime(stateData["StartedAt"]),
         });
     }
@@ -151,9 +151,9 @@ namespace Hangfire.PostgreSql
         SucceededState.StateName,
         (_, job, stateData) => new SucceededJobDto {
           Job = job,
-          Result = stateData.ContainsKey("Result") ? stateData["Result"] : null,
-          TotalDuration = stateData.ContainsKey("PerformanceDuration") && stateData.ContainsKey("Latency")
-            ? long.Parse(stateData["PerformanceDuration"]) + (long?)long.Parse(stateData["Latency"])
+          Result = stateData.TryGetValue("Result", out string result) ? result : null,
+          TotalDuration = stateData.ContainsKey("PerformanceDuration") && stateData.TryGetValue("Latency", out string latency)
+            ? long.Parse(stateData["PerformanceDuration"]) + (long?)long.Parse(latency)
             : null,
           SucceededAt = JobHelper.DeserializeNullableDateTime(stateData["SucceededAt"]),
         });
@@ -322,7 +322,7 @@ namespace Hangfire.PostgreSql
 
           long GetCountIfExists(string name)
           {
-            return countByStates.ContainsKey(name) ? countByStates[name] : 0;
+            return countByStates.TryGetValue(name, out long stateCount) ? stateCount : 0;
           }
 
           stats.Enqueued = GetCountIfExists(EnqueuedState.StateName);
@@ -556,6 +556,7 @@ namespace Hangfire.PostgreSql
       {
         // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
         get => ContainsKey(i) ? base[i] : default;
+        // ReSharper disable once UnusedMember.Local
         set => base[i] = value;
       }
     }

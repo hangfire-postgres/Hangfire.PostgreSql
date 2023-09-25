@@ -24,12 +24,12 @@ using Npgsql;
 namespace Hangfire.PostgreSql
 {
   /// <summary>
-  /// Connection factory for runtime create connection 
+  /// Connection factory for creating <see cref="NpgsqlConnection"/> at runtime. 
   /// </summary>
   public interface IConnectionFactory
   {
     /// <summary>
-    /// Get or create NpgsqlConnection
+    /// Get or create <see cref="NpgsqlConnection"/>.
     /// </summary>
     NpgsqlConnection GetOrCreateConnection();
   }

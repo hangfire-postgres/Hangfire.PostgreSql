@@ -226,3 +226,4 @@ src/Hangfire.PostgreSql/project.lock.json
 */**/project.lock.json
 tools
 .vs
+.idea

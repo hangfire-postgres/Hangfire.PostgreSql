@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using System.Transactions;
 using Dapper;
 using Hangfire.Common;
+using Hangfire.PostgreSql.Factories;
+using Hangfire.PostgreSql.Tests.Entities;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -40,7 +42,7 @@ namespace Hangfire.PostgreSql.Tests
     public void Ctor_ThrowsAnException_WhenOptionsIsNull()
     {
       ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
-        () => new PostgreSqlConnection(new PostgreSqlStorage("some-connection-string", null, null)));
+        () => new PostgreSqlConnection(new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory(), null)));
 
       Assert.Equal("options", exception.ParamName);
     }
@@ -144,12 +146,12 @@ namespace Hangfire.PostgreSql.Tests
         Assert.NotEmpty(jobId);
 
         TestJob testJob = Helper.GetTestJob(connection, GetSchemaName(), "-1");
-        Assert.Equal(jobId, testJob.Id.ToString());
+        Assert.Equal(jobId, testJob.Id.ToString(CultureInfo.InvariantCulture));
         Assert.Equal(createdAt, testJob.CreatedAt);
-        Assert.Null((long?)testJob.StateId);
-        Assert.Null((string)testJob.StateName);
+        Assert.Null(testJob.StateId);
+        Assert.Null(testJob.StateName);
 
-        InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>((string)testJob.InvocationData);
+        InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>(testJob.InvocationData);
         invocationData.Arguments = testJob.Arguments;
 
         Job job = invocationData.DeserializeJob();
@@ -361,7 +363,7 @@ namespace Hangfire.PostgreSql.Tests
         string parameterValue = connection.QuerySingle<string>($@"SELECT ""value"" FROM ""{GetSchemaName()}"".""jobparameter"" WHERE ""jobid"" = @Id AND ""name"" = @Name",
           new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Name = "Name" });
 
-        Assert.Equal((string)null, parameterValue);
+        Assert.Null(parameterValue);
       });
     }
 
@@ -1273,11 +1275,13 @@ namespace Hangfire.PostgreSql.Tests
     {
       using (NpgsqlConnection sqlConnection = ConnectionUtils.CreateConnection())
       {
-        PostgreSqlStorage storage = new PostgreSqlStorage(sqlConnection, new PostgreSqlStorageOptions {
+        PostgreSqlStorageOptions options = new()
+        {
           EnableTransactionScopeEnlistment = true,
           SchemaName = GetSchemaName(),
           TransactionSynchronisationTimeout = TimeSpan.FromSeconds(1),
-        });
+        };
+        PostgreSqlStorage storage = new(new ExistingNpgsqlConnectionFactory(sqlConnection, options), options);
         using (PostgreSqlConnection connection = storage.GetStorageConnection())
         {
           action(connection);

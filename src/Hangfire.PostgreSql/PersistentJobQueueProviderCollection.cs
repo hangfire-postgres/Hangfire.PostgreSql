@@ -71,8 +71,8 @@ namespace Hangfire.PostgreSql
 
     public IPersistentJobQueueProvider GetProvider(string queue)
     {
-      return _providersByQueue.ContainsKey(queue)
-        ? _providersByQueue[queue]
+      return _providersByQueue.TryGetValue(queue, out IPersistentJobQueueProvider provider)
+        ? provider
         : _defaultProvider;
     }
 

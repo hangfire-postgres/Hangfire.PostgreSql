@@ -1,4 +1,5 @@
 ﻿using System;
+using Hangfire.PostgreSql.Factories;
 using Moq;
 using Npgsql;
 
@@ -53,7 +54,7 @@ namespace Hangfire.PostgreSql.Tests.Utils
 
     public PostgreSqlStorage ForceInit(NpgsqlConnection connection = null)
     {
-      Storage = new PostgreSqlStorage(connection ?? MainConnection, _storageOptions) {
+      Storage = new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(connection ?? MainConnection, _storageOptions), _storageOptions) {
         QueueProviders = PersistentJobQueueProviderCollection,
       };
       _initialized = true;
@@ -77,7 +78,7 @@ namespace Hangfire.PostgreSql.Tests.Utils
       PersistentJobQueueProviderCollection jobQueueProviderCollection = null,
       NpgsqlConnection connection = null)
     {
-      Storage = new PostgreSqlStorage(connection ?? MainConnection, options) {
+      Storage = new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(connection ?? MainConnection, options), options) {
         QueueProviders = jobQueueProviderCollection,
       };
       _initialized = true;
