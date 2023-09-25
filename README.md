@@ -35,7 +35,8 @@ In `Startup.cs` _ConfigureServices(IServiceCollection services)_ method add the 
 
 ```csharp
 services.AddHangfire(config =>
-		        config.UsePostgreSqlStorage(Configuration.GetConnectionString("HangfireConnection")));
+    config.UsePostgreSqlStorage(c =>
+        c.UseNpgsqlConnection(Configuration.GetConnectionString("HangfireConnection"))));
 ```
 
 In Configure method, add these two lines:
@@ -54,16 +55,17 @@ If you encounter any issues/bugs or have idea of a feature regarding Hangfire.Po
 SSL support can be enabled for Hangfire.PostgreSql library using the following mechanism:
 
 ```csharp
-config.UsePostgreSqlStorage(
-    Configuration.GetConnectionString("HangfireConnection"), // connection string
-    connection => // connection setup - gets called after instantiating the connection and before any calls to DB are made
-    {
-        connection.ProvideClientCertificatesCallback += clientCerts =>
+config.UsePostgreSqlStorage(c =>
+    c.UseNpgsqlConnection(
+        Configuration.GetConnectionString("HangfireConnection"), // connection string,
+        connection => // connection setup - gets called after instantiating the connection and before any calls to DB are made
         {
-            clientCerts.Add(X509Certificate.CreateFromCertFile("[CERT_FILENAME]"));
-        };
-    },
-    new PostgreSqlStorageOptions() // no overload without options, so just pass the default or configured options
+            connection.ProvideClientCertificatesCallback += clientCerts =>
+            {
+                clientCerts.Add(X509Certificate.CreateFromCertFile("[CERT_FILENAME]"));
+            };
+        }
+    )
 );
 ```
 
