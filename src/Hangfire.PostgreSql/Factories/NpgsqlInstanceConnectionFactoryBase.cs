@@ -14,6 +14,10 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
     _options = options ?? throw new ArgumentNullException(nameof(options));
   }
 
+  /// <summary>
+  /// Gets the connection string builder associated with the current instance.
+  /// </summary>
+  /// <exception cref="InvalidOperationException">Throws if connection string builder has not been initialized.</exception>
   public NpgsqlConnectionStringBuilder ConnectionString =>
     _connectionStringBuilder ?? throw new InvalidOperationException("Connection string builder has not been initialized");
 
@@ -44,5 +48,6 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
     }
   }
 
+  /// <inheritdoc />
   public abstract NpgsqlConnection GetOrCreateConnection();
 }

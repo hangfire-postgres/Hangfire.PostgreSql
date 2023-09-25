@@ -74,7 +74,7 @@ namespace Hangfire.PostgreSql
       Action<NpgsqlConnection> connectionSetup,
       PostgreSqlStorageOptions options)
     {
-      return configuration.UsePostgreSqlStorage(configure => configure.UseNewNpgsqlConnection(connectionString, connectionSetup), options);
+      return configuration.UsePostgreSqlStorage(configure => configure.UseNpgsqlConnection(connectionString, connectionSetup), options);
     }
 
     /// <summary>
@@ -109,11 +109,25 @@ namespace Hangfire.PostgreSql
       return configuration.UsePostgreSqlStorage(connectionFactory, new PostgreSqlStorageOptions());
     }
 
+    /// <summary>
+    /// Tells the bootstrapper to use PostgreSQL as the job storage with the default storage options.
+    /// </summary>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <param name="configure">Bootstrapper configuration action.</param>
+    /// <returns><see cref="IGlobalConfiguration{T}"/> instance whose generic type argument is <see cref="PostgreSqlStorage"/>.</returns>
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(this IGlobalConfiguration configuration, Action<PostgreSqlBootstrapperOptions> configure)
     {
       return configuration.UsePostgreSqlStorage(configure, new PostgreSqlStorageOptions());
     }
 
+    /// <summary>
+    /// Tells the bootstrapper to use PostgreSQL as the job storage with the specified storage options.
+    /// </summary>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <param name="configure">Bootstrapper configuration action.</param>
+    /// <param name="options">Storage options.</param>
+    /// <returns><see cref="IGlobalConfiguration{T}"/> instance whose generic type argument is <see cref="PostgreSqlStorage"/>.</returns>
+    /// <exception cref="InvalidOperationException">Throws if <see cref="IConnectionFactory"/> is not set up in the <paramref name="configure"/> action.</exception>
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(this IGlobalConfiguration configuration, Action<PostgreSqlBootstrapperOptions> configure, PostgreSqlStorageOptions options)
     {
       if (options == null)

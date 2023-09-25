@@ -62,7 +62,7 @@ namespace Hangfire.PostgreSql
     /// <exception cref="ArgumentNullException"><paramref name="options" /> argument is null.</exception>
     /// <exception cref="ArgumentException"><paramref name="connectionString" /> argument not a valid PostgreSQL connection string config file.</exception>
     [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
-    public PostgreSqlStorage(string connectionString, Action<NpgsqlConnection> connectionSetup, PostgreSqlStorageOptions options) : this(new NewNpgsqlConnectionFactory(connectionString, options, connectionSetup), options) { }
+    public PostgreSqlStorage(string connectionString, Action<NpgsqlConnection> connectionSetup, PostgreSqlStorageOptions options) : this(new NpgsqlConnectionFactory(connectionString, options, connectionSetup), options) { }
 
     [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
     public PostgreSqlStorage(NpgsqlConnection existingConnection) : this(existingConnection, new PostgreSqlStorageOptions()) { }

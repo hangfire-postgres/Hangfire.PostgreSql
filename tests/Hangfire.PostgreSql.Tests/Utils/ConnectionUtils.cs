@@ -39,9 +39,9 @@ namespace Hangfire.PostgreSql.Tests.Utils
       return string.Format(CultureInfo.InvariantCulture, GetConnectionStringTemplate(), GetDatabaseName());
     }
 
-    public static NewNpgsqlConnectionFactory GetDefaultConnectionFactory([CanBeNull] PostgreSqlStorageOptions options = null)
+    public static NpgsqlConnectionFactory GetDefaultConnectionFactory([CanBeNull] PostgreSqlStorageOptions options = null)
     {
-      return new NewNpgsqlConnectionFactory(GetConnectionString(), options ?? new PostgreSqlStorageOptions());
+      return new NpgsqlConnectionFactory(GetConnectionString(), options ?? new PostgreSqlStorageOptions());
     }
 
     private static string GetConnectionStringTemplate()

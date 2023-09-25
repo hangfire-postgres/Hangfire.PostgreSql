@@ -1101,7 +1101,7 @@ namespace Hangfire.PostgreSql.Tests
         }
 
         PostgreSqlStorageOptions options = new() { EnableTransactionScopeEnlistment = true };
-        PostgreSqlStorage storage = new(new NewNpgsqlConnectionFactory(connectionString, options), options);
+        PostgreSqlStorage storage = new(new NpgsqlConnectionFactory(connectionString, options), options);
         using (IStorageConnection storageConnection = storage.GetConnection())
         {
           using (IWriteOnlyTransaction writeTransaction = storageConnection.CreateWriteTransaction())
