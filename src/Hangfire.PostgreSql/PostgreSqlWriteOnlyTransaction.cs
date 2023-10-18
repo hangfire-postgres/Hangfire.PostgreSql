@@ -52,15 +52,26 @@ namespace Hangfire.PostgreSql
     public override void Commit()
     {
       _storage.UseTransaction(_dedicatedConnectionFunc(), (connection, _) => {
+        RegisterNewJobsEventWithTransactionCompletedEvent();
         foreach (Action<IDbConnection> command in _commandQueue)
         {
           command(connection);
         }
       }, CreateTransactionScope);
-      
-      // Triggers signals for all queues to which jobs have been added in this transaction
-      _queuesWithAddedJobs.ForEach(PostgreSqlJobQueue._queueEventRegistry.Set);
-      _queuesWithAddedJobs.Clear();
+    }
+
+    private void RegisterNewJobsEventWithTransactionCompletedEvent()
+    {
+      // TransactionCompleted event is required here, because if this TransactionScope is enlisted
+      // within an ambient TransactionScope, the ambient TransactionScope controls when the TransactionScope completes.
+      Transaction.Current.TransactionCompleted += (_, args) => {
+        if (args.Transaction.TransactionInformation.Status == TransactionStatus.Committed)
+        {
+          // Triggers signals for all queues to which jobs have been added in this transaction
+          _queuesWithAddedJobs.ForEach(PostgreSqlJobQueue._queueEventRegistry.Set);
+          _queuesWithAddedJobs.Clear();
+        }
+      };
     }
 
     private TransactionScope CreateTransactionScope()
