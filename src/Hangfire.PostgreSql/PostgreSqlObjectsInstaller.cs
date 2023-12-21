@@ -94,6 +94,8 @@ namespace Hangfire.PostgreSql
           {
             _logger.ErrorException("Error while executing install/upgrade", ex);
           }
+
+          throw;
         }
 
         previousVersion = version;
