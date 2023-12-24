@@ -20,11 +20,11 @@ jobs:
         with:
           dotnet-version: 6.0.x
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore -c Release
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore -c Release
       - name: Pack
-        run: dotnet pack --no-build --output publish
+        run: dotnet pack -c Release --no-build --output publish
       - name: Upload a Build Artifact
         uses: actions/upload-artifact@v3.1.2
         with:
@@ -61,11 +61,11 @@ jobs:
         with:
           dotnet-version: 6.0.x
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore -c Release
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build -c Release --no-restore
       - name: Test
-        run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=TestResults.trx" || true
+        run: dotnet test -c Release --no-build --verbosity normal --logger "trx;LogFileName=TestResults.trx" || true
       - name: Test Report
         uses: dorny/test-reporter@v1
         if: always()
