@@ -8,6 +8,7 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
 {
   private readonly PostgreSqlStorageOptions _options;
   [CanBeNull] private NpgsqlConnectionStringBuilder _connectionStringBuilder;
+  [CanBeNull] private string _connectionString;
 
   protected NpgsqlInstanceConnectionFactoryBase(PostgreSqlStorageOptions options)
   {
@@ -23,13 +24,14 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
 
   protected NpgsqlConnectionStringBuilder SetupConnectionStringBuilder(string connectionString)
   {
-    if (_connectionStringBuilder != null)
+    if (_connectionStringBuilder != null && string.Equals(_connectionString, connectionString, StringComparison.OrdinalIgnoreCase))
     {
       return _connectionStringBuilder;
     }
 
     try
     {
+      _connectionString = connectionString;
       NpgsqlConnectionStringBuilder builder = new(connectionString);
 
       // The connection string must not be modified when transaction enlistment is enabled, otherwise it will cause
