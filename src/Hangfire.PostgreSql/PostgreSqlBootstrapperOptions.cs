@@ -42,6 +42,11 @@ public class PostgreSqlBootstrapperOptions
     return UseConnectionFactory(new NpgsqlConnectionFactory(connectionString, _options, connectionSetup));
   }
 
+  public PostgreSqlBootstrapperOptions UseNpgsqlConnection(Func<string> getConnectionString, [CanBeNull] Action<NpgsqlConnection> connectionSetup = null)
+  {
+    return UseConnectionFactory(new NpgsqlConnectionFactory(getConnectionString, _options, connectionSetup));
+  }
+
   /// <summary>
   /// Configures the bootstrapper to use the existing <see cref="NpgsqlConnection"/> for each database action.
   /// </summary>

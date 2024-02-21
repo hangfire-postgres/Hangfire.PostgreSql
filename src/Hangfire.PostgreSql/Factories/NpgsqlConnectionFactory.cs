@@ -11,6 +11,7 @@ public sealed class NpgsqlConnectionFactory : NpgsqlInstanceConnectionFactoryBas
 {
   private readonly string _connectionString;
   [CanBeNull] private readonly Action<NpgsqlConnection> _connectionSetup;
+  [CanBeNull] private readonly Func<string> _getConnectionString;
 
   /// <summary>
   /// Instantiates the factory using specified <paramref name="connectionString"/>.
@@ -25,10 +26,21 @@ public sealed class NpgsqlConnectionFactory : NpgsqlInstanceConnectionFactoryBas
     _connectionSetup = connectionSetup;
   }
 
+  public NpgsqlConnectionFactory(Func<string> getConnectionString, PostgreSqlStorageOptions options, [CanBeNull] Action<NpgsqlConnection> connectionSetup = null) : this(getConnectionString.Invoke(), options, connectionSetup)
+  {
+    _getConnectionString = getConnectionString;
+  }
+
   /// <inheritdoc />
   public override NpgsqlConnection GetOrCreateConnection()
   {
-    NpgsqlConnection connection = new(_connectionString);
+    var connectionString = _connectionString;
+    if (_getConnectionString != null)
+    {
+      connectionString = SetupConnectionStringBuilder(_getConnectionString.Invoke()).ConnectionString;
+    }
+    
+    NpgsqlConnection connection = new(connectionString);
     _connectionSetup?.Invoke(connection);
     return connection;
   }

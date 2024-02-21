@@ -24,7 +24,7 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
 
   protected NpgsqlConnectionStringBuilder SetupConnectionStringBuilder(string connectionString)
   {
-    if (!HasConnectionStringChanged(connectionString))
+    if (_connectionStringBuilder != null && string.Equals(_connectionString, connectionString, StringComparison.OrdinalIgnoreCase))
     {
       return _connectionStringBuilder;
     }
@@ -48,11 +48,6 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
     {
       throw new ArgumentException($"Connection string is not valid", nameof(connectionString), ex);
     }
-  }
-
-  private bool HasConnectionStringChanged(string connectionString)
-  {
-    return !string.Equals(_connectionString, connectionString, StringComparison.OrdinalIgnoreCase);
   }
 
   /// <inheritdoc />
