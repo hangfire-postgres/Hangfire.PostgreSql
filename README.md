@@ -46,7 +46,7 @@ app.UseHangfireServer();
 app.UseHangfireDashboard();
 ```
 
-And... That's it. You are ready to go. Also there exists sample application [here](https://github.com/hangfire-postgres/Hangfire.PostgreSql/releases/download/1.4.8.1/aspnetcore_hangfire_sample.zip).
+And... That's it. You are ready to go.
 
 If you encounter any issues/bugs or have idea of a feature regarding Hangfire.Postgresql, [create us an issue](https://github.com/hangfire-postgres/Hangfire.PostgreSql/issues/new). Thanks!
 
