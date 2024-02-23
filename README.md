@@ -23,13 +23,13 @@ app.UseHangfireDashboard();
 
 ### For ASP.NET Core
 
-First, NuGet package needs installation.
+With the latest .NET 8, you will need to install the following Nuget packages.
 
-- Hangfire.AspNetCore
-- Hangfire.PostgreSql (Uses Npgsql 6)
-- Hangfire.PostgreSql.Npgsql5 (Uses Npgsql 5)
+`Npgsql.EntityFrameworkCore.PostgreSQL`
+`Microsoft.EntityFrameworkCore.Design`
+`Hangfire.AspNetCore`
+`Hangfire.PostgreSql`
 
-Historically both packages were functionally the same up until the package version 1.9.11, the only difference was the underlying Npgsql dependency version. Afterwards, the support for Npgsql v5 has been dropped and now minimum required version is 6.0.0.
 
 In `Startup.cs` _ConfigureServices(IServiceCollection services)_ method add the following line:
 
@@ -43,10 +43,10 @@ In Configure method, add these two lines:
 
 ```csharp
 app.UseHangfireServer();
-app.UseHangfireDashboard();
+app.UseHangfireDashboard("/dashboard");
 ```
 
-And... That's it. You are ready to go.
+And... That's it. You are ready to go. Once you run your code, you can find the hangfire dashboard at https://localhost:PORT_NUMBER/dashboard
 
 If you encounter any issues/bugs or have idea of a feature regarding Hangfire.Postgresql, [create us an issue](https://github.com/hangfire-postgres/Hangfire.PostgreSql/issues/new). Thanks!
 
