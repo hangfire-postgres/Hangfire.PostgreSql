@@ -77,10 +77,10 @@ namespace Hangfire.PostgreSql
         _logger.DebugFormat("Removing outdated records from table '{0}'...", table);
 
         UseConnectionDistributedLock(_storage, connection => {
-          using IDbTransaction transaction = connection.BeginTransaction();
           int removedCount;
           do
           {
+            using IDbTransaction transaction = connection.BeginTransaction();
             removedCount = connection.Execute($@"
                 DELETE FROM ""{_storage.Options.SchemaName}"".""{table}"" 
                 WHERE ""id"" IN (
@@ -95,14 +95,13 @@ namespace Hangfire.PostgreSql
               continue;
             }
 
+            transaction.Commit();
             _logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
             cancellationToken.WaitHandle.WaitOne(_delayBetweenPasses);
             cancellationToken.ThrowIfCancellationRequested();
           }
           while (removedCount != 0);
-
-          transaction.Commit();
         });
       }
 
