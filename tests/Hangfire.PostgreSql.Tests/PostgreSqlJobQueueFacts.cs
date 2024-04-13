@@ -226,17 +226,31 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue_WithUseNativeDatabaseTransactions()
     {
-      Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(true);
+      Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(true, false);
     }
 
     [Fact]
     [CleanDatabase]
     public void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue_WithoutUseNativeDatabaseTransactions()
     {
-      Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(false);
+      Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(false, false);
     }
 
-    private void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(bool useNativeDatabaseTransactions)
+    [Fact]
+    [CleanDatabase]
+    public void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue_WithUseNativeDatabaseTransactionsAndSlidingInvisbility()
+    {
+      Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(true, true);
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue_WithoutUseNativeDatabaseTransactionsAndSlidingInvisbility()
+    {
+      Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(false, true);
+    }
+    
+    private void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(bool useNativeDatabaseTransactions, bool useSlidingInvisibilityTimeout)
     {
       string arrangeSql = $@"
         WITH i AS (
@@ -258,7 +272,7 @@ namespace Hangfire.PostgreSql.Tests
             InvocationData = new JsonParameter(""),
             Arguments = new JsonParameter("", JsonParameter.ValueType.Array),
           });
-        PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
+        PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions, useSlidingInvisibilityTimeout: useSlidingInvisibilityTimeout);
 
         // Act
         IFetchedJob payload = queue.Dequeue(_defaultQueues,
@@ -534,11 +548,18 @@ namespace Hangfire.PostgreSql.Tests
 #pragma warning restore xUnit1013 // Public method should be marked as test
     { }
 
-    private static PostgreSqlJobQueue CreateJobQueue(PostgreSqlStorage storage, bool useNativeDatabaseTransactions, bool enableLongPolling = false)
+    private static PostgreSqlJobQueue CreateJobQueue(PostgreSqlStorage storage, bool useNativeDatabaseTransactions, bool enableLongPolling = false, bool useSlidingInvisibilityTimeout = false)
     {
       storage.Options.SchemaName = GetSchemaName();
       storage.Options.UseNativeDatabaseTransactions = useNativeDatabaseTransactions;
       storage.Options.EnableLongPolling = enableLongPolling;
+      if (useSlidingInvisibilityTimeout)
+      {
+        // Set this into the future so tests will fail if using this instead of SlidingInvisibilityTimeout
+        storage.Options.InvisibilityTimeout = TimeSpan.FromDays(30);
+        storage.Options.SlidingInvisibilityTimeout = TimeSpan.FromMinutes(10);
+      }
+
       return new PostgreSqlJobQueue(storage);
     }
 

@@ -30,6 +30,7 @@ namespace Hangfire.PostgreSql
     private int _deleteExpiredBatchSize;
     private TimeSpan _distributedLockTimeout;
     private TimeSpan _invisibilityTimeout;
+    private TimeSpan? _slidingInvisibilityTimeout;
     private TimeSpan _jobExpirationCheckInterval;
     private TimeSpan _queuePollInterval;
     private TimeSpan _transactionSerializationTimeout;
@@ -39,6 +40,7 @@ namespace Hangfire.PostgreSql
     {
       QueuePollInterval = TimeSpan.FromSeconds(15);
       InvisibilityTimeout = TimeSpan.FromMinutes(30);
+      SlidingInvisibilityTimeout = null;
       DistributedLockTimeout = TimeSpan.FromMinutes(10);
       TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
       JobExpirationCheckInterval = TimeSpan.FromHours(1);
@@ -66,6 +68,24 @@ namespace Hangfire.PostgreSql
       set {
         ThrowIfValueIsNotPositive(value, nameof(InvisibilityTimeout));
         _invisibilityTimeout = value;
+      }
+    }
+    
+    /// <summary>
+    /// Maintain a sliding invisibility window using a background timer
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public TimeSpan? SlidingInvisibilityTimeout
+    {
+      get => _slidingInvisibilityTimeout;
+      set
+      {
+        if (value <= TimeSpan.Zero)
+        {
+          throw new ArgumentOutOfRangeException(nameof(value), "Sliding timeout should be greater than zero");
+        }
+
+        _slidingInvisibilityTimeout = value;
       }
     }
 

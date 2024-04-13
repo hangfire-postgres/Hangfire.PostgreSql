@@ -20,55 +20,85 @@
 //    Special thanks goes to him.
 
 using System;
+using System.Threading;
 using Dapper;
+using Hangfire.Logging;
+using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
 
 namespace Hangfire.PostgreSql
 {
   public class PostgreSqlFetchedJob : IFetchedJob
   {
+    private readonly ILog _logger = LogProvider.GetLogger(typeof(PostgreSqlFetchedJob));
+    
     private readonly PostgreSqlStorage _storage;
     private bool _disposed;
     private bool _removedFromQueue;
     private bool _requeued;
 
+    private readonly object _syncRoot = new object();
+    private long _lastHeartbeat;
+    private TimeSpan _interval;
+    
     public PostgreSqlFetchedJob(
       PostgreSqlStorage storage,
       long id,
       string jobId,
-      string queue)
+      string queue,
+      DateTime? fetchedAt)
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
 
       Id = id;
       JobId = jobId ?? throw new ArgumentNullException(nameof(jobId));
       Queue = queue ?? throw new ArgumentNullException(nameof(queue));
+      FetchedAt = fetchedAt ?? throw new ArgumentNullException(nameof(fetchedAt));
+
+      if (storage.Options.SlidingInvisibilityTimeout.HasValue)
+      {
+        _lastHeartbeat = TimestampHelper.GetTimestamp();
+        _interval = TimeSpan.FromSeconds(storage.Options.SlidingInvisibilityTimeout.Value.TotalSeconds / 5);
+        storage.HeartbeatProcess.Track(this);
+      }
     }
 
     public long Id { get; }
     public string Queue { get; }
     public string JobId { get; }
+    internal DateTime? FetchedAt { get; private set; }
 
     public void RemoveFromQueue()
     {
-      _storage.UseConnection(null, connection => connection.Execute($@"
-        DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id;
+      lock (_syncRoot)
+      {
+        if (!FetchedAt.HasValue) return;
+        
+        _storage.UseConnection(null, connection => connection.Execute($@"
+        DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
       ",
-        new { Id }));
+          new { Id, FetchedAt }));
 
-      _removedFromQueue = true;
+        _removedFromQueue = true;
+      }
     }
 
     public void Requeue()
     {
-      _storage.UseConnection(null, connection => connection.Execute($@"
+      lock (_syncRoot)
+      {
+        if (!FetchedAt.HasValue) return;
+
+        _storage.UseConnection(null, connection => connection.Execute($@"
         UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
         SET ""fetchedat"" = NULL 
-        WHERE ""id"" = @Id;
+        WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
       ",
-      new { Id }));
+          new { Id, FetchedAt }));
 
-      _requeued = true;
+        FetchedAt = null;
+        _requeued = true;
+      }
     }
 
     public void Dispose()
@@ -78,12 +108,68 @@ namespace Hangfire.PostgreSql
         return;
       }
 
-      if (!_removedFromQueue && !_requeued)
-      {
-        Requeue();
-      }
-
       _disposed = true;
+
+      DisposeTimer();
+
+      lock (_syncRoot)
+      {
+        if (!_removedFromQueue && !_requeued)
+        {
+          Requeue();
+        }
+      }
+    }
+    
+    internal void DisposeTimer()
+    {
+      _storage.HeartbeatProcess.Untrack(this);
+    }
+    
+    internal void ExecuteKeepAliveQueryIfRequired()
+    {
+      var now = TimestampHelper.GetTimestamp();
+
+      if (TimestampHelper.Elapsed(now, Interlocked.Read(ref _lastHeartbeat)) < _interval)
+      {
+        return;
+      }
+      
+      lock (_syncRoot)
+      {
+        if (!FetchedAt.HasValue) return;
+
+        if (_requeued || _removedFromQueue) return;
+        
+        string updateFetchAtSql = $@"
+          UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          SET ""fetchedat"" = NOW()
+          WHERE ""id"" = @id AND ""fetchedat"" = @fetchedAt
+          RETURNING ""fetchedat"" AS ""FetchedAt"";
+        ";
+        
+        try
+        {
+          _storage.UseConnection(null, connection =>
+          {
+            FetchedAt = connection.ExecuteScalar<DateTime?>(updateFetchAtSql,
+              new { queue = Queue, id = Id, fetchedAt = FetchedAt });
+          });
+
+          if (!FetchedAt.HasValue)
+          {
+            _logger.Warn(
+              $"Background job identifier '{JobId}' was fetched by another worker, will not execute keep alive.");
+          }
+
+          _logger.Trace($"Keep-alive query for message {Id} sent");
+          Interlocked.Exchange(ref _lastHeartbeat, now);
+        }
+        catch (Exception ex) when (ex.IsCatchableExceptionType())
+        {
+          _logger.DebugException($"Unable to execute keep-alive query for message {Id}", ex);
+        }
+      }
     }
   }
 }
