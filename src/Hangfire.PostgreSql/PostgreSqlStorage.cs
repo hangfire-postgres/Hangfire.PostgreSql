@@ -126,7 +126,11 @@ namespace Hangfire.PostgreSql
     {
       yield return new ExpirationManager(this);
       yield return new CountersAggregator(this, Options.CountersAggregateInterval);
-      yield return HeartbeatProcess;
+      if (Options.SlidingInvisibilityTimeout.HasValue)
+      {
+        // This is only used to update the sliding invisibility timeouts, so if not enabled then do not use it
+        yield return HeartbeatProcess;
+      }
     }
 
     public override void WriteOptionsToLog(ILog logger)
@@ -134,7 +138,7 @@ namespace Hangfire.PostgreSql
       logger.Info("Using the following options for PostgreSQL job storage:");
       logger.InfoFormat("    Queue poll interval: {0}.", Options.QueuePollInterval);
       logger.InfoFormat("    Invisibility timeout: {0}.", Options.InvisibilityTimeout);
-      logger.InfoFormat("    Sliding invisibility timeout: {0}.", Options.SlidingInvisibilityTimeout);
+      logger.InfoFormat("    Sliding invisibility timeout: {0}.", Options.SlidingInvisibilityTimeout.HasValue ? Options.SlidingInvisibilityTimeout : "disabled");
     }
 
     public override string ToString()

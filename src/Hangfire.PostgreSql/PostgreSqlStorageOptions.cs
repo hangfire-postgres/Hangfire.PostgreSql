@@ -73,8 +73,10 @@ namespace Hangfire.PostgreSql
     
     /// <summary>
     /// Maintain a sliding invisibility window using a background timer
+    /// IMPORTANT: If <see cref="BackgroundJobServerOptions.IsLightweightServer"/> option is used, then sliding invisiblity timeouts will not work
+    /// since the background storage processes are not run (which is used to update the invisibility timeouts) 
     /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if timeout value is 0 or negative</exception>
     public TimeSpan? SlidingInvisibilityTimeout
     {
       get => _slidingInvisibilityTimeout;

@@ -28,7 +28,7 @@ using Hangfire.Server;
 namespace Hangfire.PostgreSql
 {
 #pragma warning disable CS0618
-  internal sealed class PostgreSqlHeartbeatProcess : IServerComponent
+  internal sealed class PostgreSqlHeartbeatProcess : IServerComponent, IBackgroundProcess
 #pragma warning restore CS0618
   {
     private readonly ConcurrentDictionary<PostgreSqlFetchedJob, object> _items = new();
@@ -51,6 +51,11 @@ namespace Hangfire.PostgreSql
       }
 
       cancellationToken.Wait(TimeSpan.FromSeconds(1));
+    }
+
+    public void Execute(BackgroundProcessContext context)
+    {
+      Execute(context.StoppingToken);
     }
   }
 }
