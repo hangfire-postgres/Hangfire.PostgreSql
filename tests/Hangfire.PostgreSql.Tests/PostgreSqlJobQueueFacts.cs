@@ -21,6 +21,7 @@ namespace Hangfire.PostgreSql.Tests
     public PostgreSqlJobQueueFacts(PostgreSqlStorageFixture fixture)
     {
       _fixture = fixture;
+      _fixture.SetupOptions(o => o.UseSlidingInvisibilityTimeout = true);
     }
 
     [Fact]
@@ -553,12 +554,7 @@ namespace Hangfire.PostgreSql.Tests
       storage.Options.SchemaName = GetSchemaName();
       storage.Options.UseNativeDatabaseTransactions = useNativeDatabaseTransactions;
       storage.Options.EnableLongPolling = enableLongPolling;
-      if (useSlidingInvisibilityTimeout)
-      {
-        // Set this into the future so tests will fail if using this instead of SlidingInvisibilityTimeout
-        storage.Options.InvisibilityTimeout = TimeSpan.FromDays(30);
-        storage.Options.SlidingInvisibilityTimeout = TimeSpan.FromMinutes(10);
-      }
+      storage.Options.UseSlidingInvisibilityTimeout = useSlidingInvisibilityTimeout;
 
       return new PostgreSqlJobQueue(storage);
     }

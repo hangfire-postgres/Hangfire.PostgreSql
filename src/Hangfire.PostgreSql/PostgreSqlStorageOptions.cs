@@ -30,7 +30,6 @@ namespace Hangfire.PostgreSql
     private int _deleteExpiredBatchSize;
     private TimeSpan _distributedLockTimeout;
     private TimeSpan _invisibilityTimeout;
-    private TimeSpan? _slidingInvisibilityTimeout;
     private TimeSpan _jobExpirationCheckInterval;
     private TimeSpan _queuePollInterval;
     private TimeSpan _transactionSerializationTimeout;
@@ -40,7 +39,6 @@ namespace Hangfire.PostgreSql
     {
       QueuePollInterval = TimeSpan.FromSeconds(15);
       InvisibilityTimeout = TimeSpan.FromMinutes(30);
-      SlidingInvisibilityTimeout = null;
       DistributedLockTimeout = TimeSpan.FromMinutes(10);
       TransactionSynchronisationTimeout = TimeSpan.FromMilliseconds(500);
       JobExpirationCheckInterval = TimeSpan.FromHours(1);
@@ -51,6 +49,7 @@ namespace Hangfire.PostgreSql
       PrepareSchemaIfNecessary = true;
       EnableTransactionScopeEnlistment = true;
       DeleteExpiredBatchSize = 1000;
+      UseSlidingInvisibilityTimeout = false;
     }
 
     public TimeSpan QueuePollInterval
@@ -71,26 +70,6 @@ namespace Hangfire.PostgreSql
       }
     }
     
-    /// <summary>
-    /// Maintain a sliding invisibility window using a background timer
-    /// IMPORTANT: If <see cref="BackgroundJobServerOptions.IsLightweightServer"/> option is used, then sliding invisiblity timeouts will not work
-    /// since the background storage processes are not run (which is used to update the invisibility timeouts) 
-    /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown if timeout value is 0 or negative</exception>
-    public TimeSpan? SlidingInvisibilityTimeout
-    {
-      get => _slidingInvisibilityTimeout;
-      set
-      {
-        if (value <= TimeSpan.Zero)
-        {
-          throw new ArgumentOutOfRangeException(nameof(value), "Sliding timeout should be greater than zero");
-        }
-
-        _slidingInvisibilityTimeout = value;
-      }
-    }
-
     public TimeSpan DistributedLockTimeout
     {
       get => _distributedLockTimeout;
@@ -146,6 +125,14 @@ namespace Hangfire.PostgreSql
     public string SchemaName { get; set; }
     public bool EnableTransactionScopeEnlistment { get; set; }
     public bool EnableLongPolling { get; set; }
+
+    /// <summary>
+    ///   Apply a sliding invisibility timeout where the last fetched time is continually updated in the background.
+    ///   This allows a lower invisibility timeout to be used with longer running jobs
+    ///   IMPORTANT: If <see cref="BackgroundJobServerOptions.IsLightweightServer" /> option is used, then sliding invisiblity timeouts will not work
+    ///   since the background storage processes are not run (which is used to update the invisibility timeouts)
+    /// </summary>
+    public bool UseSlidingInvisibilityTimeout { get; set; }
 
     private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
     {

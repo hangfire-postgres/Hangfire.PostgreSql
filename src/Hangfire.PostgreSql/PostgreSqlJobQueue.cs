@@ -129,9 +129,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
       }
 
-      long timeoutSeconds = _storage.Options.SlidingInvisibilityTimeout.HasValue
-        ? (long)_storage.Options.SlidingInvisibilityTimeout.Value.Negate().TotalSeconds
-        : (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
+      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
       FetchedJob fetchedJob;
 
       string fetchJobSql = $@"
@@ -193,7 +191,7 @@ namespace Hangfire.PostgreSql
         }
       }
       while (fetchedJob == null);
-      
+
       return new PostgreSqlFetchedJob(_storage,
         fetchedJob.Id,
         fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
@@ -214,9 +212,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
       }
 
-      long timeoutSeconds = _storage.Options.SlidingInvisibilityTimeout.HasValue
-        ? (long)_storage.Options.SlidingInvisibilityTimeout.Value.Negate().TotalSeconds
-        : (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
+      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
       FetchedJob markJobAsFetched = null;
 
       string jobToFetchSql = $@"
