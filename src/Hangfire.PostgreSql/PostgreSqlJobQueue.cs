@@ -260,7 +260,7 @@ namespace Hangfire.PostgreSql
         }
       }
       while (markJobAsFetched == null);
-      
+
       return new PostgreSqlFetchedJob(_storage,
         markJobAsFetched.Id,
         markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),

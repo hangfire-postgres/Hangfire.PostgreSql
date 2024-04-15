@@ -1,4 +1,4 @@
-﻿// This file is part of Hangfire.PostgreSql.
+// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -151,7 +151,10 @@ namespace Hangfire.PostgreSql
           return;
         }
 
-        if (_requeued || _removedFromQueue) return;
+        if (_requeued || _removedFromQueue)
+        {
+          return;
+        }
         
         string updateFetchAtSql = $@"
           UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
