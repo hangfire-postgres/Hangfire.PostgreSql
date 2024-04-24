@@ -49,7 +49,7 @@ namespace Hangfire.PostgreSql
     /// <param name="configuration">Configuration</param>
     /// <param name="connectionString">Connection string</param>
     /// <param name="options">Advanced options</param>
-    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>) overload.")]
+    [Obsolete("Will be removed in 2.0. Please use UsePostgreSqlStorage(Action<PostgreSqlBootstrapperOptions>, PostgreSqlStorageOptions) overload.")]
     public static IGlobalConfiguration<PostgreSqlStorage> UsePostgreSqlStorage(
       this IGlobalConfiguration configuration,
       string connectionString,
