@@ -104,13 +104,32 @@ namespace Hangfire.PostgreSql.Tests
     {
       using TransactionScope scope = new(TransactionScopeOption.Required,
         new TransactionOptions() { IsolationLevel = IsolationLevel.Serializable });
-      
+
       PostgreSqlStorage storage = new(new DefaultConnectionFactory(), _options);
       NpgsqlConnection connection = storage.CreateAndOpenConnection();
-      
+
       bool success = storage.UseTransaction(connection, (_, _) => true);
-      
+
       Assert.True(success);
+    }
+
+    [Fact]
+    public void HasFeature_ThrowsAnException_WhenFeatureIsNull()
+    {
+      ArgumentNullException aex = Assert.Throws<ArgumentNullException>(() => new PostgreSqlStorage(new DefaultConnectionFactory(), _options).HasFeature(null));
+      Assert.Equal("featureId", aex.ParamName);
+    }
+
+    [Theory]
+    [InlineData("Job.Queue", true)] // JobStorageFeatures.JobQueueProperty
+    [InlineData("Connection.BatchedGetFirstByLowestScoreFromSet", true)] // JobStorageFeatures.Connection.BatchedGetFirstByLowest
+    [InlineData("", false)]
+    [InlineData("Unsupported", false)]
+    public void HasFeature_ReturnsCorrectValues(string featureName, bool expected)
+    {
+      PostgreSqlStorage storage = new(new DefaultConnectionFactory(), _options);
+      bool actual = storage.HasFeature(featureName);
+      Assert.Equal(expected, actual);
     }
 
     private PostgreSqlStorage CreateStorage()

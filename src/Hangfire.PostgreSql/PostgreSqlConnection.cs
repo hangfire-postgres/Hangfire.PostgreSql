@@ -324,6 +324,35 @@ namespace Hangfire.PostgreSql
           new { Key = key, FromScore = fromScore, ToScore = toScore }));
     }
 
+    public override List<string> GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore, int count)
+    {
+      if (key == null)
+      {
+        throw new ArgumentNullException(nameof(key));
+      }
+
+      if (toScore < fromScore)
+      {
+        throw new ArgumentException($"The '{nameof(toScore)}' value must be higher or equal to the '{nameof(fromScore)}' value.");
+      }
+
+      if (count < 1)
+      {
+        throw new ArgumentException($"The '{nameof(count)}' value must be greater than zero (0).");
+      }
+
+      return _storage.UseConnection(_dedicatedConnection, connection => connection
+        .Query<string>($@"
+          SELECT ""value"" 
+          FROM ""{_options.SchemaName}"".""set"" 
+          WHERE ""key"" = @Key 
+          AND ""score"" BETWEEN @FromScore AND @ToScore 
+          ORDER BY ""score"" LIMIT @Limit;
+        ",
+          new { Key = key, FromScore = fromScore, ToScore = toScore, Limit = count }))
+        .ToList();
+    }
+
     public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
     {
       if (key == null)
