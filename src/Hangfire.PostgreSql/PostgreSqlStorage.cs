@@ -44,6 +44,7 @@ namespace Hangfire.PostgreSql
       new(StringComparer.OrdinalIgnoreCase)
       {
         { JobStorageFeatures.JobQueueProperty, true },
+        { JobStorageFeatures.Connection.BatchedGetFirstByLowest, true }
       };
 
     [Obsolete("Will be removed in 2.0, please use the overload with IConnectionFactory argument")]
