@@ -195,7 +195,8 @@ namespace Hangfire.PostgreSql
       return new PostgreSqlFetchedJob(_storage,
         fetchedJob.Id,
         fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
-        fetchedJob.Queue);
+        fetchedJob.Queue,
+        fetchedJob.FetchedAt);
     }
 
     [NotNull]
@@ -213,7 +214,6 @@ namespace Hangfire.PostgreSql
 
       long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
       FetchedJob markJobAsFetched = null;
-
 
       string jobToFetchSql = $@"
         SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
@@ -264,7 +264,8 @@ namespace Hangfire.PostgreSql
       return new PostgreSqlFetchedJob(_storage,
         markJobAsFetched.Id,
         markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
-        markJobAsFetched.Queue);
+        markJobAsFetched.Queue,
+        markJobAsFetched.FetchedAt);
     }
 
     private Task ListenForNotificationsAsync(CancellationToken cancellationToken)

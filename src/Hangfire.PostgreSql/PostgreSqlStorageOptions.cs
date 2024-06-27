@@ -49,6 +49,7 @@ namespace Hangfire.PostgreSql
       PrepareSchemaIfNecessary = true;
       EnableTransactionScopeEnlistment = true;
       DeleteExpiredBatchSize = 1000;
+      UseSlidingInvisibilityTimeout = false;
     }
 
     public TimeSpan QueuePollInterval
@@ -68,7 +69,7 @@ namespace Hangfire.PostgreSql
         _invisibilityTimeout = value;
       }
     }
-
+    
     public TimeSpan DistributedLockTimeout
     {
       get => _distributedLockTimeout;
@@ -124,6 +125,14 @@ namespace Hangfire.PostgreSql
     public string SchemaName { get; set; }
     public bool EnableTransactionScopeEnlistment { get; set; }
     public bool EnableLongPolling { get; set; }
+
+    /// <summary>
+    ///   Apply a sliding invisibility timeout where the last fetched time is continually updated in the background.
+    ///   This allows a lower invisibility timeout to be used with longer running jobs
+    ///   IMPORTANT: If <see cref="BackgroundJobServerOptions.IsLightweightServer" /> option is used, then sliding invisiblity timeouts will not work
+    ///   since the background storage processes are not run (which is used to update the invisibility timeouts)
+    /// </summary>
+    public bool UseSlidingInvisibilityTimeout { get; set; }
 
     private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
     {
