@@ -476,6 +476,126 @@ namespace Hangfire.PostgreSql.Tests
 
     [Fact]
     [CleanDatabase]
+    public void GetFirstByLowestScoreFromSet_List_ThrowsAnException_WhenKeyIsNull()
+    {
+      UseConnection(connection => {
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => connection.GetFirstByLowestScoreFromSet(null, 0, 1, 1));
+
+        Assert.Equal("key", exception.ParamName);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void GetFirstByLowestScoreFromSet_List_ThrowsAnException_WhenToScoreIsLowerThanFromScore()
+    {
+      UseConnection(connection => {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => connection.GetFirstByLowestScoreFromSet("key", 0, -1, 1));
+
+        Assert.Contains("The 'toScore' value must be higher or equal to the 'fromScore' value.", exception.Message);
+      });
+    }
+
+    [Theory]
+    [CleanDatabase]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public void GetFirstByLowestScoreFromSet_List_ThrowsAnException_WhenCountIsLessThanOne(int count)
+    {
+      UseConnection(connection => {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => connection.GetFirstByLowestScoreFromSet("key", 0, 1, count));
+
+        Assert.Contains("The 'count' value must be greater than zero (0).", exception.Message);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void GetFirstByLowestScoreFromSet_List_ReturnsEmpty_WhenTheKeyDoesNotExist()
+    {
+      UseConnection(connection => {
+        List<string> result = connection.GetFirstByLowestScoreFromSet("key", 0, 1, 1);
+
+        Assert.NotNull(result);
+        Assert.Empty(result);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void GetFirstByLowestScoreFromSet_List_ReturnsEmpty_WhenNoValuesExistForKey()
+    {
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        VALUES 
+        ('another-key', -2.0, '-2.0')
+      ";
+
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql);
+
+        List<string> result = jobStorageConnection.GetFirstByLowestScoreFromSet("key", 0, 1, 1);
+
+        Assert.NotNull(result);
+        Assert.Empty(result);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void GetFirstByLowestScoreFromSet_List_ReturnsAllLowestValuesMatchingInputs()
+    {
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        VALUES 
+        ('key', 1.0, '1.0'),
+        ('key', -1.0, '-1.0'),
+        ('key', -5.0, '-5.0'),
+        ('another-key', -2.0, '-2.0')
+      ";
+
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql);
+
+        List<string> result = jobStorageConnection.GetFirstByLowestScoreFromSet("key", -1.0, 3.0, 10);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("-1.0", result[0]);
+        Assert.Equal("1.0", result[1]);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void GetFirstByLowestScoreFromSet_List_ReturnsSubsetOfLowestValuesMatchingInputs()
+    {
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""set"" (""key"", ""score"", ""value"")
+        VALUES 
+        ('key', 1.0, '1.0'),
+        ('key', 1.5, '1.5'),
+        ('key', 2.0, '2.0'),
+        ('key', 2.5, '2.5'),
+        ('key', -1.0, '-1.0'),
+        ('key', -5.0, '-5.0'),
+        ('another-key', -2.0, '-2.0')
+      ";
+
+      int count = 3;
+      UseConnections((connection, jobStorageConnection) => {
+        connection.Execute(arrangeSql);
+
+        List<string> result = jobStorageConnection.GetFirstByLowestScoreFromSet("key", -1.0, 3.0, count);
+
+        Assert.Equal(count, result.Count);
+        Assert.Equal("-1.0", result[0]);
+        Assert.Equal("1.0", result[1]);
+        Assert.Equal("1.5", result[2]);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
     public void AnnounceServer_ThrowsAnException_WhenServerIdIsNull()
     {
       UseConnection(connection => {
