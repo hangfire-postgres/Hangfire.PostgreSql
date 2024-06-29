@@ -8,6 +8,6 @@ END IF;
 END $$;
 
 DROP INDEX IF EXISTS ix_hangfire_job_statename_is_not_null;
-CREATE INDEX IF NOT EXISTS ix_hangfire_job_statename_is_not_null ON job USING btree(statename) INCLUDE (id) WHERE statename IS NOT NULL;
+CREATE INDEX ix_hangfire_job_statename_is_not_null ON job USING btree(statename) INCLUDE (id) WHERE statename IS NOT NULL;
 
 RESET search_path;
