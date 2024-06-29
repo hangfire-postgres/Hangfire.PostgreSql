@@ -20,7 +20,7 @@ namespace Hangfire.PostgreSql.Tests
           PostgreSqlObjectsInstaller.Install(connection, schemaName);
 
           int lastVersion = connection.Query<int>($@"SELECT version FROM ""{schemaName}"".""schema""").Single();
-          Assert.Equal(22, lastVersion);
+          Assert.Equal(23, lastVersion);
 
           connection.Execute($@"DROP SCHEMA ""{schemaName}"" CASCADE;");
         });
@@ -39,7 +39,7 @@ namespace Hangfire.PostgreSql.Tests
           PostgreSqlObjectsInstaller.Install(connection, schemaName);
 
           int lastVersion = connection.Query<int>($@"SELECT version FROM ""{schemaName}"".""schema""").Single();
-          Assert.Equal(22, lastVersion);
+          Assert.Equal(23, lastVersion);
 
           connection.Execute($@"DROP SCHEMA ""{schemaName}"" CASCADE;");
         });
