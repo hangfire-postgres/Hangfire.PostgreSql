@@ -1,5 +1,6 @@
 ﻿SET search_path = 'hangfire';
 
+DELETE FROM hangfire."aggregatedcounter";
 DELETE FROM hangfire."counter";
 DELETE FROM hangfire."hash";
 DELETE FROM hangfire."job";

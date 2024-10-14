@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Tests.Utils;
@@ -55,6 +56,34 @@ namespace Hangfire.PostgreSql.Tests
         JobList<SucceededJobDto> jobs = monitoringApi.SucceededJobs(0, 10);
 
         Assert.NotNull(jobs);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void HourlySucceededJobs_ReturnsAggregatedStats()
+    {
+      DateTime now = DateTime.UtcNow;
+      string schemaName = ConnectionUtils.GetSchemaName();
+      string key = $"stats:succeeded:{now.ToString("yyyy-MM-dd-HH", CultureInfo.InvariantCulture)}";
+      string arrangeSql =
+        $"""
+        BEGIN;
+        INSERT INTO "{schemaName}"."counter"("key", "value") 
+        VALUES (@Key, 5);
+        INSERT INTO "{schemaName}"."aggregatedcounter"("key", "value") 
+        VALUES (@Key, 7);
+        COMMIT;
+        """;
+      UseConnection(connection => {
+        connection.Execute(arrangeSql, new { Key = key });
+
+        IMonitoringApi monitoringApi = _fixture.Storage.GetMonitoringApi();
+        IDictionary<DateTime, long> stats = monitoringApi.HourlySucceededJobs();
+        Assert.Equal(24, stats.Count);
+
+        long actualCounter = Assert.Single(stats.Where(x => x.Key.Hour == now.Hour).Select(x => x.Value));
+        Assert.Equal(12, actualCounter);
       });
     }
 

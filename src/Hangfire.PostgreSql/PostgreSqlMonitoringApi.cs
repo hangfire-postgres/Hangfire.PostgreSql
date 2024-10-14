@@ -379,12 +379,25 @@ namespace Hangfire.PostgreSql
 
     private Dictionary<DateTime, long> GetTimelineStats(IDictionary<string, DateTime> keyMaps)
     {
-      string query = $@"
-        SELECT ""key"", COUNT(""value"") AS ""count"" 
-        FROM ""{_storage.Options.SchemaName}"".""counter""
-        WHERE ""key"" = ANY (@Keys)
-        GROUP BY ""key"";
-      ";
+      string query =
+        $"""
+        WITH "aggregated_counters" AS (
+          SELECT "key", "value"
+          FROM "{_storage.Options.SchemaName}"."aggregatedcounter"
+          WHERE "key" = ANY(@Keys)
+        ), "regular_counters" AS (
+          SELECT "key", "value"
+          FROM "{_storage.Options.SchemaName}"."counter"
+          WHERE "key" = ANY(@Keys)
+        ), "all_counters" AS (
+          SELECT * FROM "aggregated_counters"
+          UNION ALL
+          SELECT * FROM "regular_counters"
+        )
+        SELECT "key", COALESCE(SUM("value"), 0) AS "count"
+        FROM "all_counters"
+        GROUP BY "key"
+        """;
 
       Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<(string Key, long Count)>(query,
           new { Keys = keyMaps.Keys.ToList() })
@@ -400,10 +413,10 @@ namespace Hangfire.PostgreSql
       }
 
       Dictionary<DateTime, long> result = new();
-      for (int i = 0; i < keyMaps.Count; i++)
+      foreach (KeyValuePair<string, DateTime> keyMap in keyMaps)
       {
-        long value = valuesMap[keyMaps.ElementAt(i).Key];
-        result.Add(keyMaps.ElementAt(i).Value, value);
+        long value = valuesMap[keyMap.Key];
+        result.Add(keyMap.Value, value);
       }
 
       return result;
