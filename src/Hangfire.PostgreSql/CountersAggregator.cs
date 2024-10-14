@@ -82,28 +82,26 @@ namespace Hangfire.PostgreSql
     {
       string schemaName = _storage.Options.SchemaName;
       return
-        $@"BEGIN;
+        $"""
+        BEGIN;
 
-INSERT INTO ""{schemaName}"".""aggregatedcounter"" (""key"", ""value"", ""expireat"")	
-      SELECT
-      ""key"",
-      SUM(""value""),
-      MAX(""expireat"")
-      FROM ""{schemaName}"".""counter""
-      GROUP BY
-      ""key""
-      ON CONFLICT(""key"") DO
-        UPDATE
-          SET
-      ""value"" = ""aggregatedcounter"".""value"" + EXCLUDED.""value"",
-      ""expireat"" = EXCLUDED.""expireat"";
+        INSERT INTO "{schemaName}"."aggregatedcounter" ("key", "value", "expireat")	
+        SELECT
+          "key",
+          SUM("value"),
+          MAX("expireat")
+        FROM "{schemaName}"."counter"
+        GROUP BY "key"
+        ON CONFLICT("key") DO UPDATE
+        SET "value" = "aggregatedcounter"."value" + EXCLUDED."value", "expireat" = EXCLUDED."expireat";
+  
+        DELETE FROM "{schemaName}"."counter"
+        WHERE "key" IN (
+          SELECT "key" FROM "{schemaName}"."aggregatedcounter"
+        );
 
-      DELETE FROM ""{schemaName}"".""counter""
-        WHERE
-      ""key"" IN (SELECT ""key"" FROM ""{schemaName}"".""aggregatedcounter"" );
-
-      COMMIT;
-      ";
+        COMMIT;
+        """;
     }
   }
 }
