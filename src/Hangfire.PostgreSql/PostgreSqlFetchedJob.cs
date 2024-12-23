@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ namespace Hangfire.PostgreSql
     public long Id { get; }
     public string Queue { get; }
     public string JobId { get; }
-    internal DateTime? FetchedAt { get; private set; }
+    internal DateTimeOffset? FetchedAt { get; private set; }
 
     public void RemoveFromQueue()
     {
@@ -167,7 +167,7 @@ namespace Hangfire.PostgreSql
         {
           _storage.UseConnection(null, connection =>
           {
-            FetchedAt = connection.ExecuteScalar<DateTime?>(updateFetchAtSql,
+            FetchedAt = connection.ExecuteScalar<DateTimeOffset?>(updateFetchAtSql,
               new { queue = Queue, id = Id, fetchedAt = FetchedAt });
           });
 
