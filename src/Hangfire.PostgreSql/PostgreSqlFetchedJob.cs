@@ -46,7 +46,7 @@ namespace Hangfire.PostgreSql
       long id,
       string jobId,
       string queue,
-      DateTime? fetchedAt)
+      DateTimeOffset? fetchedAt)
     {
       _storage = storage ?? throw new ArgumentNullException(nameof(storage));
 
