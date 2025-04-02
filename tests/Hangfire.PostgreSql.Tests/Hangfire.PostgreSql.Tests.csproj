@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <AssemblyTitle>Hangfire.PostgreSql.Tests</AssemblyTitle>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <AssemblyName>Hangfire.PostgreSql.Tests</AssemblyName>
     <PackageId>Hangfire.PostgreSql.Tests</PackageId>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
