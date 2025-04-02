@@ -12,7 +12,7 @@ namespace Hangfire.PostgreSql.Tests
   {
     private const string JobId = "id";
     private const string Queue = "queue";
-    private DateTime _fetchedAt = DateTime.UtcNow; 
+    private DateTimeOffset _fetchedAt = DateTimeOffset.UtcNow; 
 
     private readonly PostgreSqlStorage _storage;
 
@@ -123,7 +123,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       _storage.UseConnection(null, connection => {
         // Arrange
-        var fetchedAt = DateTime.UtcNow.AddMinutes(-5);
+        var fetchedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
         long id = CreateJobQueueRecord(_storage, "1", "default", fetchedAt);
         using (var processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default", fetchedAt))
         {
@@ -134,8 +134,8 @@ namespace Hangfire.PostgreSql.Tests
           dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
 
           Assert.NotNull(processingJob.FetchedAt);
-          Assert.Equal<DateTime?>(processingJob.FetchedAt, record.fetchedat);
-          DateTime now = DateTime.UtcNow;
+          Assert.Equal<DateTimeOffset?>(processingJob.FetchedAt, record.fetchedat);
+          DateTimeOffset now = DateTimeOffset.UtcNow;
           Assert.True(now.AddSeconds(-5) < record.fetchedat, (now - record.fetchedat).ToString());
         }
       });
@@ -202,7 +202,7 @@ namespace Hangfire.PostgreSql.Tests
       Assert.Null(record.fetchedat);
     }
 
-    private static long CreateJobQueueRecord(PostgreSqlStorage storage, string jobId, string queue, DateTime? fetchedAt)
+    private static long CreateJobQueueRecord(PostgreSqlStorage storage, string jobId, string queue, DateTimeOffset? fetchedAt)
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
