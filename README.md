@@ -68,6 +68,19 @@ config.UsePostgreSqlStorage(c =>
     )
 );
 ```
+### Queue processing
+
+Similar to `Hangfire.SqlServer`, queues are processed in alphabetical order. Given the following example
+
+```csharp
+var options = new BackgroundJobServerOptions
+{
+    Queues = new[] { "general-queue", "very-fast-queue", "a-long-running-queue" }
+};
+app.UseHangfireServer(options);
+```
+
+this provider would first process jobs in `a-long-running-queue`, then `general-queue` and lastly `very-fast-queue`.
 
 ### License
 
