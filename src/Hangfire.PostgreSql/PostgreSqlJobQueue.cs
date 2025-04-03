@@ -323,7 +323,7 @@ namespace Hangfire.PostgreSql
       public long Id { get; set; }
       public long JobId { get; set; }
       public string Queue { get; set; }
-      public DateTime? FetchedAt { get; set; }
+      public DateTimeOffset? FetchedAt { get; set; }
       public int UpdateCount { get; set; }
     }
   }
