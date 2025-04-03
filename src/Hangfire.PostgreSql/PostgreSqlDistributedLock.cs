@@ -91,7 +91,7 @@ namespace Hangfire.PostgreSql
 
       if (!LockHandler.TryRemoveLock(resource, connection, options, false))
       {
-        throw new PostgreSqlDistributedLockException($"Could not release a lock on the resource '{resource}'. Lock does not exist.");
+        throw new PostgreSqlDistributedLockException(resource);
       }
     }
 
@@ -102,14 +102,12 @@ namespace Hangfire.PostgreSql
         Stopwatch lockAcquiringTime = Stopwatch.StartNew();
 
         bool tryAcquireLock = true;
-        Exception lastException = null;
         Func<IDbConnection, string, string, bool> tryLock = options.UseNativeDatabaseTransactions
           ? TransactionLockHandler.TryLock
           : UpdateCountLockHandler.TryLock;
 
         while (tryAcquireLock)
         {
-          lastException = null;
           if (connection.State != ConnectionState.Open)
           {
             connection.Open();
@@ -126,7 +124,6 @@ namespace Hangfire.PostgreSql
           }
           catch (Exception ex)
           {
-            lastException = ex;
             Log(resource, "Failed to acquire lock", ex);
           }
 
@@ -153,7 +150,7 @@ namespace Hangfire.PostgreSql
           }
         }
 
-        throw new PostgreSqlDistributedLockException($@"Could not place a lock on the resource '{resource}': Lock timeout.", lastException);
+        throw new PostgreSqlDistributedLockException(resource);
       }
 
       public static bool TryRemoveLock(string resource, IDbConnection connection, PostgreSqlStorageOptions options, bool onlyExpired)
