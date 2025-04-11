@@ -20,31 +20,23 @@
 //    Special thanks goes to him.
 
 using System;
-using System.Transactions;
 
-namespace Hangfire.PostgreSql.Utils
+namespace Hangfire.PostgreSql.Utils;
+
+public static class JobHelpers
 {
-  public static class TransactionHelpers
+  public static long ParseJobId(this string jobId)
   {
-    internal static TransactionScope CreateTransactionScope(IsolationLevel? isolationLevel = IsolationLevel.ReadCommitted, bool enlist = true, TimeSpan? timeout = null)
+    if (string.IsNullOrEmpty(jobId))
     {
-      TransactionScopeOption scopeOption = TransactionScopeOption.RequiresNew;
-      if (enlist)
-      {
-        Transaction currentTransaction = Transaction.Current;
-        if (currentTransaction != null)
-        {
-          isolationLevel = currentTransaction.IsolationLevel;
-          scopeOption = TransactionScopeOption.Required;
-        }
-      }
-
-      return new TransactionScope(
-        scopeOption,
-        new TransactionOptions {
-          IsolationLevel = isolationLevel.GetValueOrDefault(IsolationLevel.ReadCommitted),
-          Timeout = timeout.GetValueOrDefault(TransactionManager.DefaultTimeout),
-        });
+      throw new ArgumentNullException(nameof(jobId));
     }
+
+    if (!long.TryParse(jobId, out long id))
+    {
+      throw new ArgumentException($"Invalid job ID: {jobId}", nameof(jobId));
+    }
+
+    return id;
   }
 }

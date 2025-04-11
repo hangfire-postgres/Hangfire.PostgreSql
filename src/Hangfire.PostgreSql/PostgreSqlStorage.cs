@@ -84,6 +84,7 @@ namespace Hangfire.PostgreSql
     {
       _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
       Options = options ?? throw new ArgumentNullException(nameof(options));
+      SqlQueryProvider.Initialize(options.SchemaName);
 
       if (options.PrepareSchemaIfNecessary)
       {

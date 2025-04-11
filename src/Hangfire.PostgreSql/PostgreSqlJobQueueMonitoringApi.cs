@@ -37,8 +37,12 @@ namespace Hangfire.PostgreSql
 
     public IEnumerable<string> GetQueues()
     {
-      string sqlQuery = $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""jobqueue""";
-      return _storage.UseConnection(null, connection => connection.Query<string>(sqlQuery).ToList());
+      string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
+        $"""
+        SELECT DISTINCT queue 
+        FROM {schemaName}.jobqueue
+        """);
+      return _storage.UseConnection(null, connection => connection.Query<string>(query).ToList());
     }
 
     public IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage)
@@ -53,23 +57,22 @@ namespace Hangfire.PostgreSql
 
     public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
     {
-      string sqlQuery = $@"
+      string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
+        $"""
         SELECT (
             SELECT COUNT(*) 
-            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-            WHERE ""fetchedat"" IS NULL 
-            AND ""queue"" = @Queue
-        ) ""EnqueuedCount"", 
+            FROM {schemaName}.jobqueue 
+            WHERE fetchedat IS NULL AND queue = @Queue
+        ) AS EnqueuedCount, 
         (
           SELECT COUNT(*) 
-          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
-          WHERE ""fetchedat"" IS NOT NULL 
-          AND ""queue"" = @Queue
-        ) ""FetchedCount"";
-      ";
+          FROM {schemaName}.jobqueue 
+          WHERE fetchedat IS NOT NULL AND queue = @Queue
+        ) AS FetchedCount
+        """);
 
       (long enqueuedCount, long fetchedCount) = _storage.UseConnection(null, connection => 
-        connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(sqlQuery, new { Queue = queue }));
+        connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(query, new { Queue = queue }));
 
       return new EnqueuedAndFetchedCountDto {
         EnqueuedCount = enqueuedCount,
@@ -79,18 +82,20 @@ namespace Hangfire.PostgreSql
 
     private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
     {
-      string sqlQuery = $@"
-        SELECT j.""id"" 
-        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" jq
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""job"" j ON jq.""jobid"" = j.""id""
-        WHERE jq.""queue"" = @Queue 
-        AND jq.""fetchedat"" {(fetched ? "IS NOT NULL" : "IS NULL")}
-        AND j.""id"" IS NOT NULL
-        ORDER BY jq.""fetchedat"", jq.""jobid""
-        LIMIT @Limit OFFSET @Offset;
-      ";
+      string query = SqlQueryProvider.Instance.GetQuery(schemaName =>
+        $"""
+        SELECT j.id 
+        FROM {schemaName}.jobqueue jq
+        LEFT JOIN {schemaName}.job j ON jq.jobid = j.id
+        WHERE
+          jq.queue = @Queue 
+          AND jq.fetchedat {(fetched ? "IS NOT NULL" : "IS NULL")}
+          AND j.id IS NOT NULL
+        ORDER BY jq.fetchedat, jq.jobid
+        LIMIT @Limit OFFSET @Offset
+        """);
 
-      return _storage.UseConnection(null, connection => connection.Query<long>(sqlQuery,
+      return _storage.UseConnection(null, connection => connection.Query<long>(query,
           new { Queue = queue, Offset = from, Limit = perPage })
         .ToList());
     }

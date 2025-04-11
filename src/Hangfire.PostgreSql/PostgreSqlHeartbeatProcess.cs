@@ -21,6 +21,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using Hangfire.Common;
 using Hangfire.Server;
@@ -40,12 +41,12 @@ namespace Hangfire.PostgreSql
 
     public void Untrack(PostgreSqlFetchedJob item)
     {
-      _items.TryRemove(item, out var _);
+      _items.TryRemove(item, out object _);
     }
     
     public void Execute(CancellationToken cancellationToken)
     {
-      foreach (var item in _items)
+      foreach (KeyValuePair<PostgreSqlFetchedJob, object> item in _items)
       {
         item.Key.ExecuteKeepAliveQueryIfRequired();
       }

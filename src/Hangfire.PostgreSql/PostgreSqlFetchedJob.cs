@@ -37,7 +37,7 @@ namespace Hangfire.PostgreSql
     private bool _removedFromQueue;
     private bool _requeued;
 
-    private readonly object _syncRoot = new object();
+    private readonly object _syncRoot = new();
     private long _lastHeartbeat;
     private readonly TimeSpan _interval;
     
@@ -77,10 +77,12 @@ namespace Hangfire.PostgreSql
           return;
         }
         
-        _storage.UseConnection(null, connection => connection.Execute($@"
-          DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
-        ",
-          new { Id, FetchedAt }));
+        string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
+          $"""
+          DELETE FROM {schemaName}.jobqueue 
+          WHERE id = @Id AND fetchedat = @FetchedAt
+          """);
+        _storage.UseConnection(null, connection => connection.Execute(query, new { Id, FetchedAt }));
 
         _removedFromQueue = true;
       }
@@ -95,12 +97,13 @@ namespace Hangfire.PostgreSql
           return;
         }
 
-        _storage.UseConnection(null, connection => connection.Execute($@"
-          UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-          SET ""fetchedat"" = NULL 
-          WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
-        ",
-          new { Id, FetchedAt }));
+        string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
+          $"""
+          UPDATE {schemaName}.jobqueue 
+          SET fetchedat = NULL 
+          WHERE id = @Id AND fetchedat = @FetchedAt
+          """);
+        _storage.UseConnection(null, connection => connection.Execute(query, new { Id, FetchedAt }));
 
         FetchedAt = null;
         _requeued = true;
@@ -137,7 +140,7 @@ namespace Hangfire.PostgreSql
     
     internal void ExecuteKeepAliveQueryIfRequired()
     {
-      var now = TimestampHelper.GetTimestamp();
+      long now = TimestampHelper.GetTimestamp();
 
       if (TimestampHelper.Elapsed(now, Interlocked.Read(ref _lastHeartbeat)) < _interval)
       {
@@ -156,19 +159,19 @@ namespace Hangfire.PostgreSql
           return;
         }
         
-        string updateFetchAtSql = $@"
-          UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
-          SET ""fetchedat"" = NOW()
-          WHERE ""id"" = @id AND ""fetchedat"" = @fetchedAt
-          RETURNING ""fetchedat"" AS ""FetchedAt"";
-        ";
+        string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
+          $"""
+          UPDATE {schemaName}.jobqueue
+          SET fetchedat = NOW()
+          WHERE id = @Id AND fetchedat = @FetchedAt
+          RETURNING fetchedat AS FetchedAt
+          """);
         
         try
         {
           _storage.UseConnection(null, connection =>
           {
-            FetchedAt = connection.ExecuteScalar<DateTime?>(updateFetchAtSql,
-              new { queue = Queue, id = Id, fetchedAt = FetchedAt });
+            FetchedAt = connection.ExecuteScalar<DateTime?>(query, new { queue = Queue, id = Id, fetchedAt = FetchedAt });
           });
 
           if (!FetchedAt.HasValue)

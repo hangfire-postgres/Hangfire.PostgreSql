@@ -20,31 +20,37 @@
 //    Special thanks goes to him.
 
 using System;
-using System.Transactions;
+using System.Linq;
 
-namespace Hangfire.PostgreSql.Utils
+namespace Hangfire.PostgreSql;
+
+public class SqlQueryProvider(string schemaName)
 {
-  public static class TransactionHelpers
-  {
-    internal static TransactionScope CreateTransactionScope(IsolationLevel? isolationLevel = IsolationLevel.ReadCommitted, bool enlist = true, TimeSpan? timeout = null)
-    {
-      TransactionScopeOption scopeOption = TransactionScopeOption.RequiresNew;
-      if (enlist)
-      {
-        Transaction currentTransaction = Transaction.Current;
-        if (currentTransaction != null)
-        {
-          isolationLevel = currentTransaction.IsolationLevel;
-          scopeOption = TransactionScopeOption.Required;
-        }
-      }
+  private readonly string _schemaName = ProcessSchemaName(schemaName);
 
-      return new TransactionScope(
-        scopeOption,
-        new TransactionOptions {
-          IsolationLevel = isolationLevel.GetValueOrDefault(IsolationLevel.ReadCommitted),
-          Timeout = timeout.GetValueOrDefault(TransactionManager.DefaultTimeout),
-        });
+  public string GetQuery(Func<string, string> query)
+  {
+    return query(_schemaName);
+  }
+
+  private static string ProcessSchemaName(string schemaName)
+  {
+    return string.IsNullOrEmpty(schemaName)
+      ? throw new ArgumentException("Missing schema name", nameof(schemaName))
+      : schemaName.Any(char.IsUpper)
+        ? $"\"{schemaName}\""
+        : schemaName;
+  }
+
+  public static SqlQueryProvider Instance { get; private set; }
+
+  public static void Initialize(string schemaName)
+  {
+    if (Instance != null)
+    {
+      throw new InvalidOperationException("SqlQueryProvider is already initialized.");
     }
+
+    Instance = new SqlQueryProvider(schemaName);
   }
 }
