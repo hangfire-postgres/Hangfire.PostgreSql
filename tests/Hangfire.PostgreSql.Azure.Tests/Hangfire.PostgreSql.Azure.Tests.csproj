@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyTitle>Hangfire.PostgreSql.Azure.Tests</AssemblyTitle>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>Hangfire.PostgreSql.Azure.Tests</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Hangfire.PostgreSql.Azure.Tests</PackageId>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <LangVersion>default</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />
+    <ProjectReference Include="..\..\src\Hangfire.PostgreSql.Azure\Hangfire.PostgreSql.Azure.csproj" />
+    <ProjectReference Include="..\Hangfire.PostgreSql.Tests\Hangfire.PostgreSql.Tests.csproj" />
+  </ItemGroup>
+
+</Project>
