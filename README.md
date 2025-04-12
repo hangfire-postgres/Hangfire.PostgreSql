@@ -1,4 +1,4 @@
-# Hangfire.PostgreSql
+﻿# Hangfire.PostgreSql
 
 [![Build status](https://github.com/hangfire-postgres/Hangfire.PostgreSql/actions/workflows/pack.yml/badge.svg)](https://github.com/hangfire-postgres/Hangfire.PostgreSql/actions/workflows/pack.yml) [![GitHub release (latest by date)](https://img.shields.io/github/v/release/hangfire-postgres/Hangfire.PostgreSql?label=Release)](https://github.com/hangfire-postgres/Hangfire.PostgreSql/releases/latest) [![Nuget](https://img.shields.io/nuget/v/Hangfire.PostgreSql?label=NuGet)](https://www.nuget.org/packages/Hangfire.PostgreSql)
 
@@ -50,6 +50,20 @@ And... That's it. You are ready to go.
 
 If you encounter any issues/bugs or have idea of a feature regarding Hangfire.Postgresql, [create us an issue](https://github.com/hangfire-postgres/Hangfire.PostgreSql/issues/new). Thanks!
 
+### Connecting to Azure Postgres Flexible Servers
+
+To connect to Azure PostgreSQL Flexible Servers, use need to use
+
+```csharp
+services.AddHangfire(config =>
+    config.UseAzurePostgreSqlStorage(c => Configuration.GetConnectionString("HangfireConnection"))
+    );
+```
+
+This factory generates a data source builder which behind the scenes configured a periodic password provider. 
+This provider will use DefaultAzureCredential to fetch a token depending on the environment.
+If you need to customize the behavior, use the dataSourceBuilderSetup override. That one is called after the internal configuration.  
+
 ### Enabling SSL support
 
 SSL support can be enabled for Hangfire.PostgreSql library using the following mechanism:
@@ -81,6 +95,17 @@ app.UseHangfireServer(options);
 ```
 
 this provider would first process jobs in `a-long-running-queue`, then `general-queue` and lastly `very-fast-queue`.
+
+### Running Unit Tests
+
+In order to run unit tests you need to setup a postgresql database. Simples way to do that is to use docker;
+
+Environment configurations:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+ports:
+          - 5432:5432
+
 
 ### License
 
