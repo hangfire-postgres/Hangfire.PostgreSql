@@ -10,9 +10,7 @@ namespace Hangfire.PostgreSql.Tests
 {
   public class PostgreSqlFetchedJobFacts
   {
-    private const string JobId = "id";
-    private const string Queue = "queue";
-    private DateTime _fetchedAt = DateTime.UtcNow; 
+    private readonly DateTime _fetchedAt = DateTime.UtcNow; 
 
     private readonly PostgreSqlStorage _storage;
 
@@ -22,54 +20,12 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
-    public void Ctor_ThrowsAnException_WhenStorageIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlFetchedJob(null, 1, JobId, Queue, _fetchedAt));
-
-      Assert.Equal("storage", exception.ParamName);
-    }
-
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenJobIdIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlFetchedJob(_storage, 1, null, Queue, _fetchedAt));
-
-      Assert.Equal("jobId", exception.ParamName);
-    }
-
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenQueueIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlFetchedJob(_storage, 1, JobId, null, _fetchedAt));
-
-      Assert.Equal("queue", exception.ParamName);
-    }
-    
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenFetchedAtIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlFetchedJob(_storage, 1, JobId, Queue, null));
-      Assert.Equal("fetchedAt", exception.ParamName);
-    }
-
-    [Fact]
-    public void Ctor_CorrectlySets_AllInstanceProperties()
-    {
-      PostgreSqlFetchedJob fetchedJob = new(_storage, 1, JobId, Queue, _fetchedAt);
-
-      Assert.Equal(1, fetchedJob.Id);
-      Assert.Equal(JobId, fetchedJob.JobId);
-      Assert.Equal(Queue, fetchedJob.Queue);
-      Assert.Equal(_fetchedAt, fetchedJob.FetchedAt);
-    }
-
-    [Fact]
     [CleanDatabase]
     public void RemoveFromQueue_ReallyDeletesTheJobFromTheQueue()
     {
       // Arrange
       long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
-      PostgreSqlFetchedJob processingJob = new(_storage, id, "1", "default", _fetchedAt);
+      PostgreSqlFetchedJob processingJob = new(_storage.Context, id, "1", "default", _fetchedAt);
 
       // Act
       processingJob.RemoveFromQueue();
@@ -89,7 +45,7 @@ namespace Hangfire.PostgreSql.Tests
       CreateJobQueueRecord(_storage, "1", "critical", _fetchedAt);
       CreateJobQueueRecord(_storage, "2", "default", _fetchedAt);
 
-      PostgreSqlFetchedJob fetchedJob = new PostgreSqlFetchedJob(_storage, 999, "1", "default", _fetchedAt);
+      PostgreSqlFetchedJob fetchedJob = new PostgreSqlFetchedJob(_storage.Context, 999, "1", "default", _fetchedAt);
 
       // Act
       fetchedJob.RemoveFromQueue();
@@ -106,7 +62,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       // Arrange
       long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
-      PostgreSqlFetchedJob processingJob = new(_storage, id, "1", "default", _fetchedAt);
+      PostgreSqlFetchedJob processingJob = new(_storage.Context, id, "1", "default", _fetchedAt);
 
       // Act
       processingJob.Requeue();
@@ -123,9 +79,9 @@ namespace Hangfire.PostgreSql.Tests
     {
       _storage.UseConnection(null, connection => {
         // Arrange
-        var fetchedAt = DateTime.UtcNow.AddMinutes(-5);
+        DateTime fetchedAt = DateTime.UtcNow.AddMinutes(-5);
         long id = CreateJobQueueRecord(_storage, "1", "default", fetchedAt);
-        using (var processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default", fetchedAt))
+        using (PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage.Context, id, "1", "default", fetchedAt))
         {
           processingJob.DisposeTimer();
           Thread.Sleep(TimeSpan.FromSeconds(10));
@@ -148,7 +104,7 @@ namespace Hangfire.PostgreSql.Tests
       _storage.UseConnection(null, connection => {
         // Arrange
         long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
-        using (PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default", _fetchedAt))
+        using (PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage.Context, id, "1", "default", _fetchedAt))
         {
           Thread.Sleep(TimeSpan.FromSeconds(10));
           processingJob.DisposeTimer();
@@ -170,7 +126,7 @@ namespace Hangfire.PostgreSql.Tests
       _storage.UseConnection(null, connection => {
         // Arrange
         long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
-        using (var processingJob = new PostgreSqlFetchedJob(_storage, id, "1", "default", _fetchedAt))
+        using (PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage.Context, id, "1", "default", _fetchedAt))
         {
           Thread.Sleep(TimeSpan.FromSeconds(10));
           processingJob.DisposeTimer();
@@ -191,7 +147,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       // Arrange
       long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
-      PostgreSqlFetchedJob processingJob = new(_storage, id, "1", "default", _fetchedAt);
+      PostgreSqlFetchedJob processingJob = new(_storage.Context, id, "1", "default", _fetchedAt);
 
       // Act
       processingJob.Dispose();

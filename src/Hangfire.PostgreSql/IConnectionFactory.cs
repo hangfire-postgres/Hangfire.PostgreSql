@@ -21,16 +21,15 @@
 
 using Npgsql;
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql;
+
+/// <summary>
+/// Connection factory for creating <see cref="NpgsqlConnection"/> at runtime. 
+/// </summary>
+public interface IConnectionFactory
 {
   /// <summary>
-  /// Connection factory for creating <see cref="NpgsqlConnection"/> at runtime. 
+  /// Get or create <see cref="NpgsqlConnection"/>.
   /// </summary>
-  public interface IConnectionFactory
-  {
-    /// <summary>
-    /// Get or create <see cref="NpgsqlConnection"/>.
-    /// </summary>
-    NpgsqlConnection GetOrCreateConnection();
-  }
+  NpgsqlConnection GetOrCreateConnection();
 }

@@ -21,27 +21,24 @@
 
 using System;
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql;
+
+internal class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
 {
-  public class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
+  private readonly PostgreSqlStorageContext _context;
+
+  public PostgreSqlJobQueueProvider(PostgreSqlStorageContext context)
   {
-    public PostgreSqlJobQueueProvider(PostgreSqlStorage storage, PostgreSqlStorageOptions options)
-    {
-      Storage = storage ?? throw new ArgumentNullException(nameof(storage));
-      Options = options ?? throw new ArgumentNullException(nameof(options));
-    }
+    _context = context ?? throw new ArgumentNullException(nameof(context));
+  }
 
-    public PostgreSqlStorageOptions Options { get; }
-    public PostgreSqlStorage Storage { get; }
+  public IPersistentJobQueue GetJobQueue()
+  {
+    return new PostgreSqlJobQueue(_context);
+  }
 
-    public IPersistentJobQueue GetJobQueue()
-    {
-      return new PostgreSqlJobQueue(Storage);
-    }
-
-    public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi()
-    {
-      return new PostgreSqlJobQueueMonitoringApi(Storage);
-    }
+  public IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi()
+  {
+    return new PostgreSqlJobQueueMonitoringApi(_context);
   }
 }

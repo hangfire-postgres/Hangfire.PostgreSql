@@ -20,7 +20,6 @@
 //    Special thanks goes to him.
 
 using System;
-using Hangfire.Annotations;
 using Hangfire.PostgreSql.Factories;
 using Npgsql;
 
@@ -38,7 +37,7 @@ public class PostgreSqlBootstrapperOptions
     _options = options ?? throw new ArgumentNullException(nameof(options));
   }
 
-  [CanBeNull] internal IConnectionFactory ConnectionFactory { get; private set; }
+  internal IConnectionFactory? ConnectionFactory { get; private set; }
 
   /// <summary>
   /// Configures the bootstrapper to use a custom <see cref="IConnectionFactory"/> to use for each database action.
@@ -58,12 +57,12 @@ public class PostgreSqlBootstrapperOptions
   /// <param name="connectionString">Connection string.</param>
   /// <param name="connectionSetup">Optional additional connection setup action to be performed on the created <see cref="NpgsqlConnection"/>.</param>
   /// <returns>This instance.</returns>
-  public PostgreSqlBootstrapperOptions UseNpgsqlConnection(string connectionString, [CanBeNull] Action<NpgsqlConnection> connectionSetup = null)
+  public PostgreSqlBootstrapperOptions UseNpgsqlConnection(string connectionString, Action<NpgsqlConnection>? connectionSetup = null)
   {
     return UseConnectionFactory(new NpgsqlConnectionFactory(connectionString, _options, connectionSetup));
   }
 
-  public PostgreSqlBootstrapperOptions UseNpgsqlConnection(Func<string> getConnectionString, [CanBeNull] Action<NpgsqlConnection> connectionSetup = null)
+  public PostgreSqlBootstrapperOptions UseNpgsqlConnection(Func<string> getConnectionString, Action<NpgsqlConnection>? connectionSetup = null)
   {
     return UseConnectionFactory(new NpgsqlConnectionFactory(getConnectionString, _options, connectionSetup));
   }

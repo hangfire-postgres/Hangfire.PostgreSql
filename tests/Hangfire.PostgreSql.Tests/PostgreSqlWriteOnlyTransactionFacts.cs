@@ -29,24 +29,6 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
-    public void Ctor_ThrowsAnException_IfStorageIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlWriteOnlyTransaction(null, () => null));
-
-      Assert.Equal("storage", exception.ParamName);
-    }
-
-    [Fact]
-    public void Ctor_ThrowsAnException_IfDedicatedConnectionFuncIsNull()
-    {
-      PostgreSqlStorageOptions options = new() { EnableTransactionScopeEnlistment = true };
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
-        new PostgreSqlWriteOnlyTransaction(new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(ConnectionUtils.CreateConnection(), options), options), null));
-
-      Assert.Equal("dedicatedConnectionFunc", exception.ParamName);
-    }
-
-    [Fact]
     [CleanDatabase]
     public void ExpireJob_SetsJobExpirationData()
     {

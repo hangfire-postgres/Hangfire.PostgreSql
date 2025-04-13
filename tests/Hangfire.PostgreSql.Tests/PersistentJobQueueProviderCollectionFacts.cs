@@ -18,12 +18,6 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
-    public void Ctor_ThrowsAnException_WhenDefaultProviderIsNull()
-    {
-      Assert.Throws<ArgumentNullException>(() => new PersistentJobQueueProviderCollection(null));
-    }
-
-    [Fact]
     public void Enumeration_IncludesTheDefaultProvider()
     {
       PersistentJobQueueProviderCollection collection = CreateCollection();

@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -19,11 +19,10 @@
 //   
 //    Special thanks goes to him.
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql.Entities;
+
+public class EnqueuedAndFetchedCountDto
 {
-  public class EnqueuedAndFetchedCountDto
-  {
-    public long EnqueuedCount { get; set; }
-    public long FetchedCount { get; set; }
-  }
+  public long EnqueuedCount { get; set; }
+  public long FetchedCount { get; set; }
 }

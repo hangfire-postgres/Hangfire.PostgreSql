@@ -23,81 +23,80 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
+using Hangfire.PostgreSql.Entities;
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql;
+
+internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
 {
-  internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
+  private readonly PostgreSqlStorageContext _context;
+
+  public PostgreSqlJobQueueMonitoringApi(PostgreSqlStorageContext context)
   {
-    private readonly PostgreSqlStorage _storage;
+    _context = context ?? throw new ArgumentNullException(nameof(context));
+  }
 
-    public PostgreSqlJobQueueMonitoringApi(PostgreSqlStorage storage)
-    {
-      _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-    }
+  public IEnumerable<string> GetQueues()
+  {
+    string query = _context.QueryProvider.GetQuery(static schemaName =>
+      $"""
+       SELECT DISTINCT queue 
+       FROM {schemaName}.jobqueue
+       """);
+    return _context.ConnectionManager.UseConnection(null, connection => connection.Query<string>(query).ToList());
+  }
 
-    public IEnumerable<string> GetQueues()
-    {
-      string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
-        $"""
-        SELECT DISTINCT queue 
-        FROM {schemaName}.jobqueue
-        """);
-      return _storage.UseConnection(null, connection => connection.Query<string>(query).ToList());
-    }
+  public IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage)
+  {
+    return GetQueuedOrFetchedJobIds(queue, false, from, perPage);
+  }
 
-    public IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage)
-    {
-      return GetQueuedOrFetchedJobIds(queue, false, from, perPage);
-    }
+  public IEnumerable<long> GetFetchedJobIds(string queue, int from, int perPage)
+  {
+    return GetQueuedOrFetchedJobIds(queue, true, from, perPage);
+  }
 
-    public IEnumerable<long> GetFetchedJobIds(string queue, int from, int perPage)
-    {
-      return GetQueuedOrFetchedJobIds(queue, true, from, perPage);
-    }
+  public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
+  {
+    string query = _context.QueryProvider.GetQuery(static schemaName =>
+      $"""
+       SELECT (
+           SELECT COUNT(*) 
+           FROM {schemaName}.jobqueue 
+           WHERE fetchedat IS NULL AND queue = @Queue
+       ) AS EnqueuedCount, 
+       (
+         SELECT COUNT(*) 
+         FROM {schemaName}.jobqueue 
+         WHERE fetchedat IS NOT NULL AND queue = @Queue
+       ) AS FetchedCount
+       """);
 
-    public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
-    {
-      string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
-        $"""
-        SELECT (
-            SELECT COUNT(*) 
-            FROM {schemaName}.jobqueue 
-            WHERE fetchedat IS NULL AND queue = @Queue
-        ) AS EnqueuedCount, 
-        (
-          SELECT COUNT(*) 
-          FROM {schemaName}.jobqueue 
-          WHERE fetchedat IS NOT NULL AND queue = @Queue
-        ) AS FetchedCount
-        """);
+    (long enqueuedCount, long fetchedCount) = _context.ConnectionManager.UseConnection(null,
+      connection => connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(query, new { Queue = queue }));
 
-      (long enqueuedCount, long fetchedCount) = _storage.UseConnection(null, connection => 
-        connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(query, new { Queue = queue }));
+    return new EnqueuedAndFetchedCountDto {
+      EnqueuedCount = enqueuedCount,
+      FetchedCount = fetchedCount,
+    };
+  }
 
-      return new EnqueuedAndFetchedCountDto {
-        EnqueuedCount = enqueuedCount,
-        FetchedCount = fetchedCount,
-      };
-    }
+  private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
+  {
+    string query = _context.QueryProvider.GetQuery(schemaName =>
+      $"""
+       SELECT j.id 
+       FROM {schemaName}.jobqueue jq
+       LEFT JOIN {schemaName}.job j ON jq.jobid = j.id
+       WHERE
+         jq.queue = @Queue 
+         AND jq.fetchedat {(fetched ? "IS NOT NULL" : "IS NULL")}
+         AND j.id IS NOT NULL
+       ORDER BY jq.fetchedat, jq.jobid
+       LIMIT @Limit OFFSET @Offset
+       """);
 
-    private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
-    {
-      string query = SqlQueryProvider.Instance.GetQuery(schemaName =>
-        $"""
-        SELECT j.id 
-        FROM {schemaName}.jobqueue jq
-        LEFT JOIN {schemaName}.job j ON jq.jobid = j.id
-        WHERE
-          jq.queue = @Queue 
-          AND jq.fetchedat {(fetched ? "IS NOT NULL" : "IS NULL")}
-          AND j.id IS NOT NULL
-        ORDER BY jq.fetchedat, jq.jobid
-        LIMIT @Limit OFFSET @Offset
-        """);
-
-      return _storage.UseConnection(null, connection => connection.Query<long>(query,
-          new { Queue = queue, Offset = from, Limit = perPage })
-        .ToList());
-    }
+    return _context.ConnectionManager.UseConnection(null,
+      connection => connection.Query<long>(query, new { Queue = queue, Offset = from, Limit = perPage }).ToList());
   }
 }

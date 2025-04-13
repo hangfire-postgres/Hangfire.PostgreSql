@@ -21,13 +21,12 @@
 
 using Hangfire.PostgreSql.Properties;
 
-namespace Hangfire.PostgreSql.Entities
+namespace Hangfire.PostgreSql.Entities;
+
+[UsedImplicitly]
+internal class JobParameter
 {
-  [UsedImplicitly]
-  internal class JobParameter
-  {
-    public long JobId { get; set; }
-    public string Name { get; set; }
-    public string Value { get; set; }
-  }
+  public long JobId { get; set; }
+  public string Name { get; set; } = null!;
+  public string Value { get; set; } = null!;
 }

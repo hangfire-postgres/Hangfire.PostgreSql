@@ -31,140 +31,140 @@ using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
 using Npgsql;
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql;
+
+public class PostgreSqlJobQueue : IPersistentJobQueue
 {
-  public class PostgreSqlJobQueue : IPersistentJobQueue
+  private const string JobNotificationChannel = "new_job";
+
+  internal static readonly AutoResetEventRegistry _queueEventRegistry = new();
+  private readonly PostgreSqlStorageContext _context;
+
+  internal PostgreSqlJobQueue(PostgreSqlStorageContext context)
   {
-    private const string JobNotificationChannel = "new_job";
+    _context = context ?? throw new ArgumentNullException(nameof(context));
+    SignalDequeue = new AutoResetEvent(false);
+    JobQueueNotification = new AutoResetEvent(false);
+  }
 
-    internal static readonly AutoResetEventRegistry _queueEventRegistry = new();
-    private readonly PostgreSqlStorage _storage;
+  private AutoResetEvent SignalDequeue { get; }
+  private AutoResetEvent JobQueueNotification { get; }
 
-    public PostgreSqlJobQueue(PostgreSqlStorage storage)
+  [NotNull]
+  public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
+  {
+    Task? listenTask = null;
+    CancellationTokenSource? cancelListenSource = null;
+
+    if (_context.Options.EnableLongPolling)
     {
-      _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-      SignalDequeue = new AutoResetEvent(false);
-      JobQueueNotification = new AutoResetEvent(false);
+      cancelListenSource = new CancellationTokenSource();
+      listenTask = ListenForNotificationsAsync(cancelListenSource.Token);
     }
 
-    private AutoResetEvent SignalDequeue { get; }
-    private AutoResetEvent JobQueueNotification { get; }
-
-    [NotNull]
-    public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
+    try
     {
-      Task listenTask = null;
-      CancellationTokenSource cancelListenSource = null;
-
-      if (_storage.Options.EnableLongPolling)
-      {
-        cancelListenSource = new CancellationTokenSource();
-        listenTask = ListenForNotificationsAsync(cancelListenSource.Token);
-      }
-
+      return _context.Options.UseNativeDatabaseTransactions
+        ? Dequeue_Transaction(queues, cancellationToken)
+        : Dequeue_UpdateCount(queues, cancellationToken);
+    }
+    finally
+    {
       try
       {
-        return _storage.Options.UseNativeDatabaseTransactions
-          ? Dequeue_Transaction(queues, cancellationToken)
-          : Dequeue_UpdateCount(queues, cancellationToken);
+        cancelListenSource?.Cancel();
+        listenTask?.Wait();
+      }
+      catch (AggregateException ex)
+      {
+        if (ex.InnerException is not TaskCanceledException)
+        {
+          throw;
+        }
+
+        // Otherwise do nothing, cancel exception is expected.
       }
       finally
       {
-        try
-        {
-          cancelListenSource?.Cancel();
-          listenTask?.Wait();
-        }
-        catch (AggregateException ex)
-        {
-          if (ex.InnerException is not TaskCanceledException)
-          {
-            throw;
-          }
-
-          // Otherwise do nothing, cancel exception is expected.
-        }
-        finally
-        {
-          cancelListenSource?.Dispose();
-        }
+        cancelListenSource?.Dispose();
       }
     }
+  }
 
-    public void Enqueue(IDbConnection connection, string queue, string jobId)
+  public void Enqueue(IDbConnection connection, string queue, string jobId)
+  {
+    string query = _context.QueryProvider.GetQuery(static schemaName =>
+      $"""
+       INSERT INTO {schemaName}.jobqueue (jobid, queue) 
+       VALUES (@JobId, @Queue);
+       """);
+
+    connection.Execute(query, new { JobId = jobId.ParseJobId(), Queue = queue });
+
+    if (_context.Options.EnableLongPolling)
     {
-      string query = SqlQueryProvider.Instance.GetQuery(static schemaName =>
-        $"""
-        INSERT INTO {schemaName}.jobqueue (jobid, queue) 
-        VALUES (@JobId, @Queue);
-        """);
+      connection.Execute($"NOTIFY {JobNotificationChannel}");
+    }
+  }
 
-      connection.Execute(query, new { JobId = jobId.ParseJobId(), Queue = queue });
+  /// <summary>
+  ///   Signal the waiting Thread to lookup a new Job
+  /// </summary>
+  public void FetchNextJob()
+  {
+    SignalDequeue.Set();
+  }
 
-      if (_storage.Options.EnableLongPolling)
-      {
-        connection.Execute($"NOTIFY {JobNotificationChannel}");
-      }
+
+  [NotNull]
+  internal IFetchedJob Dequeue_Transaction(string[] queues, CancellationToken cancellationToken)
+  {
+    if (queues == null)
+    {
+      throw new ArgumentNullException(nameof(queues));
     }
 
-    /// <summary>
-    ///   Signal the waiting Thread to lookup a new Job
-    /// </summary>
-    public void FetchNextJob()
+    if (queues.Length == 0)
     {
-      SignalDequeue.Set();
+      throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
     }
 
+    long timeoutSeconds = (long)_context.Options.InvisibilityTimeout.Negate().TotalSeconds;
+    FetchedJob? fetchedJob;
 
-    [NotNull]
-    internal IFetchedJob Dequeue_Transaction(string[] queues, CancellationToken cancellationToken)
+    string query = _context.QueryProvider.GetQuery(schemaName =>
+      $"""
+       UPDATE {schemaName}.jobqueue
+       SET fetchedat = NOW()
+       WHERE id = (
+         SELECT id 
+         FROM {schemaName}.jobqueue 
+         WHERE queue = ANY (@Queues)
+         AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
+         ORDER BY fetchedat NULLS FIRST, queue, jobid
+         FOR UPDATE SKIP LOCKED
+         LIMIT 1
+       )
+       RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
+       """);
+
+    WaitHandle[] nextFetchIterationWaitHandles = new[] {
+      cancellationToken.WaitHandle,
+      SignalDequeue,
+      JobQueueNotification,
+    }.Concat(_queueEventRegistry.GetWaitHandles(queues)).ToArray();
+
+    do
     {
-      if (queues == null)
-      {
-        throw new ArgumentNullException(nameof(queues));
-      }
+      cancellationToken.ThrowIfCancellationRequested();
 
-      if (queues.Length == 0)
-      {
-        throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
-      }
-
-      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
-      FetchedJob fetchedJob;
-
-      string query = SqlQueryProvider.Instance.GetQuery(schemaName =>
-        $"""
-        UPDATE {schemaName}.jobqueue
-        SET fetchedat = NOW()
-        WHERE id = (
-          SELECT id 
-          FROM {schemaName}.jobqueue 
-          WHERE queue = ANY (@Queues)
-          AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
-          ORDER BY fetchedat NULLS FIRST, queue, jobid
-          FOR UPDATE SKIP LOCKED
-          LIMIT 1
-        )
-        RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
-        """);
-
-      WaitHandle[] nextFetchIterationWaitHandles = new[] {
-        cancellationToken.WaitHandle,
-        SignalDequeue,
-        JobQueueNotification,
-      }.Concat(_queueEventRegistry.GetWaitHandles(queues)).ToArray();
-
-      do
-      {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        Utils.Utils.TryExecute(() => {
-          NpgsqlConnection connection = _storage.CreateAndOpenConnection();
+      Utils.Utils.TryExecute(() => {
+          NpgsqlConnection connection = _context.ConnectionManager.CreateAndOpenConnection();
 
           try
           {
             using NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-            FetchedJob jobToFetch = connection.Query<FetchedJob>(query, new { Queues = queues.ToList() }, trx).SingleOrDefault();
+            FetchedJob? jobToFetch = connection.Query<FetchedJob>(query, new { Queues = queues.ToList() }, trx).SingleOrDefault();
 
             trx.Commit();
 
@@ -176,150 +176,150 @@ namespace Hangfire.PostgreSql
           }
           finally
           {
-            _storage.ReleaseConnection(connection);
+            _context.ConnectionManager.ReleaseConnection(connection);
           }
 
           return null;
         },
-          out fetchedJob,
-          ex => ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure });
+        out fetchedJob,
+        ex => ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure });
 
-        if (fetchedJob == null)
-        {
-          WaitHandle.WaitAny(nextFetchIterationWaitHandles, _storage.Options.QueuePollInterval);
-        }
+      if (fetchedJob == null)
+      {
+        WaitHandle.WaitAny(nextFetchIterationWaitHandles, _context.Options.QueuePollInterval);
       }
-      while (fetchedJob == null);
+    }
+    while (fetchedJob == null);
 
-      return new PostgreSqlFetchedJob(_storage,
-        fetchedJob.Id,
-        fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
-        fetchedJob.Queue,
-        fetchedJob.FetchedAt);
+    return new PostgreSqlFetchedJob(_context,
+      fetchedJob.Id,
+      fetchedJob.JobId.ToString(CultureInfo.InvariantCulture),
+      fetchedJob.Queue,
+      fetchedJob.FetchedAt);
+  }
+
+  [NotNull]
+  internal IFetchedJob Dequeue_UpdateCount(string[] queues, CancellationToken cancellationToken)
+  {
+    if (queues == null)
+    {
+      throw new ArgumentNullException(nameof(queues));
     }
 
-    [NotNull]
-    internal IFetchedJob Dequeue_UpdateCount(string[] queues, CancellationToken cancellationToken)
+    if (queues.Length == 0)
     {
-      if (queues == null)
+      throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
+    }
+
+    long timeoutSeconds = (long)_context.Options.InvisibilityTimeout.Negate().TotalSeconds;
+    FetchedJob? markJobAsFetched = null;
+
+    string jobToFetchQuery = _context.QueryProvider.GetQuery(schemaName =>
+      $"""
+       SELECT id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt, updatecount AS UpdateCount
+       FROM {schemaName}.jobqueue 
+       WHERE queue = ANY (@Queues) AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
+       ORDER BY fetchedat NULLS FIRST, queue, jobid
+       LIMIT 1
+       """);
+
+    string markJobAsFetchedQuery = _context.QueryProvider.GetQuery(schemaName =>
+      $"""
+       UPDATE {schemaName}.jobqueue 
+       SET fetchedat = NOW(),
+           updatecount = (updatecount + 1) % 2000000000
+       WHERE id = @Id AND updatecount = @UpdateCount
+       RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
+       """);
+
+    do
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+
+      FetchedJob? jobToFetch = _context.ConnectionManager.UseConnection(null,
+        connection => connection.QuerySingleOrDefault<FetchedJob>(jobToFetchQuery, new { Queues = queues.ToList() }));
+
+      if (jobToFetch == null)
       {
-        throw new ArgumentNullException(nameof(queues));
-      }
+        WaitHandle.WaitAny([
+            cancellationToken.WaitHandle,
+            SignalDequeue,
+            JobQueueNotification,
+          ],
+          _context.Options.QueuePollInterval);
 
-      if (queues.Length == 0)
-      {
-        throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
-      }
-
-      long timeoutSeconds = (long)_storage.Options.InvisibilityTimeout.Negate().TotalSeconds;
-      FetchedJob markJobAsFetched = null;
-
-      string jobToFetchQuery = SqlQueryProvider.Instance.GetQuery(schemaName =>
-        $"""
-        SELECT id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt, updatecount AS UpdateCount
-        FROM {schemaName}.jobqueue 
-        WHERE queue = ANY (@Queues) AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
-        ORDER BY fetchedat NULLS FIRST, queue, jobid
-        LIMIT 1
-        """);
-
-      string markJobAsFetchedQuery = SqlQueryProvider.Instance.GetQuery(schemaName =>
-        $"""
-        UPDATE {schemaName}.jobqueue 
-        SET fetchedat = NOW(),
-            updatecount = (updatecount + 1) % 2000000000
-        WHERE id = @Id AND updatecount = @UpdateCount
-        RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
-        """);
-
-      do
-      {
         cancellationToken.ThrowIfCancellationRequested();
-
-        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(jobToFetchQuery, new { Queues = queues.ToList() }).SingleOrDefault());
-
-        if (jobToFetch == null)
-        {
-          WaitHandle.WaitAny([
-              cancellationToken.WaitHandle,
-              SignalDequeue,
-              JobQueueNotification,
-            ],
-            _storage.Options.QueuePollInterval);
-
-          cancellationToken.ThrowIfCancellationRequested();
-        }
-        else
-        {
-          markJobAsFetched = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(markJobAsFetchedQuery, jobToFetch).SingleOrDefault());
-        }
       }
-      while (markJobAsFetched == null);
-
-      return new PostgreSqlFetchedJob(_storage,
-        markJobAsFetched.Id,
-        markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
-        markJobAsFetched.Queue,
-        markJobAsFetched.FetchedAt);
-    }
-
-    private Task ListenForNotificationsAsync(CancellationToken cancellationToken)
-    {
-      NpgsqlConnection connection = _storage.CreateAndOpenConnection();
-
-      try
+      else
       {
-        if (!connection.SupportsNotifications())
+        markJobAsFetched = _context.ConnectionManager.UseConnection(null, connection => connection.QuerySingleOrDefault<FetchedJob>(markJobAsFetchedQuery, jobToFetch));
+      }
+    }
+    while (markJobAsFetched == null);
+
+    return new PostgreSqlFetchedJob(_context,
+      markJobAsFetched.Id,
+      markJobAsFetched.JobId.ToString(CultureInfo.InvariantCulture),
+      markJobAsFetched.Queue,
+      markJobAsFetched.FetchedAt);
+  }
+
+  private Task ListenForNotificationsAsync(CancellationToken cancellationToken)
+  {
+    NpgsqlConnection connection = _context.ConnectionManager.CreateAndOpenConnection();
+
+    try
+    {
+      if (!connection.SupportsNotifications())
+      {
+        return Task.CompletedTask;
+      }
+
+      // CreateAnOpenConnection can return the same connection over and over if an existing connection
+      //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
+      //  connection to listen for notifications.
+      NpgsqlConnection clonedConnection = connection.CloneWith(connection.ConnectionString);
+
+      return Task.Run(async () => {
+        try
         {
-          return Task.CompletedTask;
+          if (clonedConnection.State != ConnectionState.Open)
+          {
+            await clonedConnection.OpenAsync(cancellationToken); // Open so that Dapper doesn't auto-close.
+          }
+
+          while (!cancellationToken.IsCancellationRequested)
+          {
+            await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
+            await clonedConnection.WaitAsync(cancellationToken);
+            JobQueueNotification.Set();
+          }
+        }
+        catch (TaskCanceledException)
+        {
+          // Do nothing, cancellation requested so just end.
+        }
+        finally
+        {
+          _context.ConnectionManager.ReleaseConnection(clonedConnection);
         }
 
-        // CreateAnOpenConnection can return the same connection over and over if an existing connection
-        //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
-        //  connection to listen for notifications.
-        NpgsqlConnection clonedConnection = connection.CloneWith(connection.ConnectionString);
+      }, cancellationToken);
 
-        return Task.Run(async () => {
-          try
-          {
-            if (clonedConnection.State != ConnectionState.Open)
-            {
-              await clonedConnection.OpenAsync(cancellationToken); // Open so that Dapper doesn't auto-close.
-            }
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-              await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
-              await clonedConnection.WaitAsync(cancellationToken);
-              JobQueueNotification.Set();
-            }
-          }
-          catch (TaskCanceledException)
-          {
-            // Do nothing, cancellation requested so just end.
-          }
-          finally
-          {
-            _storage.ReleaseConnection(clonedConnection);
-          }
-
-        }, cancellationToken);
-
-      }
-      finally
-      {
-        _storage.ReleaseConnection(connection);
-      }
     }
-
-    [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
-    private class FetchedJob
+    finally
     {
-      public long Id { get; set; }
-      public long JobId { get; set; }
-      public string Queue { get; set; }
-      public DateTime? FetchedAt { get; set; }
-      public int UpdateCount { get; set; }
+      _context.ConnectionManager.ReleaseConnection(connection);
     }
+  }
+
+  [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
+  private class FetchedJob
+  {
+    public long Id { get; set; }
+    public long JobId { get; set; }
+    public string Queue { get; set; } = null!;
+    public DateTime? FetchedAt { get; set; }
+    public int UpdateCount { get; set; }
   }
 }

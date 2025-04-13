@@ -20,7 +20,6 @@
 //    Special thanks goes to him.
 
 using System;
-using Hangfire.Annotations;
 using Npgsql;
 
 namespace Hangfire.PostgreSql.Factories;
@@ -28,8 +27,8 @@ namespace Hangfire.PostgreSql.Factories;
 public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
 {
   private readonly PostgreSqlStorageOptions _options;
-  [CanBeNull] private NpgsqlConnectionStringBuilder _connectionStringBuilder;
-  [CanBeNull] private string _connectionString;
+  private NpgsqlConnectionStringBuilder? _connectionStringBuilder;
+  private string? _connectionString;
 
   protected NpgsqlInstanceConnectionFactoryBase(PostgreSqlStorageOptions options)
   {

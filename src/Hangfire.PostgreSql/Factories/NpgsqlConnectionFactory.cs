@@ -20,7 +20,6 @@
 //    Special thanks goes to him.
 
 using System;
-using Hangfire.Annotations;
 using Npgsql;
 
 namespace Hangfire.PostgreSql.Factories;
@@ -31,8 +30,8 @@ namespace Hangfire.PostgreSql.Factories;
 public sealed class NpgsqlConnectionFactory : NpgsqlInstanceConnectionFactoryBase
 {
   private readonly string _connectionString;
-  [CanBeNull] private readonly Action<NpgsqlConnection> _connectionSetup;
-  [CanBeNull] private readonly Func<string> _getConnectionString;
+  private readonly Action<NpgsqlConnection>? _connectionSetup;
+  private readonly Func<string>? _getConnectionString;
 
   /// <summary>
   /// Instantiates the factory using specified <paramref name="connectionString"/>.
@@ -41,13 +40,13 @@ public sealed class NpgsqlConnectionFactory : NpgsqlInstanceConnectionFactoryBas
   /// <param name="options"><see cref="PostgreSqlStorageOptions"/> used for connection string verification.</param>
   /// <param name="connectionSetup">Optional additional connection setup action to be performed on the created <see cref="NpgsqlConnection"/>.</param>
   /// <exception cref="ArgumentNullException">Throws if <paramref name="connectionString"/> is null.</exception>
-  public NpgsqlConnectionFactory(string connectionString, PostgreSqlStorageOptions options, [CanBeNull] Action<NpgsqlConnection> connectionSetup = null) : base(options)
+  public NpgsqlConnectionFactory(string connectionString, PostgreSqlStorageOptions options, Action<NpgsqlConnection>? connectionSetup = null) : base(options)
   {
     _connectionString = SetupConnectionStringBuilder(connectionString ?? throw new ArgumentNullException(nameof(connectionString))).ConnectionString;
     _connectionSetup = connectionSetup;
   }
 
-  public NpgsqlConnectionFactory(Func<string> getConnectionString, PostgreSqlStorageOptions options, [CanBeNull] Action<NpgsqlConnection> connectionSetup = null) : this(getConnectionString.Invoke(), options, connectionSetup)
+  public NpgsqlConnectionFactory(Func<string> getConnectionString, PostgreSqlStorageOptions options, Action<NpgsqlConnection>? connectionSetup = null) : this(getConnectionString.Invoke(), options, connectionSetup)
   {
     _getConnectionString = getConnectionString;
   }
@@ -55,7 +54,7 @@ public sealed class NpgsqlConnectionFactory : NpgsqlInstanceConnectionFactoryBas
   /// <inheritdoc />
   public override NpgsqlConnection GetOrCreateConnection()
   {
-    var connectionString = _connectionString;
+    string connectionString = _connectionString;
     if (_getConnectionString != null)
     {
       connectionString = SetupConnectionStringBuilder(_getConnectionString.Invoke()).ConnectionString;

@@ -14,7 +14,7 @@ namespace Hangfire.PostgreSql.Tests
 {
   public class PostgreSqlJobQueueFacts : IClassFixture<PostgreSqlStorageFixture>
   {
-    private static readonly string[] _defaultQueues = { "default" };
+    private static readonly string[] _defaultQueues = ["default"];
 
     private readonly PostgreSqlStorageFixture _fixture;
 
@@ -22,14 +22,6 @@ namespace Hangfire.PostgreSql.Tests
     {
       _fixture = fixture;
       _fixture.SetupOptions(o => o.UseSlidingInvisibilityTimeout = true);
-    }
-
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenStorageIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlJobQueue(null));
-
-      Assert.Equal("storage", exception.ParamName);
     }
 
     [Fact]
@@ -106,7 +98,7 @@ namespace Hangfire.PostgreSql.Tests
       bool useNativeDatabaseTransactions)
     {
       UseConnection((_, storage) => {
-        CancellationTokenSource cts = new CancellationTokenSource();
+        CancellationTokenSource cts = new();
         cts.Cancel();
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
@@ -131,7 +123,7 @@ namespace Hangfire.PostgreSql.Tests
     private void Dequeue_ShouldWaitIndefinitely_WhenThereAreNoJobs(bool useNativeDatabaseTransactions)
     {
       UseConnection((_, storage) => {
-        CancellationTokenSource cts = new CancellationTokenSource(200);
+        CancellationTokenSource cts = new(200);
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
         Assert.Throws<OperationCanceledException>(() => queue.Dequeue(_defaultQueues, cts.Token));
@@ -490,7 +482,7 @@ namespace Hangfire.PostgreSql.Tests
         // Only for Postgres 11+ should we have a polling time greater than the timeout.
         if (connection.SupportsNotifications())
         {
-          storage.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
+          storage.Context.Options.QueuePollInterval = TimeSpan.FromMinutes(2);
         }
 
         PostgreSqlJobQueue queue = CreateJobQueue(storage, false, true);
@@ -540,7 +532,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private static CancellationToken CreateTimingOutCancellationToken()
     {
-      CancellationTokenSource source = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+      CancellationTokenSource source = new(TimeSpan.FromSeconds(10));
       return source.Token;
     }
 
@@ -551,12 +543,13 @@ namespace Hangfire.PostgreSql.Tests
 
     private static PostgreSqlJobQueue CreateJobQueue(PostgreSqlStorage storage, bool useNativeDatabaseTransactions, bool enableLongPolling = false, bool useSlidingInvisibilityTimeout = false)
     {
-      storage.Options.SchemaName = GetSchemaName();
-      storage.Options.UseNativeDatabaseTransactions = useNativeDatabaseTransactions;
-      storage.Options.EnableLongPolling = enableLongPolling;
-      storage.Options.UseSlidingInvisibilityTimeout = useSlidingInvisibilityTimeout;
+      PostgreSqlStorageOptions options = storage.Context.Options;
+      options.SchemaName = GetSchemaName();
+      options.UseNativeDatabaseTransactions = useNativeDatabaseTransactions;
+      options.EnableLongPolling = enableLongPolling;
+      options.UseSlidingInvisibilityTimeout = useSlidingInvisibilityTimeout;
 
-      return new PostgreSqlJobQueue(storage);
+      return new PostgreSqlJobQueue(storage.Context);
     }
 
     private void UseConnection(Action<IDbConnection, PostgreSqlStorage> action)

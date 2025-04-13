@@ -51,7 +51,7 @@ public class CountersAggregatorFacts : IClassFixture<PostgreSqlStorageFixture>
   private void UseConnection(Action<NpgsqlConnection, CountersAggregator> action)
   {
     PostgreSqlStorage storage = _fixture.SafeInit();
-    CountersAggregator aggregator = new(storage, TimeSpan.Zero);
+    CountersAggregator aggregator = new(storage.Context, TimeSpan.Zero);
     action(storage.CreateAndOpenConnection(), aggregator);
   }
 

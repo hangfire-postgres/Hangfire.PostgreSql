@@ -24,12 +24,6 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
-    public void Ctor_ThrowsAnException_WhenStorageIsNull()
-    {
-      Assert.Throws<ArgumentNullException>(() => new ExpirationManager(null));
-    }
-
-    [Fact]
     [CleanDatabase]
     public void Execute_RemovesOutdatedRecords()
     {
@@ -218,7 +212,7 @@ namespace Hangfire.PostgreSql.Tests
     private void UseConnection(Action<NpgsqlConnection, ExpirationManager> action)
     {
       PostgreSqlStorage storage = _fixture.SafeInit();
-      ExpirationManager manager = new ExpirationManager(storage, TimeSpan.Zero);
+      ExpirationManager manager = new(storage.Context, TimeSpan.Zero);
       action(storage.CreateAndOpenConnection(), manager);
     }
 

@@ -16,24 +16,17 @@
 // Borrowed from Hangfire
 
 using System;
+using System.Collections.Generic;
 
-namespace Hangfire.PostgreSql.Utils
+namespace Hangfire.PostgreSql.Utils;
+
+internal static class ExceptionTypeHelper
 {
-  internal static class ExceptionTypeHelper
-  {
-#if !NETSTANDARD1_3
-    private static readonly Type StackOverflowType = typeof(StackOverflowException);
-#endif
-    private static readonly Type OutOfMemoryType = typeof(OutOfMemoryException);
+  private static readonly HashSet<Type> _nonCatchableExceptionTypes = [typeof(StackOverflowException), typeof(OutOfMemoryException)];
  
-    internal static bool IsCatchableExceptionType(this Exception e)
-    {
-      var type = e.GetType();
-      return
-#if !NETSTANDARD1_3
-        type != StackOverflowType &&
-#endif
-        type != OutOfMemoryType;
-    }
+  internal static bool IsCatchableExceptionType(this Exception e)
+  {
+    Type? type = e.GetType();
+    return !_nonCatchableExceptionTypes.Contains(type);
   }
 }

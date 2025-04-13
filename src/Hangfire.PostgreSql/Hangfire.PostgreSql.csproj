@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Description>PostgreSql storage implementation for Hangfire (background job system for ASP.NET and aspnet core applications).</Description>
-    <Copyright>Copyright © 2014-2024 Frank Hommers and others</Copyright>
+    <Copyright>Copyright © 2014-2025 Frank Hommers and others</Copyright>
     <AssemblyTitle>Hangfire PostgreSql Storage</AssemblyTitle>
     <VersionPrefix>1.9.4</VersionPrefix>
     <Authors>Frank Hommers, Vytautas Kasparavičius, Žygimantas Arūna</Authors>
@@ -25,6 +25,7 @@
     <LangVersion>default</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>

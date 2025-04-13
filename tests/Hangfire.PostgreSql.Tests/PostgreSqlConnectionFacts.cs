@@ -29,31 +29,13 @@ namespace Hangfire.PostgreSql.Tests
       _fixture.SetupOptions(o => o.TransactionSynchronisationTimeout = TimeSpan.FromSeconds(2));
     }
 
-    [Fact]
-    public void Ctor_ThrowsAnException_WhenStorageIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => new PostgreSqlConnection(null));
-
-      Assert.Equal("storage", exception.ParamName);
-    }
-
-    [Fact]
-    [CleanDatabase]
-    public void Ctor_ThrowsAnException_WhenOptionsIsNull()
-    {
-      ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
-        () => new PostgreSqlConnection(new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory(), null)));
-
-      Assert.Equal("options", exception.ParamName);
-    }
-
 
     [Fact]
     [CleanDatabase]
     public void FetchNextJob_DelegatesItsExecution_ToTheQueue()
     {
       UseConnection(connection => {
-        CancellationToken token = new();
+        CancellationToken token = CancellationToken.None;
         string[] queues = { "default" };
 
         connection.FetchNextJob(queues, token);
@@ -67,7 +49,7 @@ namespace Hangfire.PostgreSql.Tests
     public void FetchNextJob_Throws_IfMultipleProvidersResolved()
     {
       UseConnection(connection => {
-        CancellationToken token = new CancellationToken();
+        CancellationToken token = CancellationToken.None;
         Mock<IPersistentJobQueueProvider> anotherProvider = new Mock<IPersistentJobQueueProvider>();
         _fixture.PersistentJobQueueProviderCollection.Add(anotherProvider.Object, new[] { "critical" });
 

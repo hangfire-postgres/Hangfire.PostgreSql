@@ -22,21 +22,20 @@
 using System;
 using Hangfire.PostgreSql.Properties;
 
-namespace Hangfire.PostgreSql.Entities
+namespace Hangfire.PostgreSql.Entities;
+
+[UsedImplicitly]
+internal class SqlJob
 {
-  [UsedImplicitly]
-  internal class SqlJob
-  {
-    public long Id { get; set; }
-    public string InvocationData { get; set; }
-    public string Arguments { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime? ExpireAt { get; set; }
+  public long Id { get; set; }
+  public string InvocationData { get; set; } = null!;
+  public string Arguments { get; set; } = null!;
+  public DateTime CreatedAt { get; set; }
+  public DateTime? ExpireAt { get; set; }
 
-    public DateTime? FetchedAt { get; set; }
+  public DateTime? FetchedAt { get; set; }
 
-    public string StateName { get; set; }
-    public string StateReason { get; set; }
-    public string StateData { get; set; }
-  }
+  public string StateName { get; set; } = null!;
+  public string StateReason { get; set; } = null!;
+  public string StateData { get; set; } = null!;
 }

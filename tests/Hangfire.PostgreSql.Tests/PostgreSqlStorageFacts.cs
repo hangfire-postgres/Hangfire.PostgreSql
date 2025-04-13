@@ -35,11 +35,10 @@ namespace Hangfire.PostgreSql.Tests
     public void Ctor_InitializesDefaultJobQueueProvider_AndPassesCorrectOptions()
     {
       PostgreSqlStorage storage = CreateStorage();
-      PersistentJobQueueProviderCollection providers = storage.QueueProviders;
+      PersistentJobQueueProviderCollection providers = storage.Context.QueueProviders;
 
       PostgreSqlJobQueueProvider provider = (PostgreSqlJobQueueProvider)providers.GetProvider("default");
-
-      Assert.Same(_options, provider.Options);
+      Assert.NotNull(provider);
     }
 
     [Fact]

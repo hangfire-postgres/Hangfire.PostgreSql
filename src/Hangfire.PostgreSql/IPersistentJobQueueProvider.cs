@@ -19,11 +19,10 @@
 //   
 //    Special thanks goes to him.
 
-namespace Hangfire.PostgreSql
+namespace Hangfire.PostgreSql;
+
+public interface IPersistentJobQueueProvider
 {
-  public interface IPersistentJobQueueProvider
-  {
-    IPersistentJobQueue GetJobQueue();
-    IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi();
-  }
+  IPersistentJobQueue GetJobQueue();
+  IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi();
 }

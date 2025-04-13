@@ -20,35 +20,33 @@
 //    Special thanks goes to him.
 
 using System;
-// ReSharper disable ArrangeDefaultValueWhenTypeNotEvident
 
-namespace Hangfire.PostgreSql.Utils
+namespace Hangfire.PostgreSql.Utils;
+
+public static class Utils
 {
-  public static class Utils
+  public static bool TryExecute<T>(
+    Func<T> func,
+    out T? result,
+    Func<Exception, bool>? swallowException = null,
+    int? tryCount = null)
   {
-    public static bool TryExecute<T>(
-      Func<T> func,
-      out T result,
-      Func<Exception, bool> swallowException = default,
-      int? tryCount = default)
+    while (tryCount == null || tryCount-- > 0)
     {
-      while (tryCount == default || tryCount-- > 0)
+      try
       {
-        try
+        result = func();
+        return true;
+      }
+      catch (Exception ex)
+      {
+        if (swallowException != null && !swallowException(ex))
         {
-          result = func();
-          return true;
-        }
-        catch (Exception ex)
-        {
-          if (swallowException != null && !swallowException(ex))
-          {
-            throw;
-          }
+          throw;
         }
       }
-      result = default;
-      return false;
     }
+    result = default(T);
+    return false;
   }
 }

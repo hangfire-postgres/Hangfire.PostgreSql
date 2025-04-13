@@ -41,16 +41,4 @@ public class SqlQueryProvider(string schemaName)
         ? $"\"{schemaName}\""
         : schemaName;
   }
-
-  public static SqlQueryProvider Instance { get; private set; }
-
-  public static void Initialize(string schemaName)
-  {
-    if (Instance != null)
-    {
-      throw new InvalidOperationException("SqlQueryProvider is already initialized.");
-    }
-
-    Instance = new SqlQueryProvider(schemaName);
-  }
 }

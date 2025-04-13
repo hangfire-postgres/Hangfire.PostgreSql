@@ -98,7 +98,7 @@ namespace Hangfire.PostgreSql.Tests
       Action<PostgreSqlWriteOnlyTransaction> action)
     {
       PostgreSqlStorage storage = _fixture.SafeInit();
-      using PostgreSqlWriteOnlyTransaction transaction = new(storage, () => connection);
+      using PostgreSqlWriteOnlyTransaction transaction = new(storage.Context, () => connection);
       action(transaction);
       transaction.Commit();
     }

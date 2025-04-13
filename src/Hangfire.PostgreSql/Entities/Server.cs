@@ -22,13 +22,12 @@
 using System;
 using Hangfire.PostgreSql.Properties;
 
-namespace Hangfire.PostgreSql.Entities
+namespace Hangfire.PostgreSql.Entities;
+
+[UsedImplicitly]
+internal class Server
 {
-  [UsedImplicitly]
-  internal class Server
-  {
-    public string Id { get; set; }
-    public string Data { get; set; }
-    public DateTime LastHeartbeat { get; set; }
-  }
+  public string Id { get; set; } = null!;
+  public string Data { get; set; } = null!;
+  public DateTime LastHeartbeat { get; set; }
 }

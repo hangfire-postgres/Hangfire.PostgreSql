@@ -32,7 +32,7 @@ namespace Hangfire.PostgreSql.Tests.Utils
     public PersistentJobQueueProviderCollection PersistentJobQueueProviderCollection { get; }
 
     public PostgreSqlStorage Storage { get; private set; }
-    public NpgsqlConnection MainConnection => _mainConnection ?? (_mainConnection = ConnectionUtils.CreateConnection());
+    public NpgsqlConnection MainConnection => _mainConnection ??= ConnectionUtils.CreateConnection();
 
     public void Dispose()
     {
@@ -54,34 +54,9 @@ namespace Hangfire.PostgreSql.Tests.Utils
 
     public PostgreSqlStorage ForceInit(NpgsqlConnection connection = null)
     {
-      Storage = new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(connection ?? MainConnection, _storageOptions), _storageOptions) {
-        QueueProviders = PersistentJobQueueProviderCollection,
-      };
+      Storage = new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(connection ?? MainConnection, _storageOptions), _storageOptions, PersistentJobQueueProviderCollection);
       _initialized = true;
       return Storage;
-    }
-
-    public void SafeInit(PostgreSqlStorageOptions options,
-      PersistentJobQueueProviderCollection jobQueueProviderCollection = null,
-      NpgsqlConnection connection = null)
-    {
-      if (!_initialized)
-      {
-        ForceInit(options, jobQueueProviderCollection, connection);
-        return;
-      }
-
-      Storage.QueueProviders = jobQueueProviderCollection;
-    }
-
-    public void ForceInit(PostgreSqlStorageOptions options,
-      PersistentJobQueueProviderCollection jobQueueProviderCollection = null,
-      NpgsqlConnection connection = null)
-    {
-      Storage = new PostgreSqlStorage(new ExistingNpgsqlConnectionFactory(connection ?? MainConnection, options), options) {
-        QueueProviders = jobQueueProviderCollection,
-      };
-      _initialized = true;
     }
   }
 }

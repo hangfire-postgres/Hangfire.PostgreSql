@@ -26,37 +26,35 @@ using System.Threading;
 using Hangfire.Common;
 using Hangfire.Server;
 
-namespace Hangfire.PostgreSql
-{
+namespace Hangfire.PostgreSql;
 #pragma warning disable CS0618
-  internal sealed class PostgreSqlHeartbeatProcess : IServerComponent, IBackgroundProcess
+internal sealed class PostgreSqlHeartbeatProcess : IServerComponent, IBackgroundProcess
 #pragma warning restore CS0618
+{
+  private readonly ConcurrentDictionary<PostgreSqlFetchedJob, object?> _items = new();
+
+  public void Track(PostgreSqlFetchedJob item)
   {
-    private readonly ConcurrentDictionary<PostgreSqlFetchedJob, object> _items = new();
+    _items.TryAdd(item, null);
+  }
 
-    public void Track(PostgreSqlFetchedJob item)
-    {
-      _items.TryAdd(item, null);
-    }
-
-    public void Untrack(PostgreSqlFetchedJob item)
-    {
-      _items.TryRemove(item, out object _);
-    }
+  public void Untrack(PostgreSqlFetchedJob item)
+  {
+    _items.TryRemove(item, out object _);
+  }
     
-    public void Execute(CancellationToken cancellationToken)
+  public void Execute(CancellationToken cancellationToken)
+  {
+    foreach (KeyValuePair<PostgreSqlFetchedJob, object?> item in _items)
     {
-      foreach (KeyValuePair<PostgreSqlFetchedJob, object> item in _items)
-      {
-        item.Key.ExecuteKeepAliveQueryIfRequired();
-      }
-
-      cancellationToken.Wait(TimeSpan.FromSeconds(1));
+      item.Key.ExecuteKeepAliveQueryIfRequired();
     }
 
-    public void Execute(BackgroundProcessContext context)
-    {
-      Execute(context.StoppingToken);
-    }
+    cancellationToken.Wait(TimeSpan.FromSeconds(1));
+  }
+
+  public void Execute(BackgroundProcessContext context)
+  {
+    Execute(context.StoppingToken);
   }
 }
