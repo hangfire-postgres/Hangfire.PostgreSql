@@ -81,7 +81,7 @@ namespace Hangfire.PostgreSql.Tests
     public void CanCreateAndOpenConnection_WithExistingConnectionFactory()
     {
       PostgreSqlStorage storage = new(new DefaultConnectionFactory(), _options);
-      NpgsqlConnection connection = storage.CreateAndOpenConnection();
+      NpgsqlConnection connection = storage.Context.ConnectionManager.CreateAndOpenConnection();
       Assert.NotNull(connection);
     }
 
@@ -102,9 +102,9 @@ namespace Hangfire.PostgreSql.Tests
         new TransactionOptions() { IsolationLevel = IsolationLevel.Serializable });
 
       PostgreSqlStorage storage = new(new DefaultConnectionFactory(), _options);
-      NpgsqlConnection connection = storage.CreateAndOpenConnection();
+      NpgsqlConnection connection = storage.Context.ConnectionManager.CreateAndOpenConnection();
 
-      bool success = storage.UseTransaction(connection, (_, _) => true);
+      bool success = storage.Context.ConnectionManager.UseTransaction(connection, (_, _) => true);
 
       Assert.True(success);
     }

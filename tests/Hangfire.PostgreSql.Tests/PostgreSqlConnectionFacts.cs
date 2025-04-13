@@ -1359,7 +1359,7 @@ namespace Hangfire.PostgreSql.Tests
     private void UseConnections(Action<NpgsqlConnection, PostgreSqlConnection> action)
     {
       PostgreSqlStorage storage = _fixture.SafeInit();
-      action(storage.CreateAndOpenConnection(), storage.GetStorageConnection());
+      action(storage.Context.ConnectionManager.CreateAndOpenConnection(), storage.GetStorageConnection());
     }
 
     private void UseConnection(Action<PostgreSqlConnection> action)

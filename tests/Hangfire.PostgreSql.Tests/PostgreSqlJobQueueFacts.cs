@@ -551,7 +551,7 @@ namespace Hangfire.PostgreSql.Tests
     private void UseConnection(Action<IDbConnection, PostgreSqlStorage> action)
     {
       PostgreSqlStorage storage = _fixture.SafeInit();
-      storage.UseConnection(null, connection => {
+      storage.Context.ConnectionManager.UseConnection(null, connection => {
         action(connection, storage);
 
         return true;

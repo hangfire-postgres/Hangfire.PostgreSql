@@ -209,7 +209,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       PostgreSqlStorage storage = _fixture.SafeInit();
       ExpirationManager manager = new(storage.Context, TimeSpan.Zero);
-      action(storage.CreateAndOpenConnection(), manager);
+      action(storage.Context.ConnectionManager.CreateAndOpenConnection(), manager);
     }
 
     private static string GetSchemaName()

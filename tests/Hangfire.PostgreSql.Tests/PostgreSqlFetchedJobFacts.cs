@@ -28,7 +28,7 @@ namespace Hangfire.PostgreSql.Tests
       processingJob.RemoveFromQueue();
 
       // Assert
-      long count = _storage.UseConnection(null, connection =>
+      long count = _storage.Context.ConnectionManager.UseConnection(null, connection =>
         connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""jobqueue"""));
       Assert.Equal(0, count);
     }
@@ -48,7 +48,7 @@ namespace Hangfire.PostgreSql.Tests
       fetchedJob.RemoveFromQueue();
 
       // Assert
-      long count = _storage.UseConnection(null, connection =>
+      long count = _storage.Context.ConnectionManager.UseConnection(null, connection =>
         connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""jobqueue"""));
       Assert.Equal(3, count);
     }
@@ -65,7 +65,7 @@ namespace Hangfire.PostgreSql.Tests
       processingJob.Requeue();
 
       // Assert
-      dynamic record = _storage.UseConnection(null, connection =>
+      dynamic record = _storage.Context.ConnectionManager.UseConnection(null, connection =>
         connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single());
       Assert.Null(record.fetchedat);
     }
@@ -74,7 +74,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void Timer_UpdatesFetchedAtColumn()
     {
-      _storage.UseConnection(null, connection => {
+      _storage.Context.ConnectionManager.UseConnection(null, connection => {
         // Arrange
         DateTime fetchedAt = DateTime.UtcNow.AddMinutes(-5);
         long id = CreateJobQueueRecord(_storage, "1", "default", fetchedAt);
@@ -98,7 +98,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void RemoveFromQueue_AfterTimer_RemovesJobFromTheQueue()
     {
-      _storage.UseConnection(null, connection => {
+      _storage.Context.ConnectionManager.UseConnection(null, connection => {
         // Arrange
         long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
         using (PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage.Context, id, "1", "default", _fetchedAt))
@@ -120,7 +120,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void RequeueQueue_AfterTimer_SetsFetchedAtValueToNull()
     {
-      _storage.UseConnection(null, connection => {
+      _storage.Context.ConnectionManager.UseConnection(null, connection => {
         // Arrange
         long id = CreateJobQueueRecord(_storage, "1", "default", _fetchedAt);
         using (PostgreSqlFetchedJob processingJob = new PostgreSqlFetchedJob(_storage.Context, id, "1", "default", _fetchedAt))
@@ -150,7 +150,7 @@ namespace Hangfire.PostgreSql.Tests
       processingJob.Dispose();
 
       // Assert
-      dynamic record = _storage.UseConnection(null, connection =>
+      dynamic record = _storage.Context.ConnectionManager.UseConnection(null, connection =>
         connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single());
       Assert.Null(record.fetchedat);
     }
@@ -163,7 +163,7 @@ namespace Hangfire.PostgreSql.Tests
       ";
 
       return
-        storage.UseConnection(null, connection =>
+        storage.Context.ConnectionManager.UseConnection(null, connection =>
           connection.QuerySingle<long>(arrangeSql, 
             new { Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture), Queue = queue, FetchedAt = fetchedAt }));
     }

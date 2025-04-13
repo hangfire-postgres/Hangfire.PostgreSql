@@ -19,15 +19,9 @@
 //   
 //    Special thanks goes to him.
 
-using System.Data;
-using System.Data.Common;
-using System.Transactions;
-using Hangfire.Annotations;
 using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.Storage;
-using Npgsql;
-using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql;
 
@@ -92,55 +86,6 @@ public class PostgreSqlStorage : JobStorage
   public override string ToString()
   {
     return Context.ConnectionManager.ToString();
-  }
-
-  internal NpgsqlConnection CreateAndOpenConnection()
-  {
-    return Context.ConnectionManager.CreateAndOpenConnection();
-  }
-
-  internal void UseTransaction(DbConnection? dedicatedConnection,
-    [InstantHandle] Action<DbConnection, IDbTransaction?> action,
-    IsolationLevel? isolationLevel = null)
-  {
-    Context.ConnectionManager.UseTransaction(dedicatedConnection, action, isolationLevel);
-  }
-
-  internal T UseTransaction<T>(DbConnection? dedicatedConnection,
-    [InstantHandle] Func<DbConnection, IDbTransaction?, T> func,
-    IsolationLevel? isolationLevel = null)
-  {
-    return Context.ConnectionManager.UseTransaction(dedicatedConnection, func, isolationLevel);
-  }
-
-  internal void UseTransaction(DbConnection? dedicatedConnection, Action<DbConnection, DbTransaction?> action, Func<TransactionScope> transactionScopeFactory)
-  {
-    Context.ConnectionManager.UseTransaction(dedicatedConnection, action, transactionScopeFactory);
-  }
-
-  internal T UseTransaction<T>(DbConnection? dedicatedConnection, Func<DbConnection, DbTransaction?, T> func, Func<TransactionScope> transactionScopeFactory)
-  {
-    return Context.ConnectionManager.UseTransaction(dedicatedConnection, func, transactionScopeFactory);
-  }
-
-  internal TransactionScope CreateTransactionScope(IsolationLevel? isolationLevel, TimeSpan? timeout = null)
-  {
-    return Context.ConnectionManager.CreateTransactionScope(isolationLevel, timeout);
-  }
-
-  internal void UseConnection(DbConnection? dedicatedConnection, [InstantHandle] Action<DbConnection> action)
-  {
-    Context.ConnectionManager.UseConnection(dedicatedConnection, action);
-  }
-
-  internal T UseConnection<T>(DbConnection? dedicatedConnection, Func<DbConnection, T> func)
-  {
-    return Context.ConnectionManager.UseConnection(dedicatedConnection, func);
-  }
-
-  internal void ReleaseConnection(DbConnection? connection)
-  {
-    Context.ConnectionManager.ReleaseConnection(connection);
   }
 
   public override bool HasFeature(string featureId)
