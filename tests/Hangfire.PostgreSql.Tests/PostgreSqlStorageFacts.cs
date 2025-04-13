@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Transactions;
+﻿using System.Transactions;
 using Hangfire.PostgreSql.Factories;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Server;

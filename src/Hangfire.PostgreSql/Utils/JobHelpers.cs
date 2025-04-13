@@ -19,8 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-
 namespace Hangfire.PostgreSql.Utils;
 
 public static class JobHelpers

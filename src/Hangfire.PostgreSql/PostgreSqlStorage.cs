@@ -19,8 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Transactions;

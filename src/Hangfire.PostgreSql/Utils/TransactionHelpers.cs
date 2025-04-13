@@ -19,7 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using System.Transactions;
 
 namespace Hangfire.PostgreSql.Utils;

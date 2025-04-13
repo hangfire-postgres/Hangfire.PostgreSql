@@ -19,10 +19,8 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using System.Data;
 using System.Globalization;
-using System.IO;
 using System.Reflection;
 using System.Resources;
 using Hangfire.Logging;

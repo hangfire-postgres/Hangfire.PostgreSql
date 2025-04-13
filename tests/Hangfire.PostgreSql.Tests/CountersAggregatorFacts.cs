@@ -1,6 +1,4 @@
-﻿using System;
-using System.Threading;
-using Dapper;
+﻿using Dapper;
 using Hangfire.PostgreSql.Tests.Utils;
 using Npgsql;
 using Xunit;

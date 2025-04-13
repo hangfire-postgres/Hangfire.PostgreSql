@@ -19,14 +19,10 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
 using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Entities;

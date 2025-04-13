@@ -19,8 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-
 namespace Hangfire.PostgreSql;
 
 public static class PostgreSqlBootstrapperConfigurationExtensions

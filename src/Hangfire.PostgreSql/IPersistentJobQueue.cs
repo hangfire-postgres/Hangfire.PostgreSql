@@ -20,7 +20,6 @@
 //    Special thanks goes to him.
 
 using System.Data;
-using System.Threading;
 using Hangfire.Storage;
 
 namespace Hangfire.PostgreSql;

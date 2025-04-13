@@ -1,7 +1,4 @@
-﻿using System;
-using System.Data;
-using System.Linq;
-using System.Threading;
+﻿using System.Data;
 using Dapper;
 using Hangfire.PostgreSql.Tests.Utils;
 using Moq;

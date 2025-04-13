@@ -1,5 +1,4 @@
-﻿using System;
-using Hangfire.PostgreSql.Factories;
+﻿using Hangfire.PostgreSql.Factories;
 using Moq;
 using Npgsql;
 

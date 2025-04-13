@@ -1,6 +1,4 @@
-﻿using System;
-using System.Linq;
-using Moq;
+﻿using Moq;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests

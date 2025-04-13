@@ -19,9 +19,7 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using System.Data;
-using System.Threading;
 using Dapper;
 using Hangfire.Logging;
 using Hangfire.Server;

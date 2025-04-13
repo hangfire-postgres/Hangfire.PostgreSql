@@ -15,8 +15,6 @@
 
 // Borrowed from Hangfire
 
-using System;
-
 namespace Hangfire.PostgreSql.Utils;
 
 internal static class TimestampHelper

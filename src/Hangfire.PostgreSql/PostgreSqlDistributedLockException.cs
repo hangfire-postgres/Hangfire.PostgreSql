@@ -19,7 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using Hangfire.Storage;
 
 namespace Hangfire.PostgreSql;

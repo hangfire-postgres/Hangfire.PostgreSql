@@ -1,6 +1,5 @@
 ﻿using System.Data;
 using System.Reflection;
-using System.Threading;
 using Dapper;
 using Npgsql;
 using Xunit.Sdk;

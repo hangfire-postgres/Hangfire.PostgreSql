@@ -19,9 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Linq;
-
 namespace Hangfire.PostgreSql;
 
 public class SqlQueryProvider(string schemaName)

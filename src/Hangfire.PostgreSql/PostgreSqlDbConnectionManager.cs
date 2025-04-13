@@ -19,7 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using System.Data;
 using System.Data.Common;
 using System.Text;

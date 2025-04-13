@@ -19,9 +19,7 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using System.Collections;
-using System.Collections.Generic;
 
 namespace Hangfire.PostgreSql;
 

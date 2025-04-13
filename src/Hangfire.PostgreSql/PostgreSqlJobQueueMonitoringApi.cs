@@ -19,9 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dapper;
 using Hangfire.PostgreSql.Entities;
 

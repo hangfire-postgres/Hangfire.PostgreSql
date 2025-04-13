@@ -15,9 +15,6 @@
 
 // Borrowed from Hangfire
 
-using System;
-using System.Collections.Generic;
-
 namespace Hangfire.PostgreSql.Utils;
 
 internal static class ExceptionTypeHelper

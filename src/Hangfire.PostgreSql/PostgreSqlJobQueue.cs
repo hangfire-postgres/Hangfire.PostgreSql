@@ -19,12 +19,8 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using System.Data;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Dapper;
 using Hangfire.PostgreSql.Properties;
 using Hangfire.PostgreSql.Utils;

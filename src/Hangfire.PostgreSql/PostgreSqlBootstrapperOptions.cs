@@ -19,7 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using System;
 using Hangfire.PostgreSql.Factories;
 using Npgsql;
 
