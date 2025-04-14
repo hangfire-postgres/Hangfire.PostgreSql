@@ -57,27 +57,27 @@ internal class CountersAggregator : IServerComponent
       
     do
     {
-      string query = _context.QueryProvider.GetQuery(static schemaName =>
-        $"""
-         BEGIN;
+      string query = _context.QueryProvider.GetQuery(
+        """
+        BEGIN;
 
-         INSERT INTO {schemaName}.aggregatedcounter (key, value, expireat)	
-         SELECT
-           key,
-           SUM(value),
-           MAX(expireat)
-         FROM {schemaName}.counter
-         GROUP BY key
-         ON CONFLICT(key) DO UPDATE
-         SET value = aggregatedcounter.value + EXCLUDED.value, expireat = EXCLUDED.expireat;
+        INSERT INTO hangfire.aggregatedcounter (key, value, expireat)	
+        SELECT
+          key,
+          SUM(value),
+          MAX(expireat)
+        FROM hangfire.counter
+        GROUP BY key
+        ON CONFLICT(key) DO UPDATE
+        SET value = aggregatedcounter.value + EXCLUDED.value, expireat = EXCLUDED.expireat;
 
-         DELETE FROM {schemaName}.counter
-         WHERE key IN (
-           SELECT key FROM {schemaName}.aggregatedcounter
-         );
+        DELETE FROM hangfire.counter
+        WHERE key IN (
+          SELECT key FROM hangfire.aggregatedcounter
+        );
 
-         COMMIT
-         """);
+        COMMIT
+        """);
       _context.ConnectionManager.UseConnection(null,
         connection => removedCount = connection.Execute(query, new { now = DateTime.UtcNow, count = NumberOfRecordsInSinglePass }, commandTimeout: 0));
 

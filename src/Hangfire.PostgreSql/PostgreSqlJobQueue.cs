@@ -95,12 +95,7 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
 
   public void Enqueue(IDbConnection connection, string queue, string jobId)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       INSERT INTO {schemaName}.jobqueue (jobid, queue) 
-       VALUES (@JobId, @Queue);
-       """);
-
+    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.jobqueue (jobid, queue) VALUES (@JobId, @Queue)");
     connection.Execute(query, new { JobId = jobId.ParseJobId(), Queue = queue });
 
     if (_context.Options.EnableLongPolling)
@@ -134,21 +129,21 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
     long timeoutSeconds = (long)_context.Options.InvisibilityTimeout.Negate().TotalSeconds;
     FetchedJob? fetchedJob;
 
-    string query = _context.QueryProvider.GetQuery(schemaName =>
-      $"""
-       UPDATE {schemaName}.jobqueue
-       SET fetchedat = NOW()
-       WHERE id = (
-         SELECT id 
-         FROM {schemaName}.jobqueue 
-         WHERE queue = ANY (@Queues)
-         AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
-         ORDER BY fetchedat NULLS FIRST, queue, jobid
-         FOR UPDATE SKIP LOCKED
-         LIMIT 1
-       )
-       RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      UPDATE hangfire.jobqueue
+      SET fetchedat = NOW()
+      WHERE id = (
+        SELECT id 
+        FROM hangfire.jobqueue 
+        WHERE queue = ANY (@Queues)
+        AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{0} SECONDS')
+        ORDER BY fetchedat NULLS FIRST, queue, jobid
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
+      """, timeoutSeconds.ToString(CultureInfo.InvariantCulture));
 
     WaitHandle[] nextFetchIterationWaitHandles = new[] {
       cancellationToken.WaitHandle,
@@ -216,23 +211,23 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
     long timeoutSeconds = (long)_context.Options.InvisibilityTimeout.Negate().TotalSeconds;
     FetchedJob? markJobAsFetched = null;
 
-    string jobToFetchQuery = _context.QueryProvider.GetQuery(schemaName =>
-      $"""
-       SELECT id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt, updatecount AS UpdateCount
-       FROM {schemaName}.jobqueue 
-       WHERE queue = ANY (@Queues) AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
-       ORDER BY fetchedat NULLS FIRST, queue, jobid
-       LIMIT 1
-       """);
+    string jobToFetchQuery = _context.QueryProvider.GetQuery(
+      """
+      SELECT id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt, updatecount AS UpdateCount
+      FROM hangfire.jobqueue 
+      WHERE queue = ANY (@Queues) AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{0} SECONDS')
+      ORDER BY fetchedat NULLS FIRST, queue, jobid
+      LIMIT 1
+      """, timeoutSeconds.ToString(CultureInfo.InvariantCulture));
 
-    string markJobAsFetchedQuery = _context.QueryProvider.GetQuery(schemaName =>
-      $"""
-       UPDATE {schemaName}.jobqueue 
-       SET fetchedat = NOW(),
-           updatecount = (updatecount + 1) % 2000000000
-       WHERE id = @Id AND updatecount = @UpdateCount
-       RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
-       """);
+    string markJobAsFetchedQuery = _context.QueryProvider.GetQuery(
+      """
+      UPDATE hangfire.jobqueue 
+      SET fetchedat = NOW(),
+          updatecount = (updatecount + 1) % 2000000000
+      WHERE id = @Id AND updatecount = @UpdateCount
+      RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
+      """);
 
     do
     {

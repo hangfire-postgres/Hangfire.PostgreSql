@@ -163,7 +163,7 @@ public static class PostgreSqlDistributedLock
 
         DateTime timeout = onlyExpired ? DateTime.UtcNow - context.Options.DistributedLockTimeout : DateTime.MaxValue;
 
-        string query = context.QueryProvider.GetQuery(static schemaName => $"DELETE FROM {schemaName}.lock WHERE resource = @Resource AND acquired < @Timeout");
+        string query = context.QueryProvider.GetQuery("DELETE FROM hangfire.lock WHERE resource = @Resource AND acquired < @Timeout");
         int rowsAffected = connection.Execute(query, new { Resource = resource, Timeout = timeout }, trx);
 
         trx?.Commit();
@@ -191,16 +191,16 @@ public static class PostgreSqlDistributedLock
       {
         trx = BeginTransactionIfNotPresent(connection);
 
-        string query = context.QueryProvider.GetQuery(static schemaName =>
-          $"""
-           INSERT INTO {schemaName}.lock (resource, acquired) 
-           SELECT @Resource, @Acquired
-           WHERE NOT EXISTS (
-               SELECT 1 FROM {schemaName}.lock
-               WHERE resource = @Resource
-           )
-           ON CONFLICT DO NOTHING
-           """);
+        string query = context.QueryProvider.GetQuery(
+          """
+          INSERT INTO hangfire.lock (resource, acquired) 
+          SELECT @Resource, @Acquired
+          WHERE NOT EXISTS (
+              SELECT 1 FROM hangfire.lock
+              WHERE resource = @Resource
+          )
+          ON CONFLICT DO NOTHING
+          """);
         int rowsAffected = connection.Execute(query, new { Resource = resource, Acquired = DateTime.UtcNow }, trx);
         trx?.Commit();
 
@@ -224,22 +224,21 @@ public static class PostgreSqlDistributedLock
   {
     public static bool TryLock(IDbConnection connection, PostgreSqlStorageContext context, string resource)
     {
-      string query = context.QueryProvider.GetQuery(static schemaName =>
-        $"""
-         INSERT INTO {schemaName}.lock (resource, updatecount, acquired) 
-         SELECT @Resource, 0, @Acquired
-         WHERE NOT EXISTS (
-             SELECT 1 FROM {schemaName}.lock
-             WHERE resource = @Resource
-         )
-         ON CONFLICT DO NOTHING
-         """);
+      string query = context.QueryProvider.GetQuery(
+        """
+        INSERT INTO hangfire.lock (resource, updatecount, acquired) 
+        SELECT @Resource, 0, @Acquired
+        WHERE NOT EXISTS (
+            SELECT 1 FROM hangfire.lock
+            WHERE resource = @Resource
+        )
+        ON CONFLICT DO NOTHING
+        """);
       connection.Execute(query, new { Resource = resource, Acquired = DateTime.UtcNow });
 
       // The lock is acquired if the updatecount is 0. If it is 1, it means that the lock was already acquired by another process.
       // In that case, we need to update the updatecount to 1 to indicate that the lock is now held by this process.
-      string updateQuery = context.QueryProvider.GetQuery(static schemaName =>
-        $"UPDATE {schemaName}.lock SET updatecount = 1 WHERE updatecount = 0 AND resource = @Resource");
+      string updateQuery = context.QueryProvider.GetQuery("UPDATE hangfire.lock SET updatecount = 1 WHERE updatecount = 0 AND resource = @Resource");
       int rowsAffected = connection.Execute(updateQuery, new { Resource = resource });
 
       return rowsAffected > 0;

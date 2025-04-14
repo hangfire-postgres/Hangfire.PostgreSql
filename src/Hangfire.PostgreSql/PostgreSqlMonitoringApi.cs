@@ -105,7 +105,7 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
   public IList<ServerDto> Servers()
   {
     return UseConnection(connection => {
-      string query = _context.QueryProvider.GetQuery(static schemaName => $"SELECT * FROM {schemaName}.server");
+      string query = _context.QueryProvider.GetQuery("SELECT * FROM hangfire.server");
       List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>(query)
         .AsEnumerable()
         .Select(server => (server, SerializationHelper.Deserialize<ServerData>(server.Data)))
@@ -219,34 +219,34 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
   public JobDetailsDto? JobDetails(string jobId)
   {
     return UseConnection(connection => {
-      string query = _context.QueryProvider.GetQuery(static schemaName =>
-        $"""
-         SELECT
-           id AS "Id",
-           invocationdata AS "InvocationData",
-           arguments AS "Arguments",
-           createdat AS "CreatedAt",
-           expireat AS "ExpireAt"
-         FROM {schemaName}.job 
-         WHERE id = @Id;
+      string query = _context.QueryProvider.GetQuery(
+        """
+        SELECT
+          id AS "Id",
+          invocationdata AS "InvocationData",
+          arguments AS "Arguments",
+          createdat AS "CreatedAt",
+          expireat AS "ExpireAt"
+        FROM hangfire.job
+        WHERE id = @Id;
 
-         SELECT
-           jobid AS "JobId",
-           name AS "Name",
-           value AS "Value" 
-         FROM {schemaName}.jobparameter 
-         WHERE jobid = @Id;
+        SELECT
+          jobid AS "JobId",
+          name AS "Name",
+          value AS "Value"
+        FROM hangfire.jobparameter
+        WHERE jobid = @Id;
 
-         SELECT
-           jobid AS "JobId",
-           name AS "Name",
-           reason AS "Reason",
-           createdat AS "CreatedAt",
-           data AS "Data"
-         FROM {schemaName}.state
-         WHERE jobid = @Id
-         ORDER BY id DESC
-         """);
+        SELECT
+          jobid AS "JobId",
+          name AS "Name",
+          reason AS "Reason",
+          createdat AS "CreatedAt",
+          data AS "Data"
+        FROM hangfire.state
+        WHERE jobid = @Id
+        ORDER BY id DESC
+        """);
       using SqlMapper.GridReader multi = connection.QueryMultiple(query, new { Id = jobId.ParseJobId() });
       SqlJob? job = multi.Read<SqlJob>().SingleOrDefault();
       if (job == null)
@@ -290,38 +290,38 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
   public StatisticsDto GetStatistics()
   {
     return UseConnection(connection => {
-      string query = _context.QueryProvider.GetQuery(static schemaName =>
-        $"""
-         SELECT statename AS "State", COUNT(id) AS "Count" 
-         FROM {schemaName}.job
-         WHERE statename IS NOT NULL
-         GROUP BY statename;
+      string query = _context.QueryProvider.GetQuery(
+        """
+        SELECT statename AS "State", COUNT(id) AS "Count" 
+        FROM hangfire.job
+        WHERE statename IS NOT NULL
+        GROUP BY statename;
 
-         SELECT COUNT(*) 
-         FROM {schemaName}.server;
+        SELECT COUNT(*) 
+        FROM hangfire.server;
 
-         SELECT SUM(value) FROM
-           (SELECT SUM(value) AS value
-           FROM {schemaName}.counter
-           WHERE key = 'stats:succeeded'
-           UNION ALL
-           SELECT SUM(value) AS value
-           FROM {schemaName}.aggregatedcounter
-           WHERE key = 'stats:succeeded') c;
+        SELECT SUM(value) FROM
+          (SELECT SUM(value) AS value
+          FROM hangfire.counter
+          WHERE key = 'stats:succeeded'
+          UNION ALL
+          SELECT SUM(value) AS value
+          FROM hangfire.aggregatedcounter
+          WHERE key = 'stats:succeeded') c;
 
-         SELECT SUM(value) FROM
-           (SELECT SUM(value) AS value
-           FROM {schemaName}.counter
-           WHERE key = 'stats:deleted'
-           UNION ALL
-           SELECT SUM(value) AS value
-           FROM {schemaName}.aggregatedcounter
-           WHERE key = 'stats:deleted') c;
+        SELECT SUM(value) FROM
+          (SELECT SUM(value) AS value
+          FROM hangfire.counter
+          WHERE key = 'stats:deleted'
+          UNION ALL
+          SELECT SUM(value) AS value
+          FROM hangfire.aggregatedcounter
+          WHERE key = 'stats:deleted') c;
 
-         SELECT COUNT(*)
-         FROM {schemaName}.set
-         WHERE key = 'recurring-jobs';
-         """);
+        SELECT COUNT(*)
+        FROM hangfire.set
+        WHERE key = 'recurring-jobs';
+        """);
 
       StatisticsDto stats = new();
       using (SqlMapper.GridReader multi = connection.QueryMultiple(query))
@@ -388,25 +388,25 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
 
   private Dictionary<DateTime, long> GetTimelineStats(IDictionary<string, DateTime> keyMaps)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       WITH aggregated_counters AS (
-         SELECT key, value
-         FROM {schemaName}.aggregatedcounter
-         WHERE key = ANY(@Keys)
-       ), regular_counters AS (
-         SELECT key, value
-         FROM {schemaName}.counter
-         WHERE key = ANY(@Keys)
-       ), all_counters AS (
-         SELECT * FROM aggregated_counters
-         UNION ALL
-         SELECT * FROM regular_counters
-       )
-       SELECT key, COALESCE(SUM(value), 0) AS count
-       FROM all_counters
-       GROUP BY key
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      WITH aggregated_counters AS (
+        SELECT key, value
+        FROM hangfire.aggregatedcounter
+        WHERE key = ANY(@Keys)
+      ), regular_counters AS (
+        SELECT key, value
+        FROM hangfire.counter
+        WHERE key = ANY(@Keys)
+      ), all_counters AS (
+        SELECT * FROM aggregated_counters
+        UNION ALL
+        SELECT * FROM regular_counters
+      )
+      SELECT key, COALESCE(SUM(value), 0) AS count
+      FROM all_counters
+      GROUP BY key
+      """);
 
     Dictionary<string, long> valuesMap = UseConnection(connection =>
       connection.Query<(string Key, long Count)>(query, new { Keys = keyMaps.Keys.ToList() }).ToDictionary(x => x.Key, x => x.Count));
@@ -439,24 +439,24 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
 
   private JobList<EnqueuedJobDto> EnqueuedJobs(IEnumerable<long> jobIds)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       SELECT
-         j.id AS "Id",
-         j.invocationdata AS "InvocationData",
-         j.arguments AS "Arguments",
-         j.createdat AS "CreatedAt",
-         j.expireat AS "ExpireAt",
-         s.name AS "StateName",
-         s.reason AS "StateReason",
-         s.data AS "StateData"
-       FROM {schemaName}.job AS j
-       LEFT JOIN {schemaName}.state AS s ON s.id = j.stateid
-       LEFT JOIN {schemaName}.jobqueue AS jq ON jq.jobid = j.id
-       WHERE
-         j.id = ANY (@JobIds)
-         AND jq.fetchedat IS NULL
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT
+        j.id AS "Id",
+        j.invocationdata AS "InvocationData",
+        j.arguments AS "Arguments",
+        j.createdat AS "CreatedAt",
+        j.expireat AS "ExpireAt",
+        s.name AS "StateName",
+        s.reason AS "StateReason",
+        s.data AS "StateData"
+      FROM hangfire.job AS j
+      LEFT JOIN hangfire.state AS s ON s.id = j.stateid
+      LEFT JOIN hangfire.jobqueue AS jq ON jq.jobid = j.id
+      WHERE
+        j.id = ANY (@JobIds)
+        AND jq.fetchedat IS NULL
+      """);
 
     List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query, new { JobIds = jobIds.ToList() }).ToList());
 
@@ -472,7 +472,7 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
 
   private long GetNumberOfJobsByStateName(string stateName)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName => $"SELECT COUNT(id) FROM {schemaName}.job WHERE statename = @StateName");
+    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.job WHERE statename = @StateName");
     return UseConnection(connection => connection.QuerySingle<long>(query, new { StateName = stateName }));
   }
 
@@ -493,24 +493,24 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
 
   private JobList<TDto> GetJobs<TDto>(int from, int count, string stateName, Func<SqlJob, Job?, Dictionary<string, string>, TDto> selector)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       SELECT
-           j.id AS "Id",
-           j.invocationdata AS "InvocationData",
-           j.arguments AS "Arguments",
-           j.createdat AS "CreatedAt", 
-           j.expireat AS "ExpireAt",
-           NULL AS "FetchedAt",
-           j.statename AS "StateName",
-           s.reason AS "StateReason",
-           s.data AS "StateData"
-       FROM {schemaName}.job AS j
-       LEFT JOIN {schemaName}.state AS s ON j.stateid = s.id
-       WHERE j.statename = @StateName
-       ORDER BY j.id DESC
-       LIMIT @Limit OFFSET @Offset
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT
+          j.id AS "Id",
+          j.invocationdata AS "InvocationData",
+          j.arguments AS "Arguments",
+          j.createdat AS "CreatedAt", 
+          j.expireat AS "ExpireAt",
+          NULL AS "FetchedAt",
+          j.statename AS "StateName",
+          s.reason AS "StateReason",
+          s.data AS "StateData"
+      FROM hangfire.job AS j
+      LEFT JOIN hangfire.state AS s ON j.stateid = s.id
+      WHERE j.statename = @StateName
+      ORDER BY j.id DESC
+      LIMIT @Limit OFFSET @Offset
+      """);
 
     List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query, new { StateName = stateName, Limit = count, Offset = from }).ToList());
 
@@ -539,25 +539,25 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
   private JobList<FetchedJobDto> FetchedJobs(
     IEnumerable<long> jobIds)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       SELECT
-         j.id AS "Id",
-         j.invocationdata AS "InvocationData",
-         j.arguments AS "Arguments",
-         j.createdat AS "CreatedAt",
-         j.expireat AS "ExpireAt",
-         jq.fetchedat AS "FetchedAt",
-         j.statename AS "StateName",
-         s.reason AS "StateReason",
-         s.data AS "StateData"
-       FROM {schemaName}.job AS j
-       LEFT JOIN {schemaName}.state AS s ON j.stateid = s.id
-       LEFT JOIN {schemaName}.jobqueue AS jq ON jq.jobid = j.id
-       WHERE
-         j.id = ANY (@JobIds)
-         AND jq.fetchedat IS NOT NULL
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT
+        j.id AS "Id",
+        j.invocationdata AS "InvocationData",
+        j.arguments AS "Arguments",
+        j.createdat AS "CreatedAt",
+        j.expireat AS "ExpireAt",
+        jq.fetchedat AS "FetchedAt",
+        j.statename AS "StateName",
+        s.reason AS "StateReason",
+        s.data AS "StateData"
+      FROM hangfire.job AS j
+      LEFT JOIN hangfire.state AS s ON j.stateid = s.id
+      LEFT JOIN hangfire.jobqueue AS jq ON jq.jobid = j.id
+      WHERE
+        j.id = ANY (@JobIds)
+        AND jq.fetchedat IS NOT NULL
+      """);
 
     List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query, new { JobIds = jobIds.ToList() }).ToList());
 

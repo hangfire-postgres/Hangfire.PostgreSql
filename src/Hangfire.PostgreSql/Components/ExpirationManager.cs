@@ -77,16 +77,16 @@ internal class ExpirationManager : IBackgroundProcess, IServerComponent
         do
         {
           using IDbTransaction transaction = connection.BeginTransaction();
-          string query = _context.QueryProvider.GetQuery(schemaName =>
-            $"""
-            DELETE FROM {schemaName}.{table}
+          string query = _context.QueryProvider.GetQuery(
+            """
+            DELETE FROM hangfire.{0}
             WHERE id IN (
               SELECT id
-              FROM {schemaName}.{table}
+              FROM hangfire.{0}
               WHERE expireat < NOW()
               LIMIT @Count
             )
-            """);
+            """, table);
           removedCount = connection.Execute(query, new { Count = _context.Options.DeleteExpiredBatchSize }, transaction);
 
           if (removedCount <= 0)
@@ -126,10 +126,10 @@ internal class ExpirationManager : IBackgroundProcess, IServerComponent
   {
     UseConnectionDistributedLock(connection => {
       using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-      string query = _context.QueryProvider.GetQuery(static schemaName =>
-        $"""
+      string query = _context.QueryProvider.GetQuery(
+        """
         WITH counters AS (
-          DELETE FROM {schemaName}.counter
+          DELETE FROM hangfire.counter
           WHERE key = @Key
           AND expireat IS NULL
           RETURNING *
@@ -142,7 +142,7 @@ internal class ExpirationManager : IBackgroundProcess, IServerComponent
 
       if (aggregatedValue > 0)
       {
-        string insertQuery = _context.QueryProvider.GetQuery(static schemaName => $"INSERT INTO {schemaName}.counter (key, value) VALUES (@Key, @Value)");
+        string insertQuery = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter (key, value) VALUES (@Key, @Value)");
         connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
       }
     });

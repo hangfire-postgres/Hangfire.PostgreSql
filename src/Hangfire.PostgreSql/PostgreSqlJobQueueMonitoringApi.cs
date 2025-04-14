@@ -43,11 +43,7 @@ internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringAp
 
   public IEnumerable<string> GetQueues()
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       SELECT DISTINCT queue 
-       FROM {schemaName}.jobqueue
-       """);
+    string query = _context.QueryProvider.GetQuery("SELECT DISTINCT queue FROM hangfire.jobqueue");
     return _context.ConnectionManager.UseConnection(null, connection => connection.Query<string>(query).ToList());
   }
 
@@ -63,19 +59,19 @@ internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringAp
 
   public EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue)
   {
-    string query = _context.QueryProvider.GetQuery(static schemaName =>
-      $"""
-       SELECT (
-           SELECT COUNT(*) 
-           FROM {schemaName}.jobqueue 
-           WHERE fetchedat IS NULL AND queue = @Queue
-       ) AS EnqueuedCount, 
-       (
-         SELECT COUNT(*) 
-         FROM {schemaName}.jobqueue 
-         WHERE fetchedat IS NOT NULL AND queue = @Queue
-       ) AS FetchedCount
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT (
+          SELECT COUNT(*) 
+          FROM hangfire.jobqueue 
+          WHERE fetchedat IS NULL AND queue = @Queue
+      ) AS EnqueuedCount, 
+      (
+        SELECT COUNT(*) 
+        FROM hangfire.jobqueue 
+        WHERE fetchedat IS NOT NULL AND queue = @Queue
+      ) AS FetchedCount
+      """);
 
     (long enqueuedCount, long fetchedCount) = _context.ConnectionManager.UseConnection(null,
       connection => connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(query, new { Queue = queue }));
@@ -88,18 +84,18 @@ internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringAp
 
   private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
   {
-    string query = _context.QueryProvider.GetQuery(schemaName =>
-      $"""
-       SELECT j.id 
-       FROM {schemaName}.jobqueue jq
-       LEFT JOIN {schemaName}.job j ON jq.jobid = j.id
-       WHERE
-         jq.queue = @Queue 
-         AND jq.fetchedat {(fetched ? "IS NOT NULL" : "IS NULL")}
-         AND j.id IS NOT NULL
-       ORDER BY jq.fetchedat, jq.jobid
-       LIMIT @Limit OFFSET @Offset
-       """);
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT j.id 
+      FROM hangfire.jobqueue jq
+      LEFT JOIN hangfire.job j ON jq.jobid = j.id
+      WHERE
+        jq.queue = @Queue 
+        AND jq.fetchedat {0}
+        AND j.id IS NOT NULL
+      ORDER BY jq.fetchedat, jq.jobid
+      LIMIT @Limit OFFSET @Offset
+      """, (fetched ? "IS NOT NULL" : "IS NULL"));
 
     return _context.ConnectionManager.UseConnection(null,
       connection => connection.Query<long>(query, new { Queue = queue, Offset = from, Limit = perPage }).ToList());

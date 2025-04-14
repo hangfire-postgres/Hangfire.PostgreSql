@@ -18,6 +18,7 @@
     <FileVersion>1.9.4.0</FileVersion>
     <AssemblyVersion>1.9.4.0</AssemblyVersion>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <RepositoryUrl>https://github.com/frankhommers/Hangfire.PostgreSql</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -47,8 +48,16 @@
   <ItemGroup>
     <None Include="..\..\LICENSE.md">
       <Pack>True</Pack>
-      <PackagePath></PackagePath>
+      <PackagePath>\</PackagePath>
     </None>
+    <None Include="..\..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hangfire.PostgreSql.SourceGeneration\Hangfire.PostgreSql.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

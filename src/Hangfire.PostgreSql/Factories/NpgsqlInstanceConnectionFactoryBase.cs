@@ -65,7 +65,7 @@ public abstract class NpgsqlInstanceConnectionFactoryBase : IConnectionFactory
     }
     catch (ArgumentException ex)
     {
-      throw new ArgumentException($"Connection string is not valid", nameof(connectionString), ex);
+      throw new ArgumentException("Connection string is not valid", nameof(connectionString), ex);
     }
   }
 

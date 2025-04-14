@@ -19,15 +19,48 @@
 //   
 //    Special thanks goes to him.
 
+using System.Reflection;
+
 namespace Hangfire.PostgreSql;
 
 public class SqlQueryProvider(string schemaName)
 {
   private readonly string _schemaName = ProcessSchemaName(schemaName);
+  private readonly Dictionary<string, string> _queryCache = new();
+  private readonly Dictionary<string, MethodInfo> _methodCache = new();
+
+  public string GetQuery(string query)
+  {
+    if (_queryCache.TryGetValue(query, out string result))
+    {
+        return result;
+    }
+
+    Func<string, string, string>? queryFunc = (Func<string, string, string>)GetQueryMethod("GetQuery").Invoke(null, null);
+    return _queryCache[query] = queryFunc(_schemaName, query);
+  }
+
+  public string GetQuery(string query, params object[] args)
+  {
+    // No cache for queries with arguments
+    Func<string, string, object[], string>? queryFunc = (Func<string, string, object[], string>)GetQueryMethod("GetQueryWithArgs").Invoke(null, null);
+    return queryFunc(_schemaName, query, args);
+  }
 
   public string GetQuery(Func<string, string> query)
   {
     return query(_schemaName);
+  }
+
+  private MethodInfo GetQueryMethod(string methodName)
+  {
+    if (_methodCache.TryGetValue(methodName, out MethodInfo method))
+    {
+      return method;
+    }
+
+    return _methodCache[methodName] = typeof(GeneratedQueries.QueryContainer).GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)
+      ?? throw new InvalidOperationException($"Method '{methodName}' not found in the query container.");
   }
 
   private static string ProcessSchemaName(string schemaName)
@@ -39,3 +72,4 @@ public class SqlQueryProvider(string schemaName)
         : schemaName;
   }
 }
+
