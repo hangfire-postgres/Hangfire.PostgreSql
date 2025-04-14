@@ -20,6 +20,7 @@
 //    Special thanks goes to him.
 
 using Hangfire.Logging;
+using Hangfire.PostgreSql.Components;
 using Hangfire.Server;
 using Hangfire.Storage;
 

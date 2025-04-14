@@ -24,6 +24,14 @@ using Hangfire.PostgreSql.Entities;
 
 namespace Hangfire.PostgreSql;
 
+public interface IPersistentJobQueueMonitoringApi
+{
+  IEnumerable<string> GetQueues();
+  IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage);
+  IEnumerable<long> GetFetchedJobIds(string queue, int from, int perPage);
+  EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue);
+}
+
 internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
 {
   private readonly PostgreSqlStorageContext _context;

@@ -29,6 +29,12 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql;
 
+public interface IPersistentJobQueue
+{
+  IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken);
+  void Enqueue(IDbConnection connection, string queue, string jobId);
+}
+
 public class PostgreSqlJobQueue : IPersistentJobQueue
 {
   private const string JobNotificationChannel = "new_job";

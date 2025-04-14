@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Hangfire.PostgreSql.Components;
 using Hangfire.PostgreSql.Tests.Utils;
 using Npgsql;
 using Xunit;

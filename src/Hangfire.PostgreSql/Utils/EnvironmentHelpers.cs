@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -19,13 +19,14 @@
 //   
 //    Special thanks goes to him.
 
-using System.Data;
-using Hangfire.Storage;
+namespace Hangfire.PostgreSql.Utils;
 
-namespace Hangfire.PostgreSql;
-
-public interface IPersistentJobQueue
+internal static class EnvironmentHelpers
 {
-  IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken);
-  void Enqueue(IDbConnection connection, string queue, string jobId);
+  private static bool? _isMono;
+
+  public static bool IsMono()
+  {
+    return _isMono ??= Type.GetType("Mono.Runtime") != null;
+  }
 }

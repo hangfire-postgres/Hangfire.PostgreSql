@@ -21,6 +21,12 @@
 
 namespace Hangfire.PostgreSql;
 
+public interface IPersistentJobQueueProvider
+{
+  IPersistentJobQueue GetJobQueue();
+  IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi();
+}
+
 internal class PostgreSqlJobQueueProvider : IPersistentJobQueueProvider
 {
   private readonly PostgreSqlStorageContext _context;

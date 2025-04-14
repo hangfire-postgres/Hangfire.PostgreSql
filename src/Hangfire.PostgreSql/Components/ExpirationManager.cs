@@ -25,7 +25,7 @@ using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.Storage;
 
-namespace Hangfire.PostgreSql;
+namespace Hangfire.PostgreSql.Components;
 #pragma warning disable CS0618
 internal class ExpirationManager : IBackgroundProcess, IServerComponent
 #pragma warning restore CS0618

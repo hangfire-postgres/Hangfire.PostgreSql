@@ -1,4 +1,5 @@
 ﻿using System.Transactions;
+using Hangfire.PostgreSql.Components;
 using Hangfire.PostgreSql.Factories;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.Server;

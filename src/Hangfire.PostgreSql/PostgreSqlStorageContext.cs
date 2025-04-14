@@ -1,4 +1,6 @@
-﻿namespace Hangfire.PostgreSql;
+﻿using Hangfire.PostgreSql.Components;
+
+namespace Hangfire.PostgreSql;
 
 internal sealed class PostgreSqlStorageContext(PostgreSqlStorageOptions options, PostgreSqlDbConnectionManager connectionManager)
 {

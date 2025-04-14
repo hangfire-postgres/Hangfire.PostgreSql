@@ -23,7 +23,7 @@ using System.Collections.Concurrent;
 using Hangfire.Common;
 using Hangfire.Server;
 
-namespace Hangfire.PostgreSql;
+namespace Hangfire.PostgreSql.Components;
 #pragma warning disable CS0618
 internal sealed class PostgreSqlHeartbeatProcess : IServerComponent, IBackgroundProcess
 #pragma warning restore CS0618
@@ -37,7 +37,7 @@ internal sealed class PostgreSqlHeartbeatProcess : IServerComponent, IBackground
 
   public void Untrack(PostgreSqlFetchedJob item)
   {
-    _items.TryRemove(item, out object _);
+    _items.TryRemove(item, out object? _);
   }
     
   public void Execute(CancellationToken cancellationToken)
