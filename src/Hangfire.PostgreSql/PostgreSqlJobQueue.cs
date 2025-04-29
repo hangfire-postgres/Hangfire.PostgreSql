@@ -21,7 +21,6 @@
 
 using System.Data;
 using System.Globalization;
-using Dapper;
 using Hangfire.PostgreSql.Properties;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
@@ -95,12 +94,12 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
 
   public void Enqueue(IDbConnection connection, string queue, string jobId)
   {
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.jobqueue (jobid, queue) VALUES (@JobId, @Queue)");
-    connection.Execute(query, new { JobId = jobId.ParseJobId(), Queue = queue });
+    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.jobqueue (jobid, queue) VALUES ($1, $2)");
+    connection.Process(query).WithParameters(jobId.ParseJobId(), queue).Execute();
 
     if (_context.Options.EnableLongPolling)
     {
-      connection.Execute($"NOTIFY {JobNotificationChannel}");
+      connection.Process($"NOTIFY {JobNotificationChannel}").Execute();
     }
   }
 
@@ -126,7 +125,6 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
       throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
     }
 
-    long timeoutSeconds = (long)_context.Options.InvisibilityTimeout.Negate().TotalSeconds;
     FetchedJob? fetchedJob;
 
     string query = _context.QueryProvider.GetQuery(
@@ -134,16 +132,15 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
       UPDATE hangfire.jobqueue
       SET fetchedat = NOW()
       WHERE id = (
-        SELECT id 
-        FROM hangfire.jobqueue 
-        WHERE queue = ANY (@Queues)
-        AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{0} SECONDS')
+        SELECT id
+        FROM hangfire.jobqueue
+        WHERE queue = ANY ($1) AND (fetchedat IS NULL OR fetchedat < NOW() - $2)
         ORDER BY fetchedat NULLS FIRST, queue, jobid
         FOR UPDATE SKIP LOCKED
         LIMIT 1
       )
-      RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
-      """, timeoutSeconds.ToString(CultureInfo.InvariantCulture));
+      RETURNING id, jobid, queue, fetchedat
+      """);
 
     WaitHandle[] nextFetchIterationWaitHandles = new[] {
       cancellationToken.WaitHandle,
@@ -161,7 +158,15 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
           try
           {
             using NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-            FetchedJob? jobToFetch = connection.Query<FetchedJob>(query, new { Queues = queues.ToList() }, trx).SingleOrDefault();
+            FetchedJob? jobToFetch = connection.Process(query)
+              .WithParameters(queues.ToList(), _context.Options.InvisibilityTimeout)
+              .Select(reader => new FetchedJob {
+                Id = reader.GetInt64(0),
+                JobId = reader.GetInt64(1),
+                Queue = reader.GetString(2),
+                FetchedAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+              })
+              .SingleOrDefault();
 
             trx.Commit();
 
@@ -208,33 +213,40 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
       throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
     }
 
-    long timeoutSeconds = (long)_context.Options.InvisibilityTimeout.Negate().TotalSeconds;
     FetchedJob? markJobAsFetched = null;
 
     string jobToFetchQuery = _context.QueryProvider.GetQuery(
       """
-      SELECT id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt, updatecount AS UpdateCount
+      SELECT id, jobid, queue, fetchedat, updatecount
       FROM hangfire.jobqueue 
-      WHERE queue = ANY (@Queues) AND (fetchedat IS NULL OR fetchedat < NOW() + INTERVAL '{0} SECONDS')
+      WHERE queue = ANY ($1) AND (fetchedat IS NULL OR fetchedat < NOW() - $2)
       ORDER BY fetchedat NULLS FIRST, queue, jobid
       LIMIT 1
-      """, timeoutSeconds.ToString(CultureInfo.InvariantCulture));
+      """);
 
     string markJobAsFetchedQuery = _context.QueryProvider.GetQuery(
       """
       UPDATE hangfire.jobqueue 
-      SET fetchedat = NOW(),
-          updatecount = (updatecount + 1) % 2000000000
-      WHERE id = @Id AND updatecount = @UpdateCount
-      RETURNING id AS Id, jobid AS JobId, queue AS Queue, fetchedat AS FetchedAt
+      SET fetchedat = NOW(), updatecount = (updatecount + 1) % 2000000000
+      WHERE id = $1 AND updatecount = $2
+      RETURNING id, jobid, queue, fetchedat
       """);
 
     do
     {
       cancellationToken.ThrowIfCancellationRequested();
 
-      FetchedJob? jobToFetch = _context.ConnectionManager.UseConnection(null,
-        connection => connection.QuerySingleOrDefault<FetchedJob>(jobToFetchQuery, new { Queues = queues.ToList() }));
+      FetchedJob? jobToFetch = _context.ConnectionManager.UseConnection(null, connection => connection
+        .Process(jobToFetchQuery)
+        .WithParameters(queues.ToList(), _context.Options.InvisibilityTimeout)
+        .Select(reader => new FetchedJob {
+          Id = reader.GetInt64(0),
+          JobId = reader.GetInt64(1),
+          Queue = reader.GetString(2),
+          FetchedAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+          UpdateCount = reader.GetInt32(4),
+        })
+        .SingleOrDefault());
 
       if (jobToFetch == null)
       {
@@ -249,7 +261,16 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
       }
       else
       {
-        markJobAsFetched = _context.ConnectionManager.UseConnection(null, connection => connection.QuerySingleOrDefault<FetchedJob>(markJobAsFetchedQuery, jobToFetch));
+        markJobAsFetched = _context.ConnectionManager.UseConnection(null, connection => connection
+          .Process(markJobAsFetchedQuery)
+          .WithParameters(jobToFetch.Id, jobToFetch.UpdateCount)
+          .Select(reader => new FetchedJob {
+            Id = reader.GetInt64(0),
+            JobId = reader.GetInt64(1),
+            Queue = reader.GetString(2),
+            FetchedAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+          })
+          .SingleOrDefault());
       }
     }
     while (markJobAsFetched == null);
@@ -282,12 +303,12 @@ public class PostgreSqlJobQueue : IPersistentJobQueue
         {
           if (clonedConnection.State != ConnectionState.Open)
           {
-            await clonedConnection.OpenAsync(cancellationToken); // Open so that Dapper doesn't auto-close.
+            await clonedConnection.OpenAsync(cancellationToken); // Open so that SqlQueryProcessor doesn't auto-close.
           }
 
           while (!cancellationToken.IsCancellationRequested)
           {
-            await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
+            await clonedConnection.Process($"LISTEN {JobNotificationChannel}").ExecuteAsync();
             await clonedConnection.WaitAsync(cancellationToken);
             JobQueueNotification.Set();
           }

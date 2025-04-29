@@ -25,6 +25,9 @@ dotnet_diagnostic.CA1711.severity = suggestion
 dotnet_diagnostic.CA1716.severity = suggestion
 # Identifiers should not contain underscores
 dotnet_diagnostic.CA1707.severity = suggestion
+# Enable analyzer release tracking for the analyzer project
+dotnet_analyzer_diagnostic.category-MicrosoftCodeAnalysisReleaseTracking.severity = none
+
 
 [*]
 csharp_indent_braces = false
@@ -221,7 +224,7 @@ dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_method = false:suggestion
 dotnet_style_qualification_for_property = false:suggestion
 dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
-file_header_template = 
+file_header_template =
 
 # ReSharper properties
 resharper_accessor_owner_body = expression_body
@@ -440,7 +443,7 @@ resharper_indent_typearg_angles = outside_and_inside
 resharper_indent_typeparam_angles = outside_and_inside
 resharper_indent_type_constraints = true
 resharper_indent_wrapped_function_names = false
-resharper_instance_members_qualify_declared_in = 
+resharper_instance_members_qualify_declared_in =
 resharper_int_align_assignments = false
 resharper_int_align_binary_expressions = false
 resharper_int_align_declaration_names = false
@@ -485,8 +488,8 @@ resharper_line_break_before_requires_clause = do_not_change
 resharper_linkage_specification_braces = end_of_line
 resharper_linkage_specification_indentation = none
 resharper_local_function_body = block_body
-resharper_macro_block_begin = 
-resharper_macro_block_end = 
+resharper_macro_block_begin =
+resharper_macro_block_end =
 resharper_max_array_initializer_elements_on_line = 10000
 resharper_max_attribute_length_for_same_line = 38
 resharper_max_enum_members_on_line = 1
@@ -549,7 +552,7 @@ resharper_remove_this_qualifier = true
 resharper_requires_expression_braces = next_line
 resharper_resx_attribute_indent = single_indent
 resharper_resx_insert_final_newline = false
-resharper_resx_linebreak_before_elements = 
+resharper_resx_linebreak_before_elements =
 resharper_resx_max_blank_lines_between_tags = 0
 resharper_resx_max_line_length = 2147483647
 resharper_resx_pi_attributes_indent = align_by_first_attribute
@@ -779,7 +782,7 @@ resharper_xmldoc_wrap_tags_and_pi = false
 resharper_xmldoc_wrap_text = true
 resharper_xml_attribute_indent = align_by_first_attribute
 resharper_xml_insert_final_newline = false
-resharper_xml_linebreak_before_elements = 
+resharper_xml_linebreak_before_elements =
 resharper_xml_max_blank_lines_between_tags = 2
 resharper_xml_max_line_length = 160
 resharper_xml_pi_attributes_indent = align_by_first_attribute

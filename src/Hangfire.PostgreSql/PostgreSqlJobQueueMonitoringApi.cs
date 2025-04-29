@@ -19,16 +19,15 @@
 //   
 //    Special thanks goes to him.
 
-using Dapper;
 using Hangfire.PostgreSql.Entities;
 
 namespace Hangfire.PostgreSql;
 
 public interface IPersistentJobQueueMonitoringApi
 {
-  IEnumerable<string> GetQueues();
-  IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage);
-  IEnumerable<long> GetFetchedJobIds(string queue, int from, int perPage);
+  ICollection<string> GetQueues();
+  ICollection<long> GetEnqueuedJobIds(string queue, int from, int perPage);
+  ICollection<long> GetFetchedJobIds(string queue, int from, int perPage);
   EnqueuedAndFetchedCountDto GetEnqueuedAndFetchedCount(string queue);
 }
 
@@ -41,18 +40,18 @@ internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringAp
     _context = context ?? throw new ArgumentNullException(nameof(context));
   }
 
-  public IEnumerable<string> GetQueues()
+  public ICollection<string> GetQueues()
   {
     string query = _context.QueryProvider.GetQuery("SELECT DISTINCT queue FROM hangfire.jobqueue");
-    return _context.ConnectionManager.UseConnection(null, connection => connection.Query<string>(query).ToList());
+    return _context.ConnectionManager.UseConnection(null, connection => connection.Process(query).Select(reader => reader.GetString(0)).ToList());
   }
 
-  public IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage)
+  public ICollection<long> GetEnqueuedJobIds(string queue, int from, int perPage)
   {
     return GetQueuedOrFetchedJobIds(queue, false, from, perPage);
   }
 
-  public IEnumerable<long> GetFetchedJobIds(string queue, int from, int perPage)
+  public ICollection<long> GetFetchedJobIds(string queue, int from, int perPage)
   {
     return GetQueuedOrFetchedJobIds(queue, true, from, perPage);
   }
@@ -64,40 +63,41 @@ internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringAp
       SELECT (
           SELECT COUNT(*) 
           FROM hangfire.jobqueue 
-          WHERE fetchedat IS NULL AND queue = @Queue
-      ) AS EnqueuedCount, 
+          WHERE fetchedat IS NULL AND queue = $1
+      ), 
       (
         SELECT COUNT(*) 
         FROM hangfire.jobqueue 
-        WHERE fetchedat IS NOT NULL AND queue = @Queue
-      ) AS FetchedCount
+        WHERE fetchedat IS NOT NULL AND queue = $1
+      )
       """);
 
-    (long enqueuedCount, long fetchedCount) = _context.ConnectionManager.UseConnection(null,
-      connection => connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(query, new { Queue = queue }));
-
-    return new EnqueuedAndFetchedCountDto {
-      EnqueuedCount = enqueuedCount,
-      FetchedCount = fetchedCount,
-    };
+    return _context.ConnectionManager.UseConnection(null, connection => connection
+      .Process(query)
+      .WithParameter(queue)
+      .Select(reader => new EnqueuedAndFetchedCountDto {
+        EnqueuedCount = reader.GetInt64(0),
+        FetchedCount = reader.GetInt64(1),
+      })
+      .Single());
   }
 
-  private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
+  private IList<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
   {
     string query = _context.QueryProvider.GetQuery(
       """
-      SELECT j.id 
+      SELECT j.id
       FROM hangfire.jobqueue jq
       LEFT JOIN hangfire.job j ON jq.jobid = j.id
-      WHERE
-        jq.queue = @Queue 
-        AND jq.fetchedat {0}
-        AND j.id IS NOT NULL
+      WHERE jq.queue = $1 AND jq.fetchedat {0} AND j.id IS NOT NULL
       ORDER BY jq.fetchedat, jq.jobid
-      LIMIT @Limit OFFSET @Offset
+      LIMIT $2 OFFSET $3
       """, (fetched ? "IS NOT NULL" : "IS NULL"));
 
-    return _context.ConnectionManager.UseConnection(null,
-      connection => connection.Query<long>(query, new { Queue = queue, Offset = from, Limit = perPage }).ToList());
+    return _context.ConnectionManager.UseConnection(null, connection => connection
+      .Process(query)
+      .WithParameters(queue, perPage, from)
+      .Select(reader => reader.GetInt64(0))
+      .ToList());
   }
 }

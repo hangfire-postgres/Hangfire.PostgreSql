@@ -20,7 +20,7 @@
 //    Special thanks goes to him.
 
 using System.Data;
-using Dapper;
+using System.Globalization;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Entities;
 using Hangfire.PostgreSql.Utils;
@@ -39,25 +39,96 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
     _context = context ?? throw new ArgumentNullException(nameof(context));
   }
 
-  public long ScheduledCount()
+  public IDictionary<DateTime, long> SucceededByDatesCount()
   {
-    return GetNumberOfJobsByStateName(ScheduledState.StateName);
+    return GetTimelineStats("succeeded", TimelineStatsRange.Daily);
+  }
+
+  public IDictionary<DateTime, long> FailedByDatesCount()
+  {
+    return GetTimelineStats("failed", TimelineStatsRange.Daily);
+  }
+
+  public IDictionary<DateTime, long> HourlySucceededJobs()
+  {
+    return GetTimelineStats("succeeded", TimelineStatsRange.Hourly);
+  }
+
+  public IDictionary<DateTime, long> HourlyFailedJobs()
+  {
+    return GetTimelineStats("failed", TimelineStatsRange.Hourly);
+  }
+
+  private enum TimelineStatsRange 
+  {
+    Daily,
+    Hourly,
+  }
+
+  private Dictionary<DateTime, long> GetTimelineStats(string state, TimelineStatsRange range)
+  {
+    DateTime now = DateTime.UtcNow;
+    now = range switch {
+      TimelineStatsRange.Daily => DateTime.UtcNow.Date,
+      TimelineStatsRange.Hourly => new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, DateTimeKind.Utc),
+      var _ => throw new ArgumentOutOfRangeException(nameof(range), range, null),
+    };
+    Dictionary<DateTime, long> result = (range switch {
+      TimelineStatsRange.Daily => Enumerable.Range(0, 7).Select(x => now.AddDays(-x)),
+      TimelineStatsRange.Hourly => Enumerable.Range(0, 24).Select(x => now.AddHours(-x)),
+      var _ => throw new ArgumentOutOfRangeException(nameof(range), range, null),
+    }).ToDictionary(x => x, _ => 0L);
+    string keySuffix = range == TimelineStatsRange.Daily ? "yyyy-MM-dd" : "yyyy-MM-dd-HH";
+    List<string> keys = result.Keys.Select(x => $"stats:{state}:{x.ToString(keySuffix)}").ToList();
+
+    string query = _context.QueryProvider.GetQuery(
+      // language=sql
+      """
+      WITH aggregated_counters AS (
+        SELECT key, value FROM hangfire.aggregatedcounter WHERE key = ANY($1)
+      ), regular_counters AS (
+        SELECT key, value FROM hangfire.counter WHERE key = ANY($1)
+      ), all_counters AS (
+        SELECT * FROM aggregated_counters
+        UNION ALL
+        SELECT * FROM regular_counters
+      )
+      SELECT key, COALESCE(SUM(value), 0)
+      FROM all_counters
+      GROUP BY key
+      """);
+    UseConnection(connection => connection
+      .Process(query)
+      .WithParameter(keys)
+      .ForEach(reader => {
+        string key = reader.GetString(0);
+        long count = reader.IsDBNull(1) ? 0 : reader.GetInt64(1);
+        DateTime date = DateTime.ParseExact(key.Substring(key.LastIndexOf(':') + 1), keySuffix, CultureInfo.InvariantCulture);
+        result[date] = count;
+      }));
+    return result;
   }
 
   public long EnqueuedCount(string queue)
   {
-    IPersistentJobQueueMonitoringApi queueApi = GetQueueApi(queue);
-    EnqueuedAndFetchedCountDto counters = queueApi.GetEnqueuedAndFetchedCount(queue);
-
-    return counters.EnqueuedCount;
+    return GetCountFromQueueMonitoring(queue, x => x.EnqueuedCount);
   }
 
   public long FetchedCount(string queue)
   {
+    return GetCountFromQueueMonitoring(queue, x => x.FetchedCount);
+  }
+
+  private long GetCountFromQueueMonitoring(string queue, Func<EnqueuedAndFetchedCountDto, long> accessor)
+  {
     IPersistentJobQueueMonitoringApi queueApi = GetQueueApi(queue);
     EnqueuedAndFetchedCountDto counters = queueApi.GetEnqueuedAndFetchedCount(queue);
+    return accessor(counters);
+  }
 
-    return counters.FetchedCount;
+  public long ScheduledCount()
+  {
+    return GetNumberOfJobsByStateName(ScheduledState.StateName);
   }
 
   public long FailedCount()
@@ -68,6 +139,90 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
   public long ProcessingCount()
   {
     return GetNumberOfJobsByStateName(ProcessingState.StateName);
+  }
+
+  public long SucceededListCount()
+  {
+    return GetNumberOfJobsByStateName(SucceededState.StateName);
+  }
+
+  public long DeletedListCount()
+  {
+    return GetNumberOfJobsByStateName(DeletedState.StateName);
+  }
+
+  private long GetNumberOfJobsByStateName(string stateName)
+  {
+    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.job WHERE statename = $1");
+    return UseConnection(connection => connection.Process(query).WithParameter(stateName).Select(reader => reader.GetInt64(0)).Single());
+  }
+
+  public StatisticsDto GetStatistics()
+  {
+    return UseConnection(connection => {
+      string serverQuery = _context.QueryProvider.GetQuery("SELECT COUNT(*) FROM hangfire.server");
+      string setQuery = _context.QueryProvider.GetQuery("SELECT COUNT(*) FROM hangfire.set WHERE key = $1");
+      string stateQuery = _context.QueryProvider.GetQuery("SELECT statename, COUNT(id) FROM hangfire.job WHERE statename IS NOT NULL GROUP BY statename");
+      string aggregateQuery = _context.QueryProvider.GetQuery(
+        """
+        SELECT SUM(value) FROM (
+          SELECT SUM(value) AS value FROM hangfire.counter WHERE key = $1
+          UNION ALL
+          SELECT SUM(value) AS value FROM hangfire.aggregatedcounter WHERE key = $1
+        ) c
+        """);
+
+      Dictionary<string, long> countsByState = connection.Process(stateQuery)
+        .Select(reader => (reader.GetString(0), reader.GetInt64(1)))
+        .ToDictionary(x => x.Item1, x => x.Item2);
+
+      long succeededCount = GetCountAggregate("stats:succeeded");
+      long deletedCount = GetCountAggregate("stats:deleted");
+      long recurringCount = GetCountFromSet("recurring-jobs");
+      long serverCount = connection.Process(serverQuery).Select(ReadInt64OrDefault).FirstOrDefault();
+
+      return new StatisticsDto {
+        Enqueued = GetCountCached(EnqueuedState.StateName),
+        Failed = GetCountCached(FailedState.StateName),
+        Processing = GetCountCached(ProcessingState.StateName),
+        Scheduled = GetCountCached(ScheduledState.StateName),
+        Succeeded = succeededCount,
+        Deleted = deletedCount,
+        Recurring = recurringCount,
+        Servers = serverCount,
+        Queues = _context.QueueProviders
+          .SelectMany(x => x.GetJobQueueMonitoringApi().GetQueues())
+          .Count(),
+      };
+
+      long GetCountCached(string name)
+      {
+        return countsByState.TryGetValue(name, out long stateCount) ? stateCount : 0;
+      }
+
+      long GetCountAggregate(string name)
+      {
+        return GetCountFromDatabase(aggregateQuery, name);
+      }
+
+      long GetCountFromSet(string name)
+      {
+        return GetCountFromDatabase(setQuery, name);
+      }
+
+      long GetCountFromDatabase(string query, string argument)
+      {
+        return connection.Process(query)
+          .WithParameter(argument)
+          .Select(ReadInt64OrDefault)
+          .FirstOrDefault();
+      }
+      
+      long ReadInt64OrDefault(IDataRecord reader)
+      {
+        return reader.IsDBNull(0) ? 0 : reader.GetInt64(0);
+      }
+    });
   }
 
   public JobList<ProcessingJobDto> ProcessingJobs(int from, int count)
@@ -90,37 +245,6 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
         EnqueueAt = JobHelper.DeserializeDateTime(stateData["EnqueueAt"]),
         ScheduledAt = JobHelper.DeserializeDateTime(stateData["ScheduledAt"]),
       });
-  }
-
-  public IDictionary<DateTime, long> SucceededByDatesCount()
-  {
-    return GetTimelineStats("succeeded");
-  }
-
-  public IDictionary<DateTime, long> FailedByDatesCount()
-  {
-    return GetTimelineStats("failed");
-  }
-
-  public IList<ServerDto> Servers()
-  {
-    return UseConnection(connection => {
-      string query = _context.QueryProvider.GetQuery("SELECT * FROM hangfire.server");
-      List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>(query)
-        .AsEnumerable()
-        .Select(server => (server, SerializationHelper.Deserialize<ServerData>(server.Data)))
-        .ToList();
-
-      List<ServerDto> result = servers.Select(item => new ServerDto {
-        Name = item.Server.Id,
-        Heartbeat = item.Server.LastHeartbeat,
-        Queues = item.Data.Queues,
-        StartedAt = item.Data.StartedAt ?? DateTime.MinValue,
-        WorkersCount = item.Data.WorkerCount,
-      }).ToList();
-
-      return result;
-    });
   }
 
   public JobList<FailedJobDto> FailedJobs(int from, int count)
@@ -164,6 +288,34 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
       });
   }
 
+  private JobList<TDto> GetJobs<TDto>(int from, int count, string stateName, Func<SqlJob, Job?, Dictionary<string, string>, TDto> selector)
+  {
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT j.id, j.invocationdata, j.arguments, j.createdat, j.expireat, j.statename, s.reason, s.data
+      FROM hangfire.job AS j
+      LEFT JOIN hangfire.state AS s ON j.stateid = s.id
+      WHERE j.statename = $1
+      ORDER BY j.id DESC
+      LIMIT $2 OFFSET $3
+      """);
+    List<SqlJob> jobs = UseConnection(connection => connection
+      .Process(query)
+      .WithParameters(stateName, count, from)
+      .Select(reader => new SqlJob {
+        Id = reader.GetInt64(0),
+        InvocationData = reader.GetString(1),
+        Arguments = reader.GetString(2),
+        CreatedAt = reader.GetDateTime(3),
+        ExpireAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
+        StateName = reader.IsDBNull(5) ? null : reader.GetString(5),
+        StateReason = reader.IsDBNull(6) ? null : reader.GetString(6),
+        StateData = reader.IsDBNull(7) ? null : reader.GetString(7),
+      })
+      .ToList());
+    return DeserializeJobs(jobs, selector);
+  }
+
   public IList<QueueWithTopEnqueuedJobsDto> Queues()
   {
     var tuples = _context.QueueProviders
@@ -176,7 +328,7 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
 
     foreach (var tuple in tuples)
     {
-      IEnumerable<long> enqueuedJobIds = tuple.Monitoring.GetEnqueuedJobIds(tuple.Queue, 0, 5);
+      ICollection<long> enqueuedJobIds = tuple.Monitoring.GetEnqueuedJobIds(tuple.Queue, 0, 5);
       EnqueuedAndFetchedCountDto counters = tuple.Monitoring.GetEnqueuedAndFetchedCount(tuple.Queue);
 
       result.Add(new QueueWithTopEnqueuedJobsDto {
@@ -193,79 +345,136 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
   public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int from, int perPage)
   {
     IPersistentJobQueueMonitoringApi queueApi = GetQueueApi(queue);
-    IEnumerable<long> enqueuedJobIds = queueApi.GetEnqueuedJobIds(queue, from, perPage);
-
+    ICollection<long> enqueuedJobIds = queueApi.GetEnqueuedJobIds(queue, from, perPage);
     return EnqueuedJobs(enqueuedJobIds);
   }
 
   public JobList<FetchedJobDto> FetchedJobs(string queue, int from, int perPage)
   {
     IPersistentJobQueueMonitoringApi queueApi = GetQueueApi(queue);
-    IEnumerable<long> fetchedJobIds = queueApi.GetFetchedJobIds(queue, from, perPage);
-
+    ICollection<long> fetchedJobIds = queueApi.GetFetchedJobIds(queue, from, perPage);
     return FetchedJobs(fetchedJobIds);
   }
 
-  public IDictionary<DateTime, long> HourlySucceededJobs()
+  private IPersistentJobQueueMonitoringApi GetQueueApi(string queue)
   {
-    return GetHourlyTimelineStats("succeeded");
+    IPersistentJobQueueProvider provider = _context.QueueProviders.GetProvider(queue);
+    return provider.GetJobQueueMonitoringApi();
   }
 
-  public IDictionary<DateTime, long> HourlyFailedJobs()
+  private JobList<EnqueuedJobDto> EnqueuedJobs(ICollection<long> jobIds)
   {
-    return GetHourlyTimelineStats("failed");
+    if (jobIds.Count == 0)
+    {
+      return new JobList<EnqueuedJobDto>([]);
+    }
+
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT j.id, j.invocationdata, j.arguments, j.createdat, j.expireat, s.name, s.reason, s.data
+      FROM hangfire.job AS j
+      LEFT JOIN hangfire.state AS s ON s.id = j.stateid
+      LEFT JOIN hangfire.jobqueue AS jq ON jq.jobid = j.id
+      WHERE j.id = ANY ($1) AND jq.fetchedat IS NULL
+      """);
+
+    List<SqlJob> jobs = UseConnection(connection => connection
+      .Process(query)
+      .WithParameter(jobIds.ToList())
+      .Select(reader => new SqlJob {
+        Id = reader.GetInt64(0),
+        InvocationData = reader.GetString(1),
+        Arguments = reader.GetString(2),
+        CreatedAt = reader.GetDateTime(3),
+        ExpireAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
+        StateName = reader.IsDBNull(5) ? null : reader.GetString(5),
+        StateReason = reader.IsDBNull(6) ? null : reader.GetString(6),
+        StateData = reader.IsDBNull(7) ? null : reader.GetString(7),
+      })
+      .ToList());
+    return DeserializeJobs(jobs,
+      (sqlJob, job, stateData) => new EnqueuedJobDto {
+        Job = job,
+        State = sqlJob.StateName,
+        EnqueuedAt = sqlJob.StateName == EnqueuedState.StateName
+          ? JobHelper.DeserializeNullableDateTime(stateData["EnqueuedAt"])
+          : null,
+      });
   }
 
-  public JobDetailsDto? JobDetails(string jobId)
+  private JobList<FetchedJobDto> FetchedJobs(ICollection<long> jobIds)
   {
+    if (jobIds.Count == 0)
+    {
+      return new JobList<FetchedJobDto>([]);
+    }
+
+    string query = _context.QueryProvider.GetQuery(
+      """
+      SELECT j.id, j.invocationdata, j.arguments, j.createdat, j.expireat, jq.fetchedat, j.statename, s.reason, s.data
+      FROM hangfire.job AS j
+      LEFT JOIN hangfire.state AS s ON j.stateid = s.id
+      LEFT JOIN hangfire.jobqueue AS jq ON jq.jobid = j.id
+      WHERE j.id = ANY ($1) AND jq.fetchedat IS NOT NULL
+      """);
+    Dictionary<string, FetchedJobDto> result = UseConnection(connection => connection
+      .Process(query)
+      .WithParameter(jobIds.ToList())
+      .Select(reader => new SqlJob {
+        Id = reader.GetInt64(0),
+        InvocationData = reader.GetString(1),
+        Arguments = reader.GetString(2),
+        CreatedAt = reader.GetDateTime(3),
+        ExpireAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
+        FetchedAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+        StateName = reader.IsDBNull(6) ? null : reader.GetString(6),
+        StateReason = reader.IsDBNull(7) ? null : reader.GetString(7),
+        StateData = reader.IsDBNull(8) ? null : reader.GetString(8),
+      })
+      .ToDictionary(job => job.Id.ToString(), job => new FetchedJobDto {
+        Job = DeserializeJob(job.InvocationData, job.Arguments),
+        State = job.StateName,
+        FetchedAt = job.FetchedAt,
+      }));
+    return new JobList<FetchedJobDto>(result);
+  }
+
+  public JobDetailsDto? JobDetails(string jobIdStr)
+  {
+    long jobId = jobIdStr.ParseJobId();
     return UseConnection(connection => {
-      string query = _context.QueryProvider.GetQuery(
-        """
-        SELECT
-          id AS "Id",
-          invocationdata AS "InvocationData",
-          arguments AS "Arguments",
-          createdat AS "CreatedAt",
-          expireat AS "ExpireAt"
-        FROM hangfire.job
-        WHERE id = @Id;
-
-        SELECT
-          jobid AS "JobId",
-          name AS "Name",
-          value AS "Value"
-        FROM hangfire.jobparameter
-        WHERE jobid = @Id;
-
-        SELECT
-          jobid AS "JobId",
-          name AS "Name",
-          reason AS "Reason",
-          createdat AS "CreatedAt",
-          data AS "Data"
-        FROM hangfire.state
-        WHERE jobid = @Id
-        ORDER BY id DESC
-        """);
-      using SqlMapper.GridReader multi = connection.QueryMultiple(query, new { Id = jobId.ParseJobId() });
-      SqlJob? job = multi.Read<SqlJob>().SingleOrDefault();
+      string jobQuery = _context.QueryProvider.GetQuery("SELECT id, invocationdata, arguments, createdat, expireat FROM hangfire.job WHERE id = $1");
+      SqlJob? job = connection.Process(jobQuery)
+        .WithParameter(jobId)
+        .Select(reader => new SqlJob {
+          Id = reader.GetInt64(0),
+          InvocationData = reader.GetString(1),
+          Arguments = reader.GetString(2),
+          CreatedAt = reader.GetDateTime(3),
+          ExpireAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
+        })
+        .FirstOrDefault();
       if (job == null)
       {
         return null;
       }
-
-      Dictionary<string, string> parameters = multi.Read<JobParameter>().ToDictionary(x => x.Name, x => x.Value);
-      List<StateHistoryDto> history =
-        multi.Read<SqlState>()
-          .ToList()
-          .Select(x => new StateHistoryDto {
-            StateName = x.Name,
-            CreatedAt = x.CreatedAt,
-            Reason = x.Reason,
-            Data = new SafeDictionary<string, string>(SerializationHelper.Deserialize<Dictionary<string, string>>(x.Data),
-              StringComparer.OrdinalIgnoreCase),
-          })
-          .ToList();
+      
+      string parametersQuery = _context.QueryProvider.GetQuery("SELECT name, value FROM hangfire.jobparameter WHERE jobid = $1");
+      Dictionary<string, string> parameters = connection.Process(parametersQuery)
+        .WithParameter(jobId)
+        .Select(reader => (reader.GetString(0), reader.GetString(1)))
+        .ToDictionary(x => x.Item1, x => x.Item2);
+      
+      string stateHistoryQuery = _context.QueryProvider.GetQuery("SELECT name, reason, createdat, data FROM hangfire.state WHERE jobid = $1 ORDER BY id DESC");
+      List<StateHistoryDto> history = connection.Process(stateHistoryQuery)
+        .WithParameter(jobId)
+        .Select(reader => new StateHistoryDto {
+          StateName = reader.GetString(0),
+          Reason = reader.IsDBNull(1) ? null : reader.GetString(1),
+          CreatedAt = reader.GetDateTime(2),
+          Data = new SafeDictionary<string>(SerializationHelper.Deserialize<Dictionary<string, string>>(reader.GetString(3))),
+        })
+        .ToList();
 
       return new JobDetailsDto {
         CreatedAt = job.CreatedAt,
@@ -277,203 +486,45 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
     });
   }
 
-  public long SucceededListCount()
-  {
-    return GetNumberOfJobsByStateName(SucceededState.StateName);
-  }
-
-  public long DeletedListCount()
-  {
-    return GetNumberOfJobsByStateName(DeletedState.StateName);
-  }
-
-  public StatisticsDto GetStatistics()
+  public IList<ServerDto> Servers()
   {
     return UseConnection(connection => {
-      string query = _context.QueryProvider.GetQuery(
-        """
-        SELECT statename AS "State", COUNT(id) AS "Count" 
-        FROM hangfire.job
-        WHERE statename IS NOT NULL
-        GROUP BY statename;
-
-        SELECT COUNT(*) 
-        FROM hangfire.server;
-
-        SELECT SUM(value) FROM
-          (SELECT SUM(value) AS value
-          FROM hangfire.counter
-          WHERE key = 'stats:succeeded'
-          UNION ALL
-          SELECT SUM(value) AS value
-          FROM hangfire.aggregatedcounter
-          WHERE key = 'stats:succeeded') c;
-
-        SELECT SUM(value) FROM
-          (SELECT SUM(value) AS value
-          FROM hangfire.counter
-          WHERE key = 'stats:deleted'
-          UNION ALL
-          SELECT SUM(value) AS value
-          FROM hangfire.aggregatedcounter
-          WHERE key = 'stats:deleted') c;
-
-        SELECT COUNT(*)
-        FROM hangfire.set
-        WHERE key = 'recurring-jobs';
-        """);
-
-      StatisticsDto stats = new();
-      using (SqlMapper.GridReader multi = connection.QueryMultiple(query))
-      {
-        Dictionary<string, long> countByStates = multi.Read<(string StateName, long Count)>()
-          .ToDictionary(x => x.StateName, x => x.Count);
-
-        long GetCountIfExists(string name)
-        {
-          return countByStates.TryGetValue(name, out long stateCount) ? stateCount : 0;
-        }
-
-        stats.Enqueued = GetCountIfExists(EnqueuedState.StateName);
-        stats.Failed = GetCountIfExists(FailedState.StateName);
-        stats.Processing = GetCountIfExists(ProcessingState.StateName);
-        stats.Scheduled = GetCountIfExists(ScheduledState.StateName);
-
-        stats.Servers = multi.ReadSingle<long>();
-
-        stats.Succeeded = multi.ReadSingleOrDefault<long?>() ?? 0;
-        stats.Deleted = multi.ReadSingleOrDefault<long?>() ?? 0;
-
-        stats.Recurring = multi.ReadSingle<long>();
-      }
-
-      stats.Queues = _context.QueueProviders
-        .SelectMany(x => x.GetJobQueueMonitoringApi().GetQueues())
-        .Count();
-
-      return stats;
+      string query = _context.QueryProvider.GetQuery("SELECT id, data, lastheartbeat FROM hangfire.server");
+      return connection.Process(query)
+        .Select(reader => {
+          string id = reader.GetString(0);
+          string data = reader.GetString(1);
+          DateTime lastHeartbeat = reader.GetDateTime(2);
+          ServerData serverData = ServerData.Deserialize(data);
+          return new ServerDto {
+            Name = id,
+            Heartbeat = lastHeartbeat,
+            Queues = serverData.Queues,
+            StartedAt = serverData.StartedAt ?? DateTime.MinValue,
+            WorkersCount = serverData.WorkerCount,
+          };
+        })
+        .ToList();
     });
   }
 
-  private Dictionary<DateTime, long> GetHourlyTimelineStats(string type)
+  private static JobList<TDto> DeserializeJobs<TDto>(
+    ICollection<SqlJob> jobs,
+    Func<SqlJob, Job?, SafeDictionary<string>, TDto> selector)
   {
-    DateTime endDate = DateTime.UtcNow;
-    List<DateTime> dates = [];
-    for (int i = 0; i < 24; i++)
+    List<KeyValuePair<string, TDto>> result = new(jobs.Count);
+
+    foreach (SqlJob job in jobs)
     {
-      dates.Add(endDate);
-      endDate = endDate.AddHours(-1);
+      Dictionary<string, string> deserializedData = SerializationHelper.Deserialize<Dictionary<string, string>>(job.StateData) ?? new Dictionary<string, string>();
+      SafeDictionary<string> stateData = new(deserializedData);
+
+      TDto? dto = selector(job, DeserializeJob(job.InvocationData, job.Arguments), stateData);
+
+      result.Add(new KeyValuePair<string, TDto>(job.Id.ToString(), dto));
     }
 
-    Dictionary<string, DateTime> keyMaps = dates.ToDictionary(x => $"stats:{type}:{x:yyyy-MM-dd-HH}", x => x);
-
-    return GetTimelineStats(keyMaps);
-  }
-
-  private Dictionary<DateTime, long> GetTimelineStats(string type)
-  {
-    DateTime endDate = DateTime.UtcNow.Date;
-    List<DateTime> dates = [];
-
-    for (int i = 0; i < 7; i++)
-    {
-      dates.Add(endDate);
-      endDate = endDate.AddDays(-1);
-    }
-
-    Dictionary<string, DateTime> keyMaps = dates.ToDictionary(x => $"stats:{type}:{x:yyyy-MM-dd}", x => x);
-
-    return GetTimelineStats(keyMaps);
-  }
-
-  private Dictionary<DateTime, long> GetTimelineStats(IDictionary<string, DateTime> keyMaps)
-  {
-    string query = _context.QueryProvider.GetQuery(
-      """
-      WITH aggregated_counters AS (
-        SELECT key, value
-        FROM hangfire.aggregatedcounter
-        WHERE key = ANY(@Keys)
-      ), regular_counters AS (
-        SELECT key, value
-        FROM hangfire.counter
-        WHERE key = ANY(@Keys)
-      ), all_counters AS (
-        SELECT * FROM aggregated_counters
-        UNION ALL
-        SELECT * FROM regular_counters
-      )
-      SELECT key, COALESCE(SUM(value), 0) AS count
-      FROM all_counters
-      GROUP BY key
-      """);
-
-    Dictionary<string, long> valuesMap = UseConnection(connection =>
-      connection.Query<(string Key, long Count)>(query, new { Keys = keyMaps.Keys.ToList() }).ToDictionary(x => x.Key, x => x.Count));
-
-    foreach (string key in keyMaps.Keys)
-    {
-      if (!valuesMap.ContainsKey(key))
-      {
-        valuesMap.Add(key, 0);
-      }
-    }
-
-    Dictionary<DateTime, long> result = new();
-    foreach (KeyValuePair<string, DateTime> keyMap in keyMaps)
-    {
-      long value = valuesMap[keyMap.Key];
-      result.Add(keyMap.Value, value);
-    }
-
-    return result;
-  }
-
-  private IPersistentJobQueueMonitoringApi GetQueueApi(string queueName)
-  {
-    IPersistentJobQueueProvider provider = _context.QueueProviders.GetProvider(queueName);
-    IPersistentJobQueueMonitoringApi monitoringApi = provider.GetJobQueueMonitoringApi();
-
-    return monitoringApi;
-  }
-
-  private JobList<EnqueuedJobDto> EnqueuedJobs(IEnumerable<long> jobIds)
-  {
-    string query = _context.QueryProvider.GetQuery(
-      """
-      SELECT
-        j.id AS "Id",
-        j.invocationdata AS "InvocationData",
-        j.arguments AS "Arguments",
-        j.createdat AS "CreatedAt",
-        j.expireat AS "ExpireAt",
-        s.name AS "StateName",
-        s.reason AS "StateReason",
-        s.data AS "StateData"
-      FROM hangfire.job AS j
-      LEFT JOIN hangfire.state AS s ON s.id = j.stateid
-      LEFT JOIN hangfire.jobqueue AS jq ON jq.jobid = j.id
-      WHERE
-        j.id = ANY (@JobIds)
-        AND jq.fetchedat IS NULL
-      """);
-
-    List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query, new { JobIds = jobIds.ToList() }).ToList());
-
-    return DeserializeJobs(jobs,
-      (sqlJob, job, stateData) => new EnqueuedJobDto {
-        Job = job,
-        State = sqlJob.StateName,
-        EnqueuedAt = sqlJob.StateName == EnqueuedState.StateName
-          ? JobHelper.DeserializeNullableDateTime(stateData["EnqueuedAt"])
-          : null,
-      });
-  }
-
-  private long GetNumberOfJobsByStateName(string stateName)
-  {
-    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.job WHERE statename = @StateName");
-    return UseConnection(connection => connection.QuerySingle<long>(query, new { StateName = stateName }));
+    return new JobList<TDto>(result);
   }
 
   private static Job? DeserializeJob(string invocationData, string arguments)
@@ -491,97 +542,23 @@ public class PostgreSqlMonitoringApi : IMonitoringApi
     }
   }
 
-  private JobList<TDto> GetJobs<TDto>(int from, int count, string stateName, Func<SqlJob, Job?, Dictionary<string, string>, TDto> selector)
-  {
-    string query = _context.QueryProvider.GetQuery(
-      """
-      SELECT
-          j.id AS "Id",
-          j.invocationdata AS "InvocationData",
-          j.arguments AS "Arguments",
-          j.createdat AS "CreatedAt", 
-          j.expireat AS "ExpireAt",
-          NULL AS "FetchedAt",
-          j.statename AS "StateName",
-          s.reason AS "StateReason",
-          s.data AS "StateData"
-      FROM hangfire.job AS j
-      LEFT JOIN hangfire.state AS s ON j.stateid = s.id
-      WHERE j.statename = @StateName
-      ORDER BY j.id DESC
-      LIMIT @Limit OFFSET @Offset
-      """);
-
-    List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query, new { StateName = stateName, Limit = count, Offset = from }).ToList());
-
-    return DeserializeJobs(jobs, selector);
-  }
-
-  private static JobList<TDto> DeserializeJobs<TDto>(
-    ICollection<SqlJob> jobs,
-    Func<SqlJob, Job?, SafeDictionary<string, string>, TDto> selector)
-  {
-    List<KeyValuePair<string, TDto>> result = new(jobs.Count);
-
-    foreach (SqlJob job in jobs)
-    {
-      Dictionary<string, string> deserializedData = SerializationHelper.Deserialize<Dictionary<string, string>>(job.StateData) ?? new Dictionary<string, string>();
-      SafeDictionary<string, string> stateData = new(deserializedData, StringComparer.OrdinalIgnoreCase);
-
-      TDto? dto = selector(job, DeserializeJob(job.InvocationData, job.Arguments), stateData);
-
-      result.Add(new KeyValuePair<string, TDto>(job.Id.ToString(), dto));
-    }
-
-    return new JobList<TDto>(result);
-  }
-
-  private JobList<FetchedJobDto> FetchedJobs(
-    IEnumerable<long> jobIds)
-  {
-    string query = _context.QueryProvider.GetQuery(
-      """
-      SELECT
-        j.id AS "Id",
-        j.invocationdata AS "InvocationData",
-        j.arguments AS "Arguments",
-        j.createdat AS "CreatedAt",
-        j.expireat AS "ExpireAt",
-        jq.fetchedat AS "FetchedAt",
-        j.statename AS "StateName",
-        s.reason AS "StateReason",
-        s.data AS "StateData"
-      FROM hangfire.job AS j
-      LEFT JOIN hangfire.state AS s ON j.stateid = s.id
-      LEFT JOIN hangfire.jobqueue AS jq ON jq.jobid = j.id
-      WHERE
-        j.id = ANY (@JobIds)
-        AND jq.fetchedat IS NOT NULL
-      """);
-
-    List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(query, new { JobIds = jobIds.ToList() }).ToList());
-
-    Dictionary<string, FetchedJobDto> result = jobs.ToDictionary(job => job.Id.ToString(), job => new FetchedJobDto {
-      Job = DeserializeJob(job.InvocationData, job.Arguments),
-      State = job.StateName,
-      FetchedAt = job.FetchedAt,
-    });
-
-    return new JobList<FetchedJobDto>(result);
-  }
-
   private T UseConnection<T>(Func<IDbConnection, T> func)
   {
     return _context.ConnectionManager.UseConnection(null, func);
+  }
+
+  private void UseConnection(Action<IDbConnection> action)
+  {
+    _context.ConnectionManager.UseConnection(null, action);
   }
 
   /// <summary>
   ///   Overloaded dictionary that doesn't throw if given an invalid key
   ///   Fixes issues such as https://github.com/frankhommers/Hangfire.PostgreSql/issues/79
   /// </summary>
-  private class SafeDictionary<TKey, TValue>(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer) : Dictionary<TKey, TValue>(dictionary, comparer)
+  private class SafeDictionary<TValue>(IDictionary<string, TValue> dictionary) : Dictionary<string, TValue>(dictionary, StringComparer.OrdinalIgnoreCase)
   {
-    public new TValue? this[TKey i]
+    public new TValue? this[string i]
     {
       // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
       get => ContainsKey(i) ? base[i] : default;

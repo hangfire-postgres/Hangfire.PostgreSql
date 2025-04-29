@@ -53,7 +53,7 @@ public static class PostgreSqlObjectsInstaller
     }
     finally
     {
-      if (!connectionManager.IsConnectionFactoryExisting())
+      if (!connectionManager.UsesExistingConnection())
       {
         connection.Dispose();
       }
@@ -135,7 +135,7 @@ public static class PostgreSqlObjectsInstaller
   {
     try
     {
-      using NpgsqlCommand command = new($@"SELECT true ""VersionAlreadyApplied"" FROM ""{schemaName}"".""schema"" WHERE ""version"" >= $1", connection);
+      using NpgsqlCommand command = new($"""SELECT true "VersionAlreadyApplied" FROM "{schemaName}"."schema" WHERE "version" >= $1""", connection);
       command.Parameters.Add(new NpgsqlParameter { Value = version });
       object? result = command.ExecuteScalar();
       if (true.Equals(result))

@@ -77,15 +77,13 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
-    private void
-      Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning_WithUseNativeDatabaseTransactions()
+    private void Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning_WithUseNativeDatabaseTransactions()
     {
       Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning(true);
     }
 
     [Fact]
-    private void
-      Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning_WithoutUseNativeDatabaseTransactions()
+    private void Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning_WithoutUseNativeDatabaseTransactions()
     {
       Dequeue_ThrowsOperationCanceled_WhenCancellationTokenIsSetAtTheBeginning(false);
     }
@@ -180,6 +178,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private void Dequeue_ShouldLeaveJobInTheQueue_ButSetItsFetchedAtValue(bool useNativeDatabaseTransactions)
     {
+      // language=sql
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
@@ -241,6 +240,7 @@ namespace Hangfire.PostgreSql.Tests
     
     private void Dequeue_ShouldFetchATimedOutJobs_FromTheSpecifiedQueue(bool useNativeDatabaseTransactions, bool useSlidingInvisibilityTimeout)
     {
+      // language=sql
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
@@ -288,6 +288,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private void Dequeue_ShouldSetFetchedAt_OnlyForTheFetchedJob(bool useNativeDatabaseTransactions)
     {
+      // language=sql
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
@@ -335,6 +336,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private void Dequeue_ShouldFetchJobs_OnlyFromSpecifiedQueues(bool useNativeDatabaseTransactions)
     {
+      // language=sql
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
@@ -371,6 +373,7 @@ namespace Hangfire.PostgreSql.Tests
 
     private void Dequeue_ShouldFetchJobs_FromMultipleQueues(bool useNativeDatabaseTransactions)
     {
+      // language=sql
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")

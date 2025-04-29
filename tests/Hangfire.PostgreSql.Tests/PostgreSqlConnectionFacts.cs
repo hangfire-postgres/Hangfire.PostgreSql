@@ -380,6 +380,7 @@ namespace Hangfire.PostgreSql.Tests
     [CleanDatabase]
     public void GetParameter_ReturnsParameterValue_WhenJobExists()
     {
+      // language=sql
       string arrangeSql = $@"
         WITH ""insertedjob"" AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")

@@ -1,4 +1,24 @@
-using Dapper;
+// This file is part of Hangfire.PostgreSql.
+// Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
+// 
+// Hangfire.PostgreSql is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as 
+// published by the Free Software Foundation, either version 3 
+// of the License, or any later version.
+// 
+// Hangfire.PostgreSql  is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+// 
+// You should have received a copy of the GNU Lesser General Public 
+// License along with Hangfire.PostgreSql. If not, see <http://www.gnu.org/licenses/>.
+//
+// This work is based on the work of Sergey Odinokov, author of 
+// Hangfire. <http://hangfire.io/>
+//   
+//    Special thanks goes to him.
+
 using Hangfire.Logging;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
@@ -53,8 +73,8 @@ internal class PostgreSqlFetchedJob : IFetchedJob
         return;
       }
 
-      string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.jobqueue WHERE id = @Id AND fetchedat = @FetchedAt");
-      _context.ConnectionManager.UseConnection(null, connection => connection.Execute(query, new { Id, FetchedAt }));
+      string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.jobqueue WHERE id = $1 AND fetchedat = $2");
+      _context.ConnectionManager.UseConnection(null, connection => connection.Process(query).WithParameters(Id, FetchedAt).Execute());
 
       _removedFromQueue = true;
     }
@@ -69,8 +89,8 @@ internal class PostgreSqlFetchedJob : IFetchedJob
         return;
       }
 
-      string query = _context.QueryProvider.GetQuery("UPDATE hangfire.jobqueue SET fetchedat = NULL WHERE id = @Id AND fetchedat = @FetchedAt");
-      _context.ConnectionManager.UseConnection(null, connection => connection.Execute(query, new { Id, FetchedAt }));
+      string query = _context.QueryProvider.GetQuery("UPDATE hangfire.jobqueue SET fetchedat = NULL WHERE id = $1 AND fetchedat = $2");
+      _context.ConnectionManager.UseConnection(null, connection => connection.Process(query).WithParameters(Id, FetchedAt).Execute());
 
       FetchedAt = null;
       _requeued = true;
@@ -125,19 +145,22 @@ internal class PostgreSqlFetchedJob : IFetchedJob
       {
         return;
       }
-        
+
       string query = _context.QueryProvider.GetQuery(
         """
         UPDATE hangfire.jobqueue
         SET fetchedat = NOW()
-        WHERE id = @Id AND fetchedat = @FetchedAt
-        RETURNING fetchedat AS FetchedAt
+        WHERE id = $1 AND fetchedat = $2
+        RETURNING fetchedat
         """);
-        
+      
       try
       {
-        _context.ConnectionManager.UseConnection(null,
-          connection => FetchedAt = connection.ExecuteScalar<DateTime?>(query, new { queue = Queue, id = Id, fetchedAt = FetchedAt }));
+        FetchedAt = _context.ConnectionManager.UseConnection(null, connection => connection
+          .Process(query)
+          .WithParameters(Id, FetchedAt)
+          .Select<DateTime?>(reader => reader.IsDBNull(0) ? null : reader.GetDateTime(0))
+          .SingleOrDefault());
 
         if (!FetchedAt.HasValue)
         {

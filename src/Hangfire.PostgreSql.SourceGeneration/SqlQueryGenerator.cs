@@ -10,6 +10,14 @@ namespace Hangfire.PostgreSql.SourceGeneration;
 [Generator]
 public class SqlQueryGenerator : IIncrementalGenerator
 {
+  private static readonly DiagnosticDescriptor _interpolatedStringError = new(
+    id: "HFPG001",
+    title: "Interpolated strings are not allowed in GetQuery",
+    messageFormat: "Interpolated strings are not allowed in GetQuery. Use a literal string, formattable string with arguments or the full callback instead.",
+    category: "Usage",
+    DiagnosticSeverity.Error,
+    isEnabledByDefault: true);
+
   public void Initialize(IncrementalGeneratorInitializationContext context)
   {
     IncrementalValuesProvider<InvocationExpressionSyntax?> queryStrings = context.SyntaxProvider
@@ -23,6 +31,13 @@ public class SqlQueryGenerator : IIncrementalGenerator
       foreach (InvocationExpressionSyntax? invocation in invocations.Where(x => x is { ArgumentList.Arguments.Count: > 0 }))
       {
         ExpressionSyntax argumentExpression = invocation!.ArgumentList.Arguments[0].Expression;
+
+        if (argumentExpression is InterpolatedStringExpressionSyntax)
+        {
+          Location location = argumentExpression.GetLocation();
+          context.ReportDiagnostic(Diagnostic.Create(_interpolatedStringError, location));
+          continue;
+        }
 
         if (argumentExpression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression))
         {
@@ -143,10 +158,10 @@ public class SqlQueryGenerator : IIncrementalGenerator
       .Replace("\r\n", " ")
       .Replace("\n", " ")
       .Replace("\t", " ");
+    // Remove extra spaces
     processed = System.Text.RegularExpressions.Regex.Replace(processed, @"\s+", " ");
-
-    processed = System.Text.RegularExpressions.Regex.Replace(processed, @"\{(\d+)\}", "{{0}}");
-    return processed;
+    // Replace format indexers
+    return System.Text.RegularExpressions.Regex.Replace(processed, @"\{(\d+)\}", "{{$1}}");
   }
 }
 

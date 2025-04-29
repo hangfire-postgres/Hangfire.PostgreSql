@@ -36,14 +36,16 @@ public class SqlQueryProvider(string schemaName)
         return result;
     }
 
-    Func<string, string, string>? queryFunc = (Func<string, string, string>)GetQueryMethod("GetQuery").Invoke(null, null);
+    const string methodName = nameof(GeneratedQueries.QueryContainer.GetQuery);
+    Func<string, string, string>? queryFunc = (Func<string, string, string>)GetQueryMethod(methodName).Invoke(null, null);
     return _queryCache[query] = queryFunc(_schemaName, query);
   }
 
   public string GetQuery(string query, params object[] args)
   {
     // No cache for queries with arguments
-    Func<string, string, object[], string>? queryFunc = (Func<string, string, object[], string>)GetQueryMethod("GetQueryWithArgs").Invoke(null, null);
+    const string methodName = nameof(GeneratedQueries.QueryContainer.GetQueryWithArgs);
+    Func<string, string, object[], string>? queryFunc = (Func<string, string, object[], string>)GetQueryMethod(methodName).Invoke(null, null);
     return queryFunc(_schemaName, query, args);
   }
 

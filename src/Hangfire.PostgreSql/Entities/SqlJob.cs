@@ -34,7 +34,7 @@ internal class SqlJob
 
   public DateTime? FetchedAt { get; set; }
 
-  public string StateName { get; set; } = null!;
-  public string StateReason { get; set; } = null!;
-  public string StateData { get; set; } = null!;
+  public string? StateName { get; set; }
+  public string? StateReason { get; set; }
+  public string? StateData { get; set; }
 }

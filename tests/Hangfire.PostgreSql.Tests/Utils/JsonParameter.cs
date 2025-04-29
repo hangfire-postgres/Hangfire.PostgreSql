@@ -18,14 +18,14 @@
 // Hangfire. <http://hangfire.io/>
 //   
 //    Special thanks goes to him.
-
+#nullable enable
 using System.Data;
 using System.Text.Json;
 using Dapper;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace Hangfire.PostgreSql;
+namespace Hangfire.PostgreSql.Tests.Utils;
 
 internal class JsonParameter : SqlMapper.ICustomQueryParameter
 {

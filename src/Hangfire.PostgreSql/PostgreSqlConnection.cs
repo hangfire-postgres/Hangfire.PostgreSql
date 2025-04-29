@@ -23,13 +23,13 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Entities;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Npgsql;
+using NpgsqlTypes;
 using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql;
@@ -111,34 +111,24 @@ public class PostgreSqlConnection : JobStorageConnection
     InvocationData invocationData = InvocationData.SerializeJob(job);
 
     string query = _context.QueryProvider.GetQuery(
-      "INSERT INTO hangfire.job (invocationdata, arguments, createdat, expireat) VALUES (@InvocationData, @Arguments, @CreatedAt, @ExpireAt) RETURNING id");
+      "INSERT INTO hangfire.job (invocationdata, arguments, createdat, expireat) VALUES ($1, $2, $3, $4) RETURNING id");
     return _context.ConnectionManager.UseTransaction(_dedicatedConnection, (connection, transaction) => {
-      string jobId = connection.QuerySingle<long>(query,
-        new {
-          InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-          Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
-          CreatedAt = createdAt,
-          ExpireAt = createdAt.Add(expireIn),
-        }).ToString(CultureInfo.InvariantCulture);
-
+      long jobId = connection.Process(query)
+        .WithParameter(SerializationHelper.Serialize(invocationData), NpgsqlDbType.Jsonb)
+        .WithParameter(invocationData.Arguments, NpgsqlDbType.Jsonb)
+        .WithParameters(createdAt, createdAt.Add(expireIn))
+        .Select(reader => reader.GetInt64(0))
+        .Single();
       if (parameters.Count > 0)
       {
-        object[] parameterArray = new object[parameters.Count];
-        int parameterIndex = 0;
+        string insertQuery = _context.QueryProvider.GetQuery("INSERT INTO hangfire.jobparameter (jobid, name, value) VALUES ($1, $2, $3)");
         foreach (KeyValuePair<string, string> parameter in parameters)
         {
-          parameterArray[parameterIndex++] = new {
-            JobId = jobId.ParseJobId(),
-            Name = parameter.Key,
-            parameter.Value,
-          };
+          connection.Process(insertQuery, transaction).WithParameters(jobId, parameter.Key, parameter.Value).Execute();
         }
-
-        string insertQuery = _context.QueryProvider.GetQuery("INSERT INTO hangfire.jobparameter (jobid, name, value) VALUES (@JobId, @Name, @Value)");
-        connection.Execute(insertQuery, parameterArray, transaction);
       }
 
-      return jobId;
+      return jobId.ToString(CultureInfo.InvariantCulture);
     });
   }
 
@@ -149,36 +139,37 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(id));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT invocationdata, statename, arguments, createdat FROM hangfire.job WHERE id = @Id");
-    SqlJob? jobData = _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.QuerySingleOrDefault<SqlJob>(query, new { Id = id.ParseJobId() }));
+    string query = _context.QueryProvider.GetQuery("SELECT statename, createdat, invocationdata, arguments FROM hangfire.job WHERE id = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
+      connection => connection.Process(query)
+        .WithParameter(id.ParseJobId())
+        .Select(reader => {
+          string state = reader.GetString(0);
+          DateTime createdAt = reader.GetDateTime(1);
+          InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>(reader.GetString(2));
+          invocationData.Arguments = reader.GetString(3);
+          return new JobData {
+            Job = TryLoadJob(invocationData, out JobLoadException? exception),
+            State = state,
+            CreatedAt = createdAt,
+            LoadException = exception,
+          };
+        })
+        .SingleOrDefault());
 
-    if (jobData == null)
+    Job? TryLoadJob(InvocationData invocationData, out JobLoadException? exception)
     {
-      return null;
+      exception = null;
+      try
+      {
+        return invocationData.DeserializeJob();
+      }
+      catch (JobLoadException ex)
+      {
+        exception = ex;
+        return null;
+      }
     }
-
-    InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>(jobData.InvocationData);
-    invocationData.Arguments = jobData.Arguments;
-
-    Job? job = null;
-    JobLoadException? loadException = null;
-
-    try
-    {
-      job = invocationData.DeserializeJob();
-    }
-    catch (JobLoadException ex)
-    {
-      loadException = ex;
-    }
-
-    return new JobData {
-      Job = job,
-      State = jobData.StateName,
-      CreatedAt = jobData.CreatedAt,
-      LoadException = loadException,
-    };
   }
 
   public override StateData? GetStateData(string jobId)
@@ -193,19 +184,18 @@ public class PostgreSqlConnection : JobStorageConnection
       SELECT s.name, s.reason, s.data
       FROM hangfire.state s
       INNER JOIN hangfire.job j ON j.stateid = s.id
-      WHERE j.id = @JobId
+      WHERE j.id = $1
       """);
-
-    SqlState? sqlState = _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.QuerySingleOrDefault<SqlState>(query, new { JobId = jobId.ParseJobId() }));
-
-    return sqlState == null
-      ? null
-      : new StateData {
-        Name = sqlState.Name,
-        Reason = sqlState.Reason,
-        Data = SerializationHelper.Deserialize<Dictionary<string, string>>(sqlState.Data),
-      };
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
+      connection => connection
+        .Process(query)
+        .WithParameter(jobId.ParseJobId())
+        .Select(reader => new StateData {
+          Name = reader.GetString(0),
+          Reason = reader.GetString(1),
+          Data = SerializationHelper.Deserialize<Dictionary<string, string>>(reader.GetString(2)),
+        })
+        .SingleOrDefault());
   }
 
   public override void SetJobParameter(string id, string name, string value)
@@ -221,17 +211,18 @@ public class PostgreSqlConnection : JobStorageConnection
     }
 
     string query = _context.QueryProvider.GetQuery(
+      // language=sql
       """
       WITH inputvalues AS (
-        SELECT @JobId AS jobid, @Name AS name, @Value AS value
+        SELECT $1 AS jobid, $2 AS name, $3 AS value
       ), updatedrows AS ( 
-        UPDATE {schemaName}.jobparameter AS updatetarget
+        UPDATE hangfire.jobparameter AS updatetarget
         SET value = inputvalues.value
         FROM inputvalues
         WHERE updatetarget.jobid = inputvalues.jobid AND updatetarget.name = inputvalues.name
         RETURNING updatetarget.jobid, updatetarget.name
       )
-      INSERT INTO {schemaName}.jobparameter (jobid, name, value)
+      INSERT INTO hangfire.jobparameter (jobid, name, value)
       SELECT jobid, name, value 
       FROM inputvalues
       WHERE NOT EXISTS (
@@ -240,12 +231,13 @@ public class PostgreSqlConnection : JobStorageConnection
         WHERE updatedrows.jobid = inputvalues.jobid AND updatedrows.name = inputvalues.name
       )
       """);
-
-    _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.Execute(query, new { JobId = id.ParseJobId(), Name = name, Value = value }));
+    _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameters(id.ParseJobId(), name, value)
+      .Execute());
   }
 
-  public override string GetJobParameter(string id, string name)
+  public override string? GetJobParameter(string id, string name)
   {
     if (id == null)
     {
@@ -257,9 +249,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(name));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.jobparameter WHERE jobid = @Id AND name = @Name");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.QuerySingleOrDefault<string>(query, new { Id = id.ParseJobId(), Name = name }));
+    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.jobparameter WHERE jobid = $1 AND name = $2");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection =>
+      connection.Process(query)
+        .WithParameters(id.ParseJobId(), name)
+        .Select(reader => reader.GetString(0))
+        .SingleOrDefault());
   }
 
   public override HashSet<string> GetAllItemsFromSet(string key)
@@ -269,12 +264,15 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.set WHERE key = @Key");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => new HashSet<string>(connection.Query<string>(query, new { Key = key })));
+    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.set WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection =>
+      new HashSet<string>(connection
+        .Process(query)
+        .WithParameter(key)
+        .Select(reader => reader.GetString(0))));
   }
 
-  public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
+  public override string? GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
   {
     if (key == null)
     {
@@ -290,13 +288,14 @@ public class PostgreSqlConnection : JobStorageConnection
       """
       SELECT value
       FROM hangfire.set
-      WHERE key = @Key
-      AND score BETWEEN @FromScore AND @ToScore
+      WHERE key = $1 AND score BETWEEN $2 AND $3
       ORDER BY score LIMIT 1
       """);
-
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.QuerySingleOrDefault<string>(query, new { Key = key, FromScore = fromScore, ToScore = toScore }));
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameters(key, fromScore, toScore)
+      .Select(reader => reader.GetString(0))
+      .SingleOrDefault());
   }
 
   public override List<string> GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore, int count)
@@ -320,13 +319,14 @@ public class PostgreSqlConnection : JobStorageConnection
       """
       SELECT value
       FROM hangfire.set
-      WHERE key = @Key
-      AND score BETWEEN @FromScore AND @ToScore
-      ORDER BY score LIMIT @Limit
+      WHERE key = $1 AND score BETWEEN $2 AND $3
+      ORDER BY score LIMIT $4
       """);
-
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.Query<string>(query, new { Key = key, FromScore = fromScore, ToScore = toScore, Limit = count })).ToList();
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameters(key, fromScore, toScore, count)
+      .Select(reader => reader.GetString(0))
+      .ToList());
   }
 
   public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -342,24 +342,23 @@ public class PostgreSqlConnection : JobStorageConnection
     }
 
     string query = _context.QueryProvider.GetQuery(
+      // language=sql
       """
       WITH inputvalues AS (
-        SELECT @Key AS key, @Field AS field, @Value AS value
-      ), updatedrows AS ( 
+        SELECT $1 AS key, $2 AS field, $3 AS value
+      ), updatedrows AS (
         UPDATE hangfire.hash updatetarget
         SET value = inputvalues.value
         FROM inputvalues
-        WHERE updatetarget.key = inputvalues.key
-        AND updatetarget.field = inputvalues.field
+        WHERE updatetarget.key = inputvalues.key AND updatetarget.field = inputvalues.field
         RETURNING updatetarget.key, updatetarget.field
       )
       INSERT INTO hangfire.hash(key, field, value)
       SELECT key, field, value FROM inputvalues insertvalues
       WHERE NOT EXISTS (
-        SELECT 1 
-        FROM updatedrows 
-        WHERE updatedrows.key = insertvalues.key 
-        AND updatedrows.field = insertvalues.field
+        SELECT 1
+        FROM updatedrows
+        WHERE updatedrows.key = insertvalues.key AND updatedrows.field = insertvalues.field
       )
       """);
 
@@ -371,7 +370,7 @@ public class PostgreSqlConnection : JobStorageConnection
         _context.ConnectionManager.UseTransaction(_dedicatedConnection, (connection, transaction) => {
           foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
           {
-            connection.Execute(query, new { Key = key, Field = keyValuePair.Key, keyValuePair.Value }, transaction);
+            connection.Process(query, transaction).WithParameters(key, keyValuePair.Key, keyValuePair.Value).Execute();
           }
         }, IsolationLevel.Serializable);
 
@@ -399,10 +398,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT field, value FROM hangfire.hash WHERE key = @Key");
-    Dictionary<string, string> result = _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.Query<SqlHash>(query, new { Key = key }).ToDictionary(x => x.Field, x => x.Value));
-
+    string query = _context.QueryProvider.GetQuery("SELECT field, value FROM hangfire.hash WHERE key = $1");
+    Dictionary<string, string> result = _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => new { Field = reader.GetString(0), Value = reader.GetString(1) })
+      .ToDictionary(x => x.Field, x => x.Value));
     return result.Count != 0 ? result : null;
   }
 
@@ -425,10 +426,11 @@ public class PostgreSqlConnection : JobStorageConnection
     };
 
     string query = _context.QueryProvider.GetQuery(
+      // language=sql
       """
       WITH inputvalues AS (
-        SELECT @Id AS id, @Data AS data, NOW() AS lastheartbeat
-      ), updatedrows AS ( 
+        SELECT $1 AS id, $2 AS data, NOW() AS lastheartbeat
+      ), updatedrows AS (
         UPDATE hangfire.server AS updatetarget
         SET data = inputvalues.data, lastheartbeat = inputvalues.lastheartbeat
         FROM inputvalues
@@ -436,17 +438,19 @@ public class PostgreSqlConnection : JobStorageConnection
         RETURNING updatetarget.id
       )
       INSERT INTO hangfire.server(id, data, lastheartbeat)
-      SELECT id, data, lastheartbeat 
+      SELECT id, data, lastheartbeat
       FROM inputvalues AS insertvalues
       WHERE NOT EXISTS (
-        SELECT 1 
+        SELECT 1
         FROM updatedrows 
         WHERE updatedrows.id = insertvalues.id 
       )
       """);
-
-    _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.Execute(query, new { Id = serverId, Data = new JsonParameter(SerializationHelper.Serialize(data)) }));
+    _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(serverId)
+      .WithParameter(data.Serialize(), NpgsqlDbType.Jsonb)
+      .Execute());
   }
 
   public override void RemoveServer(string serverId)
@@ -456,8 +460,8 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(serverId));
     }
 
-    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.server WHERE id = @Id");
-    _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Execute(query, new { Id = serverId }));
+    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.server WHERE id = $1");
+    _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Process(query).WithParameter(serverId).Execute());
   }
 
   public override void Heartbeat(string serverId)
@@ -467,9 +471,8 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(serverId));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.server SET lastheartbeat = NOW() WHERE id = @Id");
-    int affectedRows = _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Execute(query, new { Id = serverId }));
-
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.server SET lastheartbeat = NOW() WHERE id = $1");
+    int affectedRows = _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Process(query).WithParameter(serverId).Execute());
     if (affectedRows == 0)
     {
       throw new BackgroundServerGoneException();
@@ -483,10 +486,8 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentException("The 'timeOut' value must be positive.", nameof(timeOut));
     }
 
-    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.server WHERE lastheartbeat < (NOW() - INTERVAL '{0} MILLISECONDS')",
-      ((long)timeOut.TotalMilliseconds).ToString(CultureInfo.InvariantCulture));
-
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Execute(query));
+    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.server WHERE hangfire.server.lastheartbeat < (NOW() - $1)");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Process(query).WithParameter(timeOut).Execute());
   }
 
   public override long GetSetCount(string key)
@@ -496,8 +497,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT COUNT(key) FROM hangfire.set WHERE key = @Key");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<long>(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("SELECT COUNT(key) FROM hangfire.set WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.GetInt64(0))
+      .SingleOrDefault());
   }
 
   public override List<string> GetAllItemsFromList(string key)
@@ -507,8 +512,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.list WHERE key = @Key ORDER BY id DESC");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.Query<string>(query, new { Key = key }).ToList());
+    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.list WHERE key = $1 ORDER BY id DESC");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.GetString(0))
+      .ToList());
   }
 
   public override long GetCounter(string key)
@@ -524,15 +533,18 @@ public class PostgreSqlConnection : JobStorageConnection
       FROM (
         SELECT SUM(value) AS value
         FROM hangfire.counter
-        WHERE key = @Key
+        WHERE key = $1
         UNION ALL
         SELECT SUM(value) AS value
         FROM hangfire.aggregatedcounter
-        WHERE key = @Key
+        WHERE key = $1
       ) c
       """);
-
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<long?>(query, new { Key = key }) ?? 0);
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.IsDBNull(0) ? 0 : reader.GetInt64(0))
+      .Single());
   }
 
   public override long GetListCount(string key)
@@ -542,8 +554,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.list WHERE key = @Key");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<long>(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.list WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.GetInt64(0))
+      .SingleOrDefault());
   }
 
   public override TimeSpan GetListTtl(string key)
@@ -553,10 +569,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT min(expireat) FROM hangfire.list WHERE key = @Key");
-    DateTime? result = _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
-
-    return !result.HasValue ? TimeSpan.FromSeconds(-1) : result.Value - DateTime.UtcNow;
+    string query = _context.QueryProvider.GetQuery("SELECT min(expireat) FROM hangfire.list WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.IsDBNull(0) ? TimeSpan.FromSeconds(-1) : reader.GetDateTime(0) - DateTime.UtcNow)
+      .Single());
   }
 
   public override List<string> GetRangeFromList(string key, int startingFrom, int endingAt)
@@ -570,13 +588,15 @@ public class PostgreSqlConnection : JobStorageConnection
       """
       SELECT value
       FROM hangfire.list
-      WHERE key = @Key
+      WHERE key = $1
       ORDER BY id DESC
-      LIMIT @Limit OFFSET @Offset
+      LIMIT $2 OFFSET $3
       """);
-
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom }).ToList());
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameters(key, endingAt - startingFrom + 1, startingFrom)
+      .Select(reader => reader.GetString(0))
+      .ToList());
   }
 
   public override long GetHashCount(string key)
@@ -586,8 +606,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.hash WHERE key = @Key");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingle<long>(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("SELECT COUNT(id) FROM hangfire.hash WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.GetInt64(0))
+      .Single());
   }
 
   public override TimeSpan GetHashTtl(string key)
@@ -597,10 +621,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT MIN(expireat) FROM hangfire.hash WHERE key = @Key");
-    DateTime? result = _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
-
-    return !result.HasValue ? TimeSpan.FromSeconds(-1) : result.Value - DateTime.UtcNow;
+    string query = _context.QueryProvider.GetQuery("SELECT MIN(expireat) FROM hangfire.hash WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.IsDBNull(0) ? TimeSpan.FromSeconds(-1) : reader.GetDateTime(0) - DateTime.UtcNow)
+      .Single());
   }
 
   public override List<string> GetRangeFromSet(string key, int startingFrom, int endingAt)
@@ -614,13 +640,15 @@ public class PostgreSqlConnection : JobStorageConnection
       """
       SELECT value
       FROM hangfire.set
-      WHERE key = @Key
+      WHERE key = $1
       ORDER BY id
-      LIMIT @Limit OFFSET @Offset
+      LIMIT $2 OFFSET $3
       """);
-
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection,
-      connection => connection.Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom }).ToList());
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameters(key, endingAt - startingFrom + 1, startingFrom)
+      .Select(reader => reader.GetString(0))
+      .ToList());
   }
 
   public override TimeSpan GetSetTtl(string key)
@@ -630,10 +658,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT min(expireat) FROM hangfire.set WHERE key = @Key");
-    DateTime? result = _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<DateTime?>(query, new { Key = key }));
-
-    return !result.HasValue ? TimeSpan.FromSeconds(-1) : result.Value - DateTime.UtcNow;
+    string query = _context.QueryProvider.GetQuery("SELECT min(expireat) FROM hangfire.set WHERE key = $1");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameter(key)
+      .Select(reader => reader.IsDBNull(0) ? TimeSpan.FromSeconds(-1) : reader.GetDateTime(0) - DateTime.UtcNow)
+      .Single());
   }
 
   public override string? GetValueFromHash(string key, string name)
@@ -648,8 +678,12 @@ public class PostgreSqlConnection : JobStorageConnection
       throw new ArgumentNullException(nameof(name));
     }
 
-    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.hash WHERE key = @Key AND field = @Field");
-    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection.QuerySingleOrDefault<string>(query, new { Key = key, Field = name }));
+    string query = _context.QueryProvider.GetQuery("SELECT value FROM hangfire.hash WHERE key = $1 AND field = $2");
+    return _context.ConnectionManager.UseConnection(_dedicatedConnection, connection => connection
+      .Process(query)
+      .WithParameters(key, name)
+      .Select(reader => reader.GetString(0))
+      .SingleOrDefault());
   }
 
   private IDisposable AcquireLock(string resource, TimeSpan timeout)

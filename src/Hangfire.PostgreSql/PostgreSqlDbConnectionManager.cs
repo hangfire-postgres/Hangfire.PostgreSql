@@ -212,7 +212,7 @@ internal sealed class PostgreSqlDbConnectionManager
     return connection != null && _connectionFactory is ExistingNpgsqlConnectionFactory && ReferenceEquals(connection, _connectionFactory.GetOrCreateConnection());
   }
   
-  internal bool IsConnectionFactoryExisting()
+  internal bool UsesExistingConnection()
   {
     return _connectionFactory is ExistingNpgsqlConnectionFactory;
   }

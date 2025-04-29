@@ -22,7 +22,6 @@
 using System.Data;
 using System.Diagnostics;
 using System.Transactions;
-using Dapper;
 using Hangfire.Logging;
 using Npgsql;
 using IsolationLevel = System.Data.IsolationLevel;
@@ -163,8 +162,8 @@ public static class PostgreSqlDistributedLock
 
         DateTime timeout = onlyExpired ? DateTime.UtcNow - context.Options.DistributedLockTimeout : DateTime.MaxValue;
 
-        string query = context.QueryProvider.GetQuery("DELETE FROM hangfire.lock WHERE resource = @Resource AND acquired < @Timeout");
-        int rowsAffected = connection.Execute(query, new { Resource = resource, Timeout = timeout }, trx);
+        string query = context.QueryProvider.GetQuery("DELETE FROM hangfire.lock WHERE resource = $1 AND acquired < $2");
+        int rowsAffected = connection.Process(query, trx).WithParameters(resource, timeout).Execute();
 
         trx?.Commit();
 
@@ -194,14 +193,14 @@ public static class PostgreSqlDistributedLock
         string query = context.QueryProvider.GetQuery(
           """
           INSERT INTO hangfire.lock (resource, acquired) 
-          SELECT @Resource, @Acquired
+          SELECT $1, $2
           WHERE NOT EXISTS (
               SELECT 1 FROM hangfire.lock
-              WHERE resource = @Resource
+              WHERE resource = $1
           )
           ON CONFLICT DO NOTHING
           """);
-        int rowsAffected = connection.Execute(query, new { Resource = resource, Acquired = DateTime.UtcNow }, trx);
+        int rowsAffected = connection.Process(query, trx).WithParameters(resource, DateTime.UtcNow).Execute();
         trx?.Commit();
 
         return rowsAffected > 0;
@@ -227,19 +226,19 @@ public static class PostgreSqlDistributedLock
       string query = context.QueryProvider.GetQuery(
         """
         INSERT INTO hangfire.lock (resource, updatecount, acquired) 
-        SELECT @Resource, 0, @Acquired
+        SELECT $1, 0, $2
         WHERE NOT EXISTS (
             SELECT 1 FROM hangfire.lock
-            WHERE resource = @Resource
+            WHERE resource = $1
         )
         ON CONFLICT DO NOTHING
         """);
-      connection.Execute(query, new { Resource = resource, Acquired = DateTime.UtcNow });
+      connection.Process(query).WithParameters(resource, DateTime.UtcNow).Execute();
 
       // The lock is acquired if the updatecount is 0. If it is 1, it means that the lock was already acquired by another process.
       // In that case, we need to update the updatecount to 1 to indicate that the lock is now held by this process.
-      string updateQuery = context.QueryProvider.GetQuery("UPDATE hangfire.lock SET updatecount = 1 WHERE updatecount = 0 AND resource = @Resource");
-      int rowsAffected = connection.Execute(updateQuery, new { Resource = resource });
+      string updateQuery = context.QueryProvider.GetQuery("UPDATE hangfire.lock SET updatecount = 1 WHERE updatecount = 0 AND resource = $1");
+      int rowsAffected = connection.Process(updateQuery).WithParameter(resource).Execute();
 
       return rowsAffected > 0;
     }

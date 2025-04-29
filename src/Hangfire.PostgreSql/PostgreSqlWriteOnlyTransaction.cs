@@ -21,13 +21,12 @@
 
 using System.Data;
 using System.Data.Common;
-using System.Globalization;
 using System.Transactions;
-using Dapper;
 using Hangfire.Common;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.States;
 using Hangfire.Storage;
+using NpgsqlTypes;
 
 namespace Hangfire.PostgreSql;
 
@@ -73,53 +72,45 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
 
   public override void ExpireJob(string jobId, TimeSpan expireIn)
   {
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.job SET expireat = NOW() + INTERVAL '{0} SECONDS' WHERE id = @Id",
-      (long)expireIn.TotalSeconds);
-    QueueCommand(con => con.Execute(query, new { Id = jobId.ParseJobId() }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.job SET expireat = NOW() + $2 WHERE id = $1");
+    QueueCommand(con => con.Process(query).WithParameters(jobId.ParseJobId(), expireIn).Execute());
   }
 
   public override void PersistJob(string jobId)
   {
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.job SET expireat = NULL WHERE id = @Id");
-    QueueCommand(con => con.Execute(query, new { Id = jobId.ParseJobId() }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.job SET expireat = NULL WHERE id = $1");
+    QueueCommand(con => con.Process(query).WithParameter(jobId.ParseJobId()).Execute());
   }
 
   public override void SetJobState(string jobId, IState state)
   {
     string query = _context.QueryProvider.GetQuery(
+      // language=sql
       """
       WITH s AS (
         INSERT INTO hangfire.state (jobid, name, reason, createdat, data)
-        VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data) RETURNING id
+        VALUES ($1, $2, $3, $4, $5) RETURNING id
       )
       UPDATE hangfire.job j
-      SET stateid = s.id, statename = @Name
+      SET stateid = s.id, statename = $2
       FROM s
-      WHERE j.id = @JobId
+      WHERE j.id = $1
       """);
 
-    QueueCommand(con => con.Execute(query,
-      new {
-        JobId = jobId.ParseJobId(),
-        state.Name,
-        state.Reason,
-        CreatedAt = DateTime.UtcNow,
-        Data = new JsonParameter(SerializationHelper.Serialize(state.SerializeData())),
-      }));
+    QueueCommand(con => con.Process(query)
+      .WithParameters(jobId.ParseJobId(), state.Name, state.Reason, DateTime.UtcNow)
+      .WithParameter(SerializationHelper.Serialize(state.SerializeData()), NpgsqlDbType.Jsonb)
+      .Execute());
   }
 
   public override void AddJobState(string jobId, IState state)
   {
     string query = _context.QueryProvider.GetQuery(
-      "INSERT INTO hangfire.state (jobid, name, reason, createdat, data) VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data)");
-    QueueCommand(con => con.Execute(query,
-      new {
-        JobId = jobId.ParseJobId(),
-        state.Name,
-        state.Reason,
-        CreatedAt = DateTime.UtcNow,
-        Data = new JsonParameter(SerializationHelper.Serialize(state.SerializeData())),
-      }));
+      "INSERT INTO hangfire.state (jobid, name, reason, createdat, data) VALUES ($1, $2, $3, $4, $5)");
+    QueueCommand(con => con.Process(query)
+      .WithParameters(jobId.ParseJobId(), state.Name, state.Reason, DateTime.UtcNow)
+      .WithParameter(SerializationHelper.Serialize(state.SerializeData()), NpgsqlDbType.Jsonb)
+      .Execute());
   }
 
   public override void AddToQueue(string queue, string jobId)
@@ -134,28 +125,48 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
 
   public override void IncrementCounter(string key)
   {
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter (key, value) VALUES (@Key, @Value)");
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = +1 }));
+    ProcessCounter(key, CounterOperation.Increment, null);
   }
 
   public override void IncrementCounter(string key, TimeSpan expireIn)
   {
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter(key, value, expireat) VALUES (@Key, @Value, NOW() + INTERVAL '{0} SECONDS')",
-      (long)expireIn.TotalSeconds);
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = +1 }));
+    ProcessCounter(key, CounterOperation.Increment, expireIn);
   }
 
   public override void DecrementCounter(string key)
   {
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter (key, value) VALUES (@Key, @Value)");
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = -1 }));
+    ProcessCounter(key, CounterOperation.Decrement, null);
   }
 
   public override void DecrementCounter(string key, TimeSpan expireIn)
   {
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter(key, value, expireat) VALUES (@Key, @Value, NOW() + INTERVAL '{0} SECONDS')",
-      ((long)expireIn.TotalSeconds).ToString(CultureInfo.InvariantCulture));
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = -1 }));
+    ProcessCounter(key, CounterOperation.Decrement, expireIn);
+  }
+
+  private enum CounterOperation
+  {
+    Increment,
+    Decrement,
+  }
+
+  private void ProcessCounter(string key, CounterOperation operation, TimeSpan? expireIn)
+  {
+    string query = expireIn.HasValue
+      ? _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter(key, value, expireat) VALUES ($1, $2, NOW() + $3)")
+      : _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter(key, value) VALUES ($1, $2)");
+    long value = operation switch {
+      CounterOperation.Increment => 1,
+      CounterOperation.Decrement => -1,
+      var _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null),
+    };
+    QueueCommand(con => {
+      SqlQueryProcessor processor = con.Process(query).WithParameters(key, value);
+      if (expireIn.HasValue)
+      {
+        processor.WithParameter(expireIn.Value);
+      }
+      processor.Execute();
+    });
   }
 
   public override void AddToSet(string key, string value)
@@ -168,29 +179,28 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
     string query = _context.QueryProvider.GetQuery(
       """
       INSERT INTO hangfire.set(key, value, score)
-      VALUES(@Key, @Value, @Score)
-      ON CONFLICT (key, value)
-      DO UPDATE SET score = EXCLUDED.score
+      VALUES($1, $2, $3)
+      ON CONFLICT (key, value) DO UPDATE SET score = EXCLUDED.score
       """);
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = value, Score = score }));
+    QueueCommand(con => con.Process(query).WithParameters(key, value, score).Execute());
   }
 
   public override void RemoveFromSet(string key, string value)
   {
-    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.set WHERE key = @Key AND value = @Value");
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = value }));
+    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.set WHERE key = $1 AND value = $2");
+    QueueCommand(con => con.Process(query).WithParameters(key, value).Execute());
   }
 
   public override void InsertToList(string key, string value)
   {
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.list (key, value) VALUES (@Key, @Value)");
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = value }));
+    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.list (key, value) VALUES ($1, $2)");
+    QueueCommand(con => con.Process(query).WithParameters(key, value).Execute());
   }
 
   public override void RemoveFromList(string key, string value)
   {
-    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.list WHERE key = @Key AND value = @Value");
-    QueueCommand(con => con.Execute(query, new { Key = key, Value = value }));
+    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.list WHERE key = $1 AND value = $2");
+    QueueCommand(con => con.Process(query).WithParameters(key, value).Execute());
   }
 
   public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
@@ -198,16 +208,16 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
     string query = _context.QueryProvider.GetQuery(
       """
       DELETE FROM hangfire.list AS source
-      WHERE key = @Key
+      WHERE key = $1
       AND id NOT IN (
           SELECT id 
           FROM hangfire.list AS keep
           WHERE keep.key = source.key
           ORDER BY id 
-          OFFSET @Offset LIMIT @Limit
+          LIMIT $2 OFFSET $3
       )
       """);
-    QueueCommand(con => con.Execute(query, new { Key = key, Offset = keepStartingFrom, Limit = keepEndingAt - keepStartingFrom + 1 }));
+    QueueCommand(con => con.Process(query).WithParameters(key, keepEndingAt - keepStartingFrom + 1, keepStartingFrom).Execute());
   }
 
   public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -223,24 +233,24 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
     }
 
     string query = _context.QueryProvider.GetQuery(
+      // language=sql
       """
       WITH inputvalues AS (
-        SELECT @Key AS key, @Field AS field, @Value AS value
-      ), updatedrows AS ( 
+        SELECT $1 AS key, $2 AS field, $3 AS value
+      ), updatedrows AS (
         UPDATE hangfire.hash updatetarget
         SET value = inputvalues.value
         FROM inputvalues
-        WHERE updatetarget.key = inputvalues.key
-        AND updatetarget.field = inputvalues.field
+        WHERE updatetarget.key = inputvalues.key AND updatetarget.field = inputvalues.field
         RETURNING updatetarget.key, updatetarget.field
       )
       INSERT INTO hangfire.hash(key, field, value)
-      SELECT key, field, value 
+      SELECT key, field, value
       FROM inputvalues insertvalues
       WHERE NOT EXISTS (
-        SELECT 1 
-        FROM updatedrows 
-        WHERE updatedrows.key = insertvalues.key 
+        SELECT 1
+        FROM updatedrows
+        WHERE updatedrows.key = insertvalues.key
         AND updatedrows.field = insertvalues.field
       )
       """);
@@ -248,7 +258,7 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
     foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
     {
       KeyValuePair<string, string> pair = keyValuePair;
-      QueueCommand(con => con.Execute(query, new { Key = key, Field = pair.Key, pair.Value }));
+      QueueCommand(con => con.Process(query).WithParameters(key, pair.Key, pair.Value).Execute());
     }
   }
 
@@ -259,8 +269,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.hash WHERE key = @Key");
-    QueueCommand(con => con.Execute(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.hash WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameter(key).Execute());
   }
 
   public override void ExpireSet(string key, TimeSpan expireIn)
@@ -270,8 +280,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.set SET expireat = @ExpireAt WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.set SET expireat = $2 WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameters(key, DateTime.UtcNow.Add(expireIn)).Execute());
   }
 
   public override void ExpireList(string key, TimeSpan expireIn)
@@ -281,8 +291,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.list SET expireat = @ExpireAt WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.list SET expireat = $2 WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameters(key, DateTime.UtcNow.Add(expireIn)).Execute());
   }
 
   public override void ExpireHash(string key, TimeSpan expireIn)
@@ -292,8 +302,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.hash SET expireat = @ExpireAt WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.hash SET expireat = $2 WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameters(key, DateTime.UtcNow.Add(expireIn)).Execute());
   }
 
   public override void PersistSet(string key)
@@ -303,8 +313,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.set SET expireat = null WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.set SET expireat = null WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameter(key).Execute());
   }
 
   public override void PersistList(string key)
@@ -314,8 +324,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.list SET expireat = null WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.list SET expireat = null WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameter(key).Execute());
   }
 
   public override void PersistHash(string key)
@@ -325,8 +335,8 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.hash SET expireat = null WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("UPDATE hangfire.hash SET expireat = null WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameter(key).Execute());
   }
 
   public override void AddRangeToSet(string key, IList<string> items)
@@ -341,8 +351,11 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(items));
     }
 
-    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.set (key, value, score) VALUES (@Key, @Value, 0.0)");
-    QueueCommand(connection => connection.Execute(query, items.Select(value => new { Key = key, Value = value }).ToList()));
+    string query = _context.QueryProvider.GetQuery("INSERT INTO hangfire.set (key, value, score) VALUES ($1, $2, 0.0)");
+    foreach (string item in items)
+    {
+      QueueCommand(con => con.Process(query).WithParameters(key, item).Execute());
+    }
   }
 
   public override void RemoveSet(string key)
@@ -352,12 +365,12 @@ public class PostgreSqlWriteOnlyTransaction : JobStorageTransaction
       throw new ArgumentNullException(nameof(key));
     }
 
-    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.set WHERE key = @Key");
-    QueueCommand(connection => connection.Execute(query, new { Key = key }));
+    string query = _context.QueryProvider.GetQuery("DELETE FROM hangfire.set WHERE key = $1");
+    QueueCommand(con => con.Process(query).WithParameter(key).Execute());
   }
 
-  internal void QueueCommand(Action<IDbConnection> action)
+  internal void QueueCommand(Action<IDbConnection> accessor)
   {
-    _commandQueue.Enqueue(action);
+    _commandQueue.Enqueue(accessor);
   }
 }

@@ -19,7 +19,6 @@
 //   
 //    Special thanks goes to him.
 
-using Dapper;
 using Hangfire.Common;
 using Hangfire.Logging;
 using Hangfire.Server;
@@ -54,13 +53,11 @@ internal class CountersAggregator : IServerComponent
     _logger.Debug("Aggregating records in 'Counter' table...");
 
     int removedCount = 0;
-      
+
     do
     {
-      string query = _context.QueryProvider.GetQuery(
+      string aggregateQuery = _context.QueryProvider.GetQuery(
         """
-        BEGIN;
-
         INSERT INTO hangfire.aggregatedcounter (key, value, expireat)	
         SELECT
           key,
@@ -69,17 +66,19 @@ internal class CountersAggregator : IServerComponent
         FROM hangfire.counter
         GROUP BY key
         ON CONFLICT(key) DO UPDATE
-        SET value = aggregatedcounter.value + EXCLUDED.value, expireat = EXCLUDED.expireat;
-
+        SET value = aggregatedcounter.value + EXCLUDED.value, expireat = EXCLUDED.expireat
+        """);
+      string deleteQuery = _context.QueryProvider.GetQuery(
+        """
         DELETE FROM hangfire.counter
         WHERE key IN (
           SELECT key FROM hangfire.aggregatedcounter
-        );
-
-        COMMIT
+        )
         """);
-      _context.ConnectionManager.UseConnection(null,
-        connection => removedCount = connection.Execute(query, new { now = DateTime.UtcNow, count = NumberOfRecordsInSinglePass }, commandTimeout: 0));
+      removedCount = _context.ConnectionManager.UseTransaction(null, (connection, transaction) => {
+        connection.Process(aggregateQuery, transaction).WithCommandTimeout(0).Execute();
+        return connection.Process(deleteQuery, transaction).WithCommandTimeout(0).Execute();
+      });
 
       if (removedCount < NumberOfRecordsInSinglePass)
       {

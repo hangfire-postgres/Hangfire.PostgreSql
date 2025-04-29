@@ -20,7 +20,6 @@
 //    Special thanks goes to him.
 
 using System.Data;
-using Dapper;
 using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -74,9 +73,9 @@ internal class ExpirationManager : IBackgroundProcess, IServerComponent
 
       UseConnectionDistributedLock(connection => {
         int removedCount;
+        using IDbTransaction transaction = connection.BeginTransaction();
         do
         {
-          using IDbTransaction transaction = connection.BeginTransaction();
           string query = _context.QueryProvider.GetQuery(
             """
             DELETE FROM hangfire.{0}
@@ -84,23 +83,23 @@ internal class ExpirationManager : IBackgroundProcess, IServerComponent
               SELECT id
               FROM hangfire.{0}
               WHERE expireat < NOW()
-              LIMIT @Count
+              LIMIT $1
             )
             """, table);
-          removedCount = connection.Execute(query, new { Count = _context.Options.DeleteExpiredBatchSize }, transaction);
-
+          removedCount = connection.Process(query, transaction).WithParameter(_context.Options.DeleteExpiredBatchSize).Execute();
           if (removedCount <= 0)
           {
             continue;
           }
 
-          transaction.Commit();
           _logger.InfoFormat("Removed {0} outdated record(s) from '{1}' table.", removedCount, table);
 
           cancellationToken.WaitHandle.WaitOne(_delayBetweenPasses);
           cancellationToken.ThrowIfCancellationRequested();
         }
         while (removedCount != 0);
+
+        transaction.Commit();
       });
     }
 
@@ -127,24 +126,28 @@ internal class ExpirationManager : IBackgroundProcess, IServerComponent
     UseConnectionDistributedLock(connection => {
       using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
       string query = _context.QueryProvider.GetQuery(
+        // language=sql
         """
         WITH counters AS (
           DELETE FROM hangfire.counter
-          WHERE key = @Key
-          AND expireat IS NULL
+          WHERE key = $1 AND expireat IS NULL
           RETURNING *
         )
         SELECT SUM(value) FROM counters
         """);
 
-      long aggregatedValue = connection.ExecuteScalar<long>(query, new { Key = counterName }, transaction);
-      transaction.Commit();
+      long aggregatedValue = connection.Process(query, transaction)
+        .WithParameter(counterName)
+        .Select(reader => reader.IsDBNull(0) ? 0 : reader.GetInt64(0))
+        .Single();
 
       if (aggregatedValue > 0)
       {
-        string insertQuery = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter (key, value) VALUES (@Key, @Value)");
-        connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
+        string insertQuery = _context.QueryProvider.GetQuery("INSERT INTO hangfire.counter (key, value) VALUES ($1, $2)");
+        connection.Process(insertQuery, transaction).WithParameters(counterName, aggregatedValue).Execute();
       }
+
+      transaction.Commit();
     });
   }
 
