@@ -216,9 +216,9 @@ namespace Hangfire.PostgreSql
 
         TryInitializeStorage(isStartup: false);
 
-        if (!_initialized)
+        if (!_initialized && !Options.AllowDegradedModeWithoutStorage)
         {
-          // Initialization failed and degraded mode is not enabled – rethrow with the last error
+          // Initialization failed and degraded mode is not enabled - rethrow with the last error
           // to give a clear signal to the caller.
           throw new InvalidOperationException(
             "Hangfire PostgreSQL storage is not initialized. See inner exception for details.",
@@ -279,17 +279,17 @@ namespace Hangfire.PostgreSql
       _initialized = false;
       _lastInitializationException = lastException;
 
-      if (!Options.AllowDegradedModeWithoutStorage || !isStartup)
+      if (!Options.AllowDegradedModeWithoutStorage && isStartup)
       {
-        // During startup without degraded mode, or when called lazily (first use), fail fast.
+        // During startup without degraded mode, fail fast to avoid starting the app in
+        // a partially configured state.
         throw new InvalidOperationException(
           "Failed to initialize Hangfire PostgreSQL storage.",
           lastException);
       }
 
-      // When degraded mode is allowed during startup, we swallow the exception here and
-      // leave storage uninitialized. Subsequent calls will attempt to initialize lazily
-      // via EnsureInitialized.
+      // When degraded mode is allowed, we swallow the exception here and leave storage
+      // uninitialized. Subsequent calls will attempt to initialize lazily via EnsureInitialized.
     }
 
     private void PerformSingleInitializationAttempt()
@@ -318,12 +318,7 @@ namespace Hangfire.PostgreSql
       double factor = Math.Pow(2, attempt - 1);
       double millis = baseDelay.TotalMilliseconds * factor;
 
-      if (millis > maxDelay.TotalMilliseconds)
-      {
-        millis = maxDelay.TotalMilliseconds;
-      }
-
-      if (millis < 0)
+      if (millis < 0 || millis > maxDelay.TotalMilliseconds || double.IsInfinity(millis) || double.IsNaN(millis))
       {
         millis = maxDelay.TotalMilliseconds;
       }

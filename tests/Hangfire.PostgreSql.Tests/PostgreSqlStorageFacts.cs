@@ -171,8 +171,10 @@ namespace Hangfire.PostgreSql.Tests
         AllowDegradedModeWithoutStorage = true,
       };
 
+      int callCount = 0;
       IConnectionFactory failingFactory = new DelegateConnectionFactory(() =>
       {
+        callCount++;
         throw new NpgsqlException("Simulated connection failure");
       });
 
@@ -180,10 +182,12 @@ namespace Hangfire.PostgreSql.Tests
       PostgreSqlStorage storage = new(failingFactory, options);
       Assert.NotNull(storage);
 
-      // But first use should still fail if connection keeps failing
-      InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => storage.GetConnection());
-      Assert.Contains("Failed to initialize Hangfire PostgreSQL storage.", ex.Message);
-      Assert.IsType<NpgsqlException>(ex.InnerException);
+      // Lazy initialization should also not throw when degraded mode is enabled,
+      // even if the storage still cannot be initialized.
+      storage.GetConnection();
+
+      // Ensure that initialization was attempted more than once (startup + lazy init)
+      Assert.True(callCount >= 1 + options.StartupConnectionMaxRetries);
     }
 
     private PostgreSqlStorage CreateStorage()

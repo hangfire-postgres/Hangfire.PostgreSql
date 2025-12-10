@@ -84,8 +84,7 @@ this provider would first process jobs in `a-long-running-queue`, then `general-
 
 ### Startup resilience and transient database outages
 
-Starting from version 1.x (where `PostgreSqlStorageOptions` gained startup resilience options),
-the storage tries to be more tolerant to *transient* PostgreSQL outages during application startup.
+Starting from version 1.20.13 (where `PostgreSqlStorageOptions` gained startup resilience options), the storage tries to be more tolerant to *transient* PostgreSQL outages during application startup.
 
 #### Default behavior
 
@@ -113,7 +112,7 @@ app.UseHangfireDashboard();
 With these defaults:
 
 1. On application startup, when schema preparation is required, the storage will try to open a connection and install/upgrade the schema.
-2. If the database is temporarily unavailable, it will retry the operation up to 6 (initial + retries) times with exponential backoff between attempts, capped by `StartupConnectionMaxDelay`.
+2. If the database is temporarily unavailable, it will retry the operation up to 6 times (1 initial attempt + 5 retries) with exponential backoff between attempts, capped at 1 minute.
 3. If all attempts fail **during startup**, the storage enters a *degraded* state instead of crashing the whole process. Your ASP.NET Core application can still start and serve other endpoints that do not depend on Hangfire.
 4. On the *first actual use* of the storage (e.g. dashboard, background job server), Hangfire will try to initialize again. If the database is available by then, initialization succeeds and everything works as usual. If it is still unavailable, an `InvalidOperationException` with the original database exception as `InnerException` is thrown at that call site.
 
@@ -148,7 +147,7 @@ With this configuration:
 
 Degraded mode is controlled via `AllowDegradedModeWithoutStorage`:
 
-- `true` (default): if all startup attempts fail, the storage constructor will *not* throw. Instead, it records the last failure and leaves storage uninitialized. The first use of the storage will re-run initialization and either succeed (once the DB is up) or throw.
+- `true` (default): if all startup attempts fail, both startup and lazy initialization will keep the storage in an uninitialized state on failure and retry on subsequent uses, until initialization eventually succeeds.
 - `false`: if all startup attempts fail, the storage constructor will throw an `InvalidOperationException("Failed to initialize Hangfire PostgreSQL storage.", innerException)`.
 
 For example, to keep retries but still fail startup if the DB never becomes available:
