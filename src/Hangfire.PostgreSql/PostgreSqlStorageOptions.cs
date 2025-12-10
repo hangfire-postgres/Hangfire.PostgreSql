@@ -50,6 +50,10 @@ namespace Hangfire.PostgreSql
       EnableTransactionScopeEnlistment = true;
       DeleteExpiredBatchSize = 1000;
       UseSlidingInvisibilityTimeout = false;
+      StartupConnectionMaxRetries = 5;
+      StartupConnectionBaseDelay = TimeSpan.FromSeconds(1);
+      StartupConnectionMaxDelay = TimeSpan.FromMinutes(1);
+      AllowDegradedModeWithoutStorage = true;
     }
 
     public TimeSpan QueuePollInterval
@@ -133,6 +137,38 @@ namespace Hangfire.PostgreSql
     ///   since the background storage processes are not run (which is used to update the invisibility timeouts)
     /// </summary>
     public bool UseSlidingInvisibilityTimeout { get; set; }
+
+    /// <summary>
+    /// Gets if additional resilience during storage initialization is enabled. When <see cref="StartupConnectionMaxRetries"/>
+    /// is greater than zero and <see cref="PrepareSchemaIfNecessary"/> is true, Hangfire will retry opening a
+    /// connection and installing schema instead of failing immediately.
+    /// This property is computed from <see cref="StartupConnectionMaxRetries"/>.
+    /// </summary>
+    public bool EnableResilientStartup => StartupConnectionMaxRetries > 0;
+
+    /// <summary>
+    /// Maximum number of additional attempts (after the initial one) to obtain a connection and
+    /// prepare the schema during startup when <see cref="EnableResilientStartup"/> is true.
+    /// Value of 0 keeps current behavior (no retries).
+    /// </summary>
+    public int StartupConnectionMaxRetries { get; set; }
+
+    /// <summary>
+    /// Base delay used to compute exponential backoff between startup connection attempts when <see cref="EnableResilientStartup"/> is true.
+    /// </summary>
+    public TimeSpan StartupConnectionBaseDelay { get; set; }
+
+    /// <summary>
+    /// Maximum delay between startup connection attempts when <see cref="EnableResilientStartup"/> is true.
+    /// </summary>
+    public TimeSpan StartupConnectionMaxDelay { get; set; }
+
+    /// <summary>
+    /// When true and <see cref="EnableResilientStartup"/> is enabled, storage initialization will
+    /// not throw even if all startup connection attempts fail. Instead, the storage starts in a
+    /// degraded mode and will attempt to initialize lazily on first use.
+    /// </summary>
+    public bool AllowDegradedModeWithoutStorage { get; set; }
 
     private static void ThrowIfValueIsNotPositive(TimeSpan value, string fieldName)
     {

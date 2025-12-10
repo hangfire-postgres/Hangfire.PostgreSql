@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using System.Threading;
 using System.Transactions;
 using Hangfire.Annotations;
 using Hangfire.Logging;
@@ -39,7 +40,10 @@ namespace Hangfire.PostgreSql
   public class PostgreSqlStorage : JobStorage
   {
     private readonly IConnectionFactory _connectionFactory;
-    
+    private readonly object _initializationLock = new();
+    private bool _initialized;
+    private Exception _lastInitializationException;
+
     private readonly Dictionary<string, bool> _features =
       new(StringComparer.OrdinalIgnoreCase)
       {
@@ -85,26 +89,17 @@ namespace Hangfire.PostgreSql
       _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
       Options = options ?? throw new ArgumentNullException(nameof(options));
 
-      if (options.PrepareSchemaIfNecessary)
-      {
-        NpgsqlConnection connection = CreateAndOpenConnection();
-        try
-        {
-          PostgreSqlObjectsInstaller.Install(connection, options.SchemaName);
-        }
-        finally
-        {
-          if (connectionFactory is not ExistingNpgsqlConnectionFactory)
-          {
-            connection.Dispose();
-          }
-        }
-      }
-
       InitializeQueueProviders();
       if (Options.UseSlidingInvisibilityTimeout)
       {
         HeartbeatProcess = new PostgreSqlHeartbeatProcess();
+      }
+
+      // Perform eager initialization if schema preparation is requested. This can be made resilient
+      // via the options exposed on PostgreSqlStorageOptions.
+      if (Options.PrepareSchemaIfNecessary)
+      {
+        TryInitializeStorage(isStartup: true);
       }
     }
 
@@ -116,11 +111,13 @@ namespace Hangfire.PostgreSql
 
     public override IMonitoringApi GetMonitoringApi()
     {
+      EnsureInitialized();
       return new PostgreSqlMonitoringApi(this, QueueProviders);
     }
 
     public override IStorageConnection GetConnection()
     {
+      EnsureInitialized();
       return new PostgreSqlConnection(this);
     }
 
@@ -197,6 +194,141 @@ namespace Hangfire.PostgreSql
         ReleaseConnection(connection);
         throw;
       }
+    }
+
+    /// <summary>
+    /// Ensures storage is initialized. When resilient startup and degraded mode are enabled,
+    /// this will attempt a lazy initialization on first use.
+    /// </summary>
+    private void EnsureInitialized()
+    {
+      if (_initialized || !Options.PrepareSchemaIfNecessary)
+      {
+        return;
+      }
+
+      lock (_initializationLock)
+      {
+        if (_initialized)
+        {
+          return;
+        }
+
+        TryInitializeStorage(isStartup: false);
+
+        if (!_initialized)
+        {
+          // Initialization failed and degraded mode is not enabled – rethrow with the last error
+          // to give a clear signal to the caller.
+          throw new InvalidOperationException(
+            "Hangfire PostgreSQL storage is not initialized. See inner exception for details.",
+            _lastInitializationException);
+        }
+      }
+    }
+
+    private void TryInitializeStorage(bool isStartup)
+    {
+      // Fast-path: no resilient startup configured - keep the current behavior of a single attempt.
+      if (!Options.EnableResilientStartup)
+      {
+        PerformSingleInitializationAttempt();
+        _initialized = true;
+        _lastInitializationException = null;
+        return;
+      }
+
+      int attempts = 0;
+      int maxAttempts = 1 + Options.StartupConnectionMaxRetries; // initial + retries
+      Exception lastException = null;
+
+      while (attempts < maxAttempts)
+      {
+        try
+        {
+          PerformSingleInitializationAttempt();
+          _initialized = true;
+          _lastInitializationException = null;
+          return;
+        }
+        catch (Exception ex)
+        {
+          lastException = ex;
+          attempts++;
+
+          if (attempts >= maxAttempts)
+          {
+            break;
+          }
+
+          // Apply exponential backoff with capping.
+          TimeSpan delay = ComputeBackoffDelay(attempts, Options.StartupConnectionBaseDelay, Options.StartupConnectionMaxDelay);
+
+          try
+          {
+            Thread.Sleep(delay);
+          }
+          catch (ThreadInterruptedException)
+          {
+            // Preserve original exception and abort initialization.
+            break;
+          }
+        }
+      }
+
+      _initialized = false;
+      _lastInitializationException = lastException;
+
+      if (!Options.AllowDegradedModeWithoutStorage || !isStartup)
+      {
+        // During startup without degraded mode, or when called lazily (first use), fail fast.
+        throw new InvalidOperationException(
+          "Failed to initialize Hangfire PostgreSQL storage.",
+          lastException);
+      }
+
+      // When degraded mode is allowed during startup, we swallow the exception here and
+      // leave storage uninitialized. Subsequent calls will attempt to initialize lazily
+      // via EnsureInitialized.
+    }
+
+    private void PerformSingleInitializationAttempt()
+    {
+      NpgsqlConnection connection = CreateAndOpenConnection();
+      try
+      {
+        PostgreSqlObjectsInstaller.Install(connection, Options.SchemaName);
+      }
+      finally
+      {
+        if (_connectionFactory is not ExistingNpgsqlConnectionFactory)
+        {
+          connection.Dispose();
+        }
+      }
+    }
+
+    private static TimeSpan ComputeBackoffDelay(int attempt, TimeSpan baseDelay, TimeSpan maxDelay)
+    {
+      if (attempt <= 0)
+      {
+        return baseDelay;
+      }
+
+      double factor = Math.Pow(2, attempt - 1);
+      double millis = baseDelay.TotalMilliseconds * factor;
+
+      if (millis > maxDelay.TotalMilliseconds)
+      {
+        millis = maxDelay.TotalMilliseconds;
+      }
+
+      if (millis < 0)
+      {
+        millis = maxDelay.TotalMilliseconds;
+      }
+
+      return TimeSpan.FromMilliseconds(millis);
     }
 
     internal void UseTransaction(DbConnection dedicatedConnection,

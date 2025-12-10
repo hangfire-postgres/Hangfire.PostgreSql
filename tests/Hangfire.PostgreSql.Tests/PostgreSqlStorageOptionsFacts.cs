@@ -14,6 +14,27 @@ namespace Hangfire.PostgreSql.Tests
       Assert.True(options.InvisibilityTimeout > TimeSpan.Zero);
       Assert.True(options.DistributedLockTimeout > TimeSpan.Zero);
       Assert.True(options.PrepareSchemaIfNecessary);
+
+      // Resilient startup defaults
+      Assert.Equal(5, options.StartupConnectionMaxRetries);
+      Assert.True(options.EnableResilientStartup);
+      Assert.Equal(TimeSpan.FromSeconds(1), options.StartupConnectionBaseDelay);
+      Assert.Equal(TimeSpan.FromMinutes(1), options.StartupConnectionMaxDelay);
+      Assert.True(options.AllowDegradedModeWithoutStorage);
+    }
+
+    [Fact]
+    public void EnableResilientStartup_IsFalse_WhenStartupConnectionMaxRetriesIsZero()
+    {
+      PostgreSqlStorageOptions options = new() { StartupConnectionMaxRetries = 0 };
+      Assert.False(options.EnableResilientStartup);
+    }
+
+    [Fact]
+    public void EnableResilientStartup_IsTrue_WhenStartupConnectionMaxRetriesIsPositive()
+    {
+      PostgreSqlStorageOptions options = new() { StartupConnectionMaxRetries = 3 };
+      Assert.True(options.EnableResilientStartup);
     }
 
     [Fact]
