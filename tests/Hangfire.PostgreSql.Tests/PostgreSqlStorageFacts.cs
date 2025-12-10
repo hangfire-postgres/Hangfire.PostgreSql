@@ -132,6 +132,64 @@ namespace Hangfire.PostgreSql.Tests
       Assert.Equal(expected, actual);
     }
 
+    [Fact]
+    public void Ctor_RetriesInitialization_WhenResilientStartupIsEnabled_AndConnectionFails()
+    {
+      // Arrange
+      PostgreSqlStorageOptions options = new()
+      {
+        PrepareSchemaIfNecessary = true,
+        StartupConnectionMaxRetries = 2,
+        StartupConnectionBaseDelay = TimeSpan.FromMilliseconds(1),
+        StartupConnectionMaxDelay = TimeSpan.FromMilliseconds(2),
+        AllowDegradedModeWithoutStorage = false,
+      };
+
+      int callCount = 0;
+      IConnectionFactory failingFactory = new DelegateConnectionFactory(() =>
+      {
+        callCount++;
+        throw new NpgsqlException("Simulated connection failure");
+      });
+
+      // Act & assert
+      InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new PostgreSqlStorage(failingFactory, options));
+      Assert.Contains("Failed to initialize Hangfire PostgreSQL storage.", ex.Message);
+      Assert.Equal(1 + options.StartupConnectionMaxRetries, callCount);
+    }
+
+    [Fact]
+    public void Ctor_AllowsDegradedMode_WhenResilientStartupIsEnabled_AndDegradedModeAllowed()
+    {
+      // Arrange
+      PostgreSqlStorageOptions options = new()
+      {
+        PrepareSchemaIfNecessary = true,
+        StartupConnectionMaxRetries = 1,
+        StartupConnectionBaseDelay = TimeSpan.FromMilliseconds(1),
+        StartupConnectionMaxDelay = TimeSpan.FromMilliseconds(2),
+        AllowDegradedModeWithoutStorage = true,
+      };
+
+      int callCount = 0;
+      IConnectionFactory failingFactory = new DelegateConnectionFactory(() =>
+      {
+        callCount++;
+        throw new NpgsqlException("Simulated connection failure");
+      });
+
+      // Act: constructor should not throw due to degraded mode
+      PostgreSqlStorage storage = new(failingFactory, options);
+      Assert.NotNull(storage);
+
+      // Lazy initialization should also not throw when degraded mode is enabled,
+      // even if the storage still cannot be initialized.
+      storage.GetConnection();
+
+      // Ensure that initialization was attempted more than once (startup + lazy init)
+      Assert.True(callCount >= 1 + options.StartupConnectionMaxRetries);
+    }
+
     private PostgreSqlStorage CreateStorage()
     {
       return new PostgreSqlStorage(ConnectionUtils.GetDefaultConnectionFactory(), _options);

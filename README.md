@@ -82,6 +82,105 @@ app.UseHangfireServer(options);
 
 this provider would first process jobs in `a-long-running-queue`, then `general-queue` and lastly `very-fast-queue`.
 
+### Startup resilience and transient database outages
+
+Starting from version 1.20.13 (where `PostgreSqlStorageOptions` gained startup resilience options), the storage tries to be more tolerant to *transient* PostgreSQL outages during application startup.
+
+#### Default behavior
+
+By default, when you use the new-style configuration:
+
+```csharp
+services.AddHangfire((provider, config) =>
+{
+    config.UsePostgreSqlStorage(opts =>
+        opts.UseNpgsqlConnection(Configuration.GetConnectionString("HangfireConnection")));
+});
+
+app.UseHangfireServer();
+app.UseHangfireDashboard();
+```
+
+`PostgreSqlStorageOptions` uses the following defaults for startup resilience:
+
+- `PrepareSchemaIfNecessary = true`
+- `StartupConnectionMaxRetries = 5`
+- `StartupConnectionBaseDelay = 1 second`
+- `StartupConnectionMaxDelay = 1 minute`
+- `AllowDegradedModeWithoutStorage = true`
+
+With these defaults:
+
+1. On application startup, when schema preparation is required, the storage will try to open a connection and install/upgrade the schema.
+2. If the database is temporarily unavailable, it will retry the operation up to 6 times (1 initial attempt + 5 retries) with exponential backoff between attempts, capped at 1 minute.
+3. If all attempts fail **during startup**, the storage enters a *degraded* state instead of crashing the whole process. Your ASP.NET Core application can still start and serve other endpoints that do not depend on Hangfire.
+4. On the *first actual use* of the storage (e.g. dashboard, background job server), Hangfire will try to initialize again. If the database is available by then, initialization succeeds and everything works as usual. If it is still unavailable, an `InvalidOperationException` with the original database exception as `InnerException` is thrown at that call site.
+
+This behavior is designed to make applications more robust in scenarios where the database may briefly lag behind the application during deployments or orchestrated restarts.
+
+#### Opting out of resilient startup (fail fast)
+
+If you prefer to fail the whole process immediately if the database is not reachable during startup – you can disable retries by setting `StartupConnectionMaxRetries` to `0`:
+
+```csharp
+var storageOptions = new PostgreSqlStorageOptions
+{
+    PrepareSchemaIfNecessary = true,
+    StartupConnectionMaxRetries = 0,          // disables resilient startup
+    AllowDegradedModeWithoutStorage = false,  // fail fast if DB is down at startup
+};
+
+services.AddHangfire((provider, config) =>
+{
+    config.UsePostgreSqlStorage(opts =>
+        opts.UseNpgsqlConnection(Configuration.GetConnectionString("HangfireConnection")),
+        storageOptions);
+});
+```
+
+With this configuration:
+
+- A single attempt is made to open a connection and prepare the schema.
+- If that attempt fails, the storage constructor throws and application startup fails.
+
+#### Controlling degraded mode
+
+Degraded mode is controlled via `AllowDegradedModeWithoutStorage`:
+
+- `true` (default): if all startup attempts fail, both startup and lazy initialization will keep the storage in an uninitialized state on failure and retry on subsequent uses, until initialization eventually succeeds.
+- `false`: if all startup attempts fail, the storage constructor will throw an `InvalidOperationException("Failed to initialize Hangfire PostgreSQL storage.", innerException)`.
+
+For example, to keep retries but still fail startup if the DB never becomes available:
+
+```csharp
+var storageOptions = new PostgreSqlStorageOptions
+{
+    PrepareSchemaIfNecessary = true,
+    StartupConnectionMaxRetries = 10,         // more aggressive retry policy
+    StartupConnectionBaseDelay = TimeSpan.FromSeconds(2),
+    StartupConnectionMaxDelay = TimeSpan.FromMinutes(2),
+    AllowDegradedModeWithoutStorage = false,  // do not start the app without storage
+};
+```
+
+#### Turning off schema preparation entirely
+
+If you manage the Hangfire schema yourself (for example via migrations or a dedicated deployment step) and do not want the storage to touch the database during startup or on first use, set `PrepareSchemaIfNecessary = false`:
+
+```csharp
+var storageOptions = new PostgreSqlStorageOptions
+{
+    PrepareSchemaIfNecessary = false, // no schema installation/upgrade
+};
+```
+
+In this case:
+
+- No schema initialization is performed by `PostgreSqlStorage`.
+- The first query that actually needs the database will fail if the schema is missing or mismatched, so you must ensure it is created/updated out of band.
+
+> Note: startup resilience settings (`StartupConnectionMaxRetries`, `AllowDegradedModeWithoutStorage`, etc.) only apply when `PrepareSchemaIfNecessary` is `true`.
+
 ### License
 
 Copyright © 2014-2024 Frank Hommers https://github.com/hangfire-postgres/Hangfire.PostgreSql.
