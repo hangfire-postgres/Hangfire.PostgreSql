@@ -116,7 +116,7 @@ namespace Hangfire.PostgreSql
 
       string createJobSql = $@"
         INSERT INTO ""{_options.SchemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-        VALUES (@InvocationData, @Arguments, @CreatedAt, @ExpireAt) 
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, @CreatedAt, @ExpireAt) 
         RETURNING ""id"";
       ";
 
@@ -125,30 +125,28 @@ namespace Hangfire.PostgreSql
       return _storage.UseTransaction(_dedicatedConnection, (connection, transaction) => {
         string jobId = connection.QuerySingle<long>(createJobSql,
           new {
-            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(invocationData)),
+            Arguments = JsonParameter.GetParameterValue(invocationData.Arguments, JsonParameter.ValueType.Array),
             CreatedAt = createdAt,
             ExpireAt = createdAt.Add(expireIn),
           }).ToString(CultureInfo.InvariantCulture);
 
         if (parameters.Count > 0)
         {
-          object[] parameterArray = new object[parameters.Count];
-          int parameterIndex = 0;
-          foreach (KeyValuePair<string, string> parameter in parameters)
-          {
-            parameterArray[parameterIndex++] = new {
-              JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
-              Name = parameter.Key,
-              parameter.Value,
-            };
-          }
+          var parameterArray = parameters
+            .Select(parameter =>
+              new {
+                JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
+                Name = parameter.Key,
+                parameter.Value,
+              }
+            )
+            .ToArray();
 
           string insertParameterSql = $@"
             INSERT INTO ""{_options.SchemaName}"".""jobparameter"" (""jobid"", ""name"", ""value"")
             VALUES (@JobId, @Name, @Value);
           ";
-
           connection.Execute(insertParameterSql, parameterArray, transaction);
         }
 
@@ -452,7 +450,7 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-          SELECT @Id ""id"", @Data ""data"", NOW() ""lastheartbeat""
+          SELECT @Id ""id"", @Data::jsonb ""data"", NOW() ""lastheartbeat""
         ), ""updatedrows"" AS ( 
           UPDATE ""{_options.SchemaName}"".""server"" ""updatetarget""
           SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
@@ -471,7 +469,7 @@ namespace Hangfire.PostgreSql
       ";
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute(sql, new { Id = serverId, Data = new JsonParameter(SerializationHelper.Serialize(data)) }));
+        .Execute(sql, new { Id = serverId, Data = JsonParameter.GetParameterValue(SerializationHelper.Serialize(data)) }));
     }
 
     public override void RemoveServer(string serverId)

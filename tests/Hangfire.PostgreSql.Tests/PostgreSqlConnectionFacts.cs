@@ -194,7 +194,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, @StateName, NOW()) RETURNING ""id""
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, @StateName, NOW()) RETURNING ""id""
       ";
 
       UseConnections((connection, jobStorageConnection) => {
@@ -202,9 +202,9 @@ namespace Hangfire.PostgreSql.Tests
 
         long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = new JsonParameter(SerializationHelper.Serialize(InvocationData.SerializeJob(job))),
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(InvocationData.SerializeJob(job))),
             StateName = "Succeeded",
-            Arguments = new JsonParameter("[\"\\\"Arguments\\\"\"]", JsonParameter.ValueType.Array),
+            Arguments = JsonParameter.GetParameterValue("[\"\\\"Arguments\\\"\"]", JsonParameter.ValueType.Array),
           });
 
         JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
@@ -250,7 +250,7 @@ namespace Hangfire.PostgreSql.Tests
         VALUES(@JobId, 'old-state', NOW());
 
         INSERT INTO ""{GetSchemaName()}"".""state"" (""jobid"", ""name"", ""reason"", ""data"", ""createdat"")
-        VALUES(@JobId, @Name, @Reason, @Data, NOW())
+        VALUES(@JobId, @Name, @Reason, @Data::jsonb, NOW())
         RETURNING ""id"";
       ";
 
@@ -268,7 +268,7 @@ namespace Hangfire.PostgreSql.Tests
         long jobId = connection.QuerySingle<long>(createJobSql);
 
         long stateId = connection.QuerySingle<long>(createStateSql,
-          new { JobId = jobId, Name = "Name", Reason = "Reason", Data = new JsonParameter(SerializationHelper.Serialize(data)) });
+          new { JobId = jobId, Name = "Name", Reason = "Reason", Data = JsonParameter.GetParameterValue(SerializationHelper.Serialize(data)) });
 
         connection.Execute(updateJobStateSql, new { JobId = jobId, StateId = stateId });
 

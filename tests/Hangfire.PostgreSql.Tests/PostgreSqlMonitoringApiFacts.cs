@@ -29,7 +29,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{ConnectionUtils.GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, NOW()) RETURNING ""id""";
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW()) RETURNING ""id""";
 
       Job job = Job.FromExpression(() => SampleMethod("Hello"));
       InvocationData invocationData = InvocationData.SerializeJob(job);
@@ -37,8 +37,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(invocationData)),
+            Arguments = JsonParameter.GetParameterValue(invocationData.Arguments, JsonParameter.ValueType.Array),
           });
 
         Mock<IState> state = new();

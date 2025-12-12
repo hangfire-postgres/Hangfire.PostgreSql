@@ -195,7 +195,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW())
+          VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -205,7 +205,7 @@ namespace Hangfire.PostgreSql.Tests
       // Arrange
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
-          new { InvocationData = new JsonParameter(""), Arguments = new JsonParameter("", JsonParameter.ValueType.Array), Queue = "default" });
+          new { InvocationData = JsonParameter.GetParameterValue(""), Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array), Queue = "default" });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
         // Act
@@ -256,7 +256,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW())
+          VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
@@ -270,8 +270,8 @@ namespace Hangfire.PostgreSql.Tests
           new {
             Queue = "default",
             FetchedAt = DateTime.UtcNow.AddDays(-1),
-            InvocationData = new JsonParameter(""),
-            Arguments = new JsonParameter("", JsonParameter.ValueType.Array),
+            InvocationData = JsonParameter.GetParameterValue(""),
+            Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array),
           });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions, useSlidingInvisibilityTimeout: useSlidingInvisibilityTimeout);
 
@@ -303,7 +303,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW())
+          VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -313,8 +313,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
           new[] {
-            new { Queue = "default", InvocationData = new JsonParameter(""), Arguments = new JsonParameter("", JsonParameter.ValueType.Array) },
-            new { Queue = "default", InvocationData = new JsonParameter(""), Arguments = new JsonParameter("", JsonParameter.ValueType.Array) },
+            new { Queue = "default", InvocationData = JsonParameter.GetParameterValue(""), Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array) },
+            new { Queue = "default", InvocationData = JsonParameter.GetParameterValue(""), Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array) },
           });
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
@@ -350,7 +350,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW())
+          VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -360,7 +360,7 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
 
         connection.Execute(arrangeSql,
-          new { Queue = "critical", InvocationData = new JsonParameter(""), Arguments = new JsonParameter("", JsonParameter.ValueType.Array) });
+          new { Queue = "critical", InvocationData = JsonParameter.GetParameterValue(""), Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array) });
 
         Assert.Throws<OperationCanceledException>(() => queue.Dequeue(_defaultQueues,
           CreateTimingOutCancellationToken()));
@@ -386,7 +386,7 @@ namespace Hangfire.PostgreSql.Tests
       string arrangeSql = $@"
         WITH i AS (
           INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-          VALUES (@InvocationData, @Arguments, NOW())
+          VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW())
           RETURNING ""id""
         )
         INSERT INTO ""{GetSchemaName()}"".""jobqueue"" (""jobid"", ""queue"")
@@ -398,8 +398,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection((connection, storage) => {
         connection.Execute(arrangeSql,
           new[] {
-            new { Queue = queueNames.First(), InvocationData = new JsonParameter("") , Arguments = new JsonParameter("", JsonParameter.ValueType.Array) },
-            new { Queue = queueNames.Last(), InvocationData = new JsonParameter(""), Arguments = new JsonParameter("", JsonParameter.ValueType.Array) },
+            new { Queue = queueNames.First(), InvocationData = JsonParameter.GetParameterValue("") , Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array) },
+            new { Queue = queueNames.Last(), InvocationData = JsonParameter.GetParameterValue(""), Arguments = JsonParameter.GetParameterValue("", JsonParameter.ValueType.Array) },
           });
 
         PostgreSqlJobQueue queue = CreateJobQueue(storage, useNativeDatabaseTransactions);
