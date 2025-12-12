@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Data;
-using System.Linq;
 using System.Threading;
 using Dapper;
 using Hangfire.PostgreSql.Tests.Utils;
@@ -234,8 +233,8 @@ namespace Hangfire.PostgreSql.Tests
         PostgreSqlDistributedLock.Acquire(connection, "hello", _timeout, options);
         PostgreSqlDistributedLock.Release(connection, "hello", options);
 
-        long lockCount = connection.Query<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
-          new { Resource = "hello" }).Single();
+        long lockCount = connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""lock"" WHERE ""resource"" = @Resource",
+          new { Resource = "hello" });
 
         Assert.Equal(0, lockCount);
       });

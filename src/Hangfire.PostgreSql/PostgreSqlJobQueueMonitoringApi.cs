@@ -26,6 +26,7 @@ using Dapper;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   internal class PostgreSqlJobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
   {
     private readonly PostgreSqlStorage _storage;
@@ -38,7 +39,7 @@ namespace Hangfire.PostgreSql
     public IEnumerable<string> GetQueues()
     {
       string sqlQuery = $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""jobqueue""";
-      return _storage.UseConnection(null, connection => connection.Query<string>(sqlQuery).ToList());
+      return _storage.UseConnection(null, connection => connection.Query<string>(sqlQuery).AsList());
     }
 
     public IEnumerable<long> GetEnqueuedJobIds(string queue, int from, int perPage)
@@ -69,7 +70,7 @@ namespace Hangfire.PostgreSql
       ";
 
       (long enqueuedCount, long fetchedCount) = _storage.UseConnection(null, connection => 
-        connection.QuerySingle<(long EnqueuedCount, long FetchedCount)>(sqlQuery, new { Queue = queue }));
+        connection.Query<EnqueuedAndFetchedCount>(sqlQuery, new { Queue = queue })).Single();
 
       return new EnqueuedAndFetchedCountDto {
         EnqueuedCount = enqueuedCount,
@@ -92,7 +93,9 @@ namespace Hangfire.PostgreSql
 
       return _storage.UseConnection(null, connection => connection.Query<long>(sqlQuery,
           new { Queue = queue, Offset = from, Limit = perPage })
-        .ToList());
+        .AsList());
     }
+
+    internal record struct EnqueuedAndFetchedCount(long EnqueuedCount, long FetchedCount);
   }
 }

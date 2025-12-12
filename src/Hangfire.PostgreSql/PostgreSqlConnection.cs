@@ -37,6 +37,7 @@ using IsolationLevel = System.Transactions.IsolationLevel;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   public class PostgreSqlConnection : JobStorageConnection
   {
     private readonly Dictionary<string, HashSet<Guid>> _lockedResources;
@@ -170,8 +171,7 @@ namespace Hangfire.PostgreSql
 
       SqlJob jobData = _storage.UseConnection(_dedicatedConnection,
         connection => connection
-          .Query<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) })
-          .SingleOrDefault());
+          .QuerySingleOrDefault<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) }));
 
       if (jobData == null)
       {
@@ -218,8 +218,7 @@ namespace Hangfire.PostgreSql
 
       SqlState sqlState = _storage.UseConnection(_dedicatedConnection,
         connection => connection
-          .Query<SqlState>(sql, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
-          .SingleOrDefault());
+          .QuerySingleOrDefault<SqlState>(sql, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) }));
       return sqlState == null
         ? null
         : new StateData {
@@ -350,7 +349,7 @@ namespace Hangfire.PostgreSql
           ORDER BY ""score"" LIMIT @Limit;
         ",
           new { Key = key, FromScore = fromScore, ToScore = toScore, Limit = count }))
-        .ToList();
+        .AsList();
     }
 
     public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -546,7 +545,7 @@ namespace Hangfire.PostgreSql
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key })
-        .ToList());
+        .AsList());
     }
 
     public override long GetCounter(string key)
@@ -612,7 +611,7 @@ namespace Hangfire.PostgreSql
       return _storage.UseConnection(_dedicatedConnection, connection =>
         connection
           .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
-          .ToList());
+          .AsList());
     }
 
     public override long GetHashCount(string key)
@@ -660,7 +659,7 @@ namespace Hangfire.PostgreSql
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
-        .ToList());
+        .AsList());
     }
 
     public override TimeSpan GetSetTtl(string key)
@@ -693,8 +692,7 @@ namespace Hangfire.PostgreSql
       string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""hash"" WHERE ""key"" = @Key AND ""field"" = @Field";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Query<string>(query, new { Key = key, Field = name })
-        .SingleOrDefault());
+        .QuerySingleOrDefault<string>(query, new { Key = key, Field = name }));
     }
 
     private IDisposable AcquireLock(string resource, TimeSpan timeout)

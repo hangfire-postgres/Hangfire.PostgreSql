@@ -627,7 +627,7 @@ namespace Hangfire.PostgreSql.Tests
         };
         jobStorageConnection.AnnounceServer("server", context1);
 
-        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic server = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""server""");
         Assert.Equal("server", server.id);
 
         ServerContext serverData = JsonSerializer.Deserialize<ServerContext>(server.data);
@@ -640,7 +640,7 @@ namespace Hangfire.PostgreSql.Tests
           WorkerCount = 1000,
         };
         jobStorageConnection.AnnounceServer("server", context2);
-        dynamic sameServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic sameServer = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""server""");
         Assert.Equal("server", sameServer.id);
         Assert.Contains("1000", sameServer.data);
       });
@@ -668,7 +668,7 @@ namespace Hangfire.PostgreSql.Tests
 
         jobStorageConnection.RemoveServer("Server1");
 
-        dynamic server = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic server = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""server""");
         Assert.NotEqual("Server1", server.Id, StringComparer.OrdinalIgnoreCase);
       });
     }
@@ -736,7 +736,7 @@ namespace Hangfire.PostgreSql.Tests
 
         jobStorageConnection.RemoveTimedOutServers(TimeSpan.FromHours(15));
 
-        dynamic liveServer = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""server""").Single();
+        dynamic liveServer = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""server""");
         Assert.Equal("server2", liveServer.id);
       });
     }
@@ -1365,7 +1365,7 @@ namespace Hangfire.PostgreSql.Tests
       UseConnections((connection, _) => {
         if (completeTransactionScope)
         {
-          dynamic sqlJob = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").Single();
+          dynamic sqlJob = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""job""");
           Assert.Equal(jobId, sqlJob.id.ToString());
           Assert.Equal(createdAt, sqlJob.createdat);
           Assert.Null((long?)sqlJob.stateid);
@@ -1373,7 +1373,7 @@ namespace Hangfire.PostgreSql.Tests
         }
         else
         {
-          TestJob job = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""job""").SingleOrDefault();
+          TestJob job = connection.QuerySingleOrDefault($@"SELECT * FROM ""{GetSchemaName()}"".""job""");
           Assert.Null(job);
         }
       });

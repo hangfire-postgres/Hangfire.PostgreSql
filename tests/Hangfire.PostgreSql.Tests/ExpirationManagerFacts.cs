@@ -167,7 +167,7 @@ namespace Hangfire.PostgreSql.Tests
         manager.Execute(_token);
 
         // Assert
-        Assert.Equal(0, connection.Query<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set""").Single());
+        Assert.Equal(0, connection.QuerySingle<long>($@"SELECT COUNT(*) FROM ""{GetSchemaName()}"".""set"""));
       });
     }
 

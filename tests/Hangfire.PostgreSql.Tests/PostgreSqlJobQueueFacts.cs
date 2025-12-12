@@ -531,7 +531,7 @@ namespace Hangfire.PostgreSql.Tests
 
         queue.Enqueue(connection, "default", "1");
 
-        dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
+        dynamic record = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""");
         Assert.Equal("1", record.jobid.ToString());
         Assert.Equal("default", record.queue);
         Assert.Null(record.FetchedAt);
