@@ -103,6 +103,49 @@ namespace Hangfire.PostgreSql.Tests
       transaction.Commit();
     }
 
+    [Fact]
+    [CleanDatabase]
+    public void FetchedJobs_WithDuplicateJobQueueEntries_DoesNotThrow()
+    {
+      string schemaName = ConnectionUtils.GetSchemaName();
+
+      string createJobSql = $@"
+        INSERT INTO ""{schemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+        VALUES (@InvocationData, @Arguments, NOW()) RETURNING ""id""";
+
+      string createJobQueueSql = $@"
+        INSERT INTO ""{schemaName}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
+        VALUES (@JobId, @Queue, @FetchedAt)";
+
+      UseConnection(connection => {
+        Job job = Job.FromExpression(() => SampleMethod("test"));
+        InvocationData invocationData = InvocationData.SerializeJob(job);
+
+        long jobId = connection.QuerySingle<long>(createJobSql,
+          new {
+            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
+            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
+          });
+
+        DateTime fetchedAt = DateTime.UtcNow;
+        connection.Execute(createJobQueueSql, new { JobId = jobId, Queue = "default", FetchedAt = fetchedAt });
+        connection.Execute(createJobQueueSql, new { JobId = jobId, Queue = "default", FetchedAt = fetchedAt.AddSeconds(1) });
+
+        PostgreSqlStorage storage = _fixture.SafeInit();
+        PostgreSqlStorageOptions options = new() { SchemaName = schemaName };
+
+        PostgreSqlJobQueueProvider provider = new(storage, options);
+        PersistentJobQueueProviderCollection providers = new(provider);
+        storage.QueueProviders = providers;
+
+        IMonitoringApi monitoringApi = storage.GetMonitoringApi();
+        JobList<FetchedJobDto> fetchedJobs = monitoringApi.FetchedJobs("default", 0, 10);
+
+        Assert.NotNull(fetchedJobs);
+        Assert.Single(fetchedJobs);
+      });
+    }
+
 #pragma warning disable xUnit1013 // Public method should be marked as test
     public static void SampleMethod(string arg)
 #pragma warning restore xUnit1013 // Public method should be marked as test
