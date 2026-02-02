@@ -200,7 +200,7 @@ namespace Hangfire.PostgreSql
           trx = BeginTransactionIfNotPresent(connection);
 
           int rowsAffected = connection.Execute($@"
-                INSERT INTO ""{schemaName}"".""lock""(""resource"", ""acquired"") 
+                INSERT INTO ""{schemaName}"".""{TableNameHandler("lock", options)}""(""resource"", ""acquired"") 
                 SELECT @Resource, @Acquired
                 WHERE NOT EXISTS (
                     SELECT 1 FROM ""{schemaName}"".""{TableNameHandler("lock", options)}""
