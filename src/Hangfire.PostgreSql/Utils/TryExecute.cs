@@ -50,5 +50,11 @@ namespace Hangfire.PostgreSql.Utils
       result = default;
       return false;
     }
+
+    public static string GetTableName(string baseName, bool useTablePrefix, string tablePrefixName)
+    {
+      return useTablePrefix ? tablePrefixName + baseName : baseName;
+    }
+
   }
 }

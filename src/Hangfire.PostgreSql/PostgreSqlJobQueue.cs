@@ -30,6 +30,7 @@ using Hangfire.PostgreSql.Properties;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
 using Npgsql;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -94,7 +95,7 @@ namespace Hangfire.PostgreSql
     public void Enqueue(IDbConnection connection, string queue, string jobId)
     {
       string enqueueJobSql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""jobqueue"" (""jobid"", ""queue"") 
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" (""jobid"", ""queue"") 
         VALUES (@JobId, @Queue);
       ";
 
@@ -133,11 +134,11 @@ namespace Hangfire.PostgreSql
       FetchedJob fetchedJob;
 
       string fetchJobSql = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""
         SET ""fetchedat"" = NOW()
         WHERE ""id"" = (
           SELECT ""id"" 
-          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" 
           WHERE ""queue"" = ANY (@Queues)
           AND (""fetchedat"" IS NULL OR ""fetchedat"" < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
           ORDER BY ""fetchedat"" NULLS FIRST, ""queue"", ""jobid""
@@ -217,7 +218,7 @@ namespace Hangfire.PostgreSql
 
       string jobToFetchSql = $@"
         SELECT ""id"" AS ""Id"", ""jobid"" AS ""JobId"", ""queue"" AS ""Queue"", ""fetchedat"" AS ""FetchedAt"", ""updatecount"" AS ""UpdateCount""
-        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""
         WHERE ""queue"" = ANY (@Queues)
         AND (""fetchedat"" IS NULL OR ""fetchedat"" < NOW() + INTERVAL '{timeoutSeconds.ToString(CultureInfo.InvariantCulture)} SECONDS')
         ORDER BY ""fetchedat"" NULLS FIRST, ""queue"", ""jobid""
@@ -225,7 +226,7 @@ namespace Hangfire.PostgreSql
         ";
 
       string markJobAsFetchedSql = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+        UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""
         SET ""fetchedat"" = NOW(), 
             ""updatecount"" = (""updatecount"" + 1) % 2000000000
         WHERE ""id"" = @Id 
@@ -315,6 +316,11 @@ namespace Hangfire.PostgreSql
       {
         _storage.ReleaseConnection(connection);
       }
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
 
     [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]

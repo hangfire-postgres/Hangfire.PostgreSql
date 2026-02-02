@@ -20,6 +20,7 @@
 //    Special thanks goes to him.
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
@@ -34,7 +35,7 @@ namespace Hangfire.PostgreSql
   {
     private static readonly ILog _logger = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
-    public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
+    public static void Install(NpgsqlConnection connection, string schemaName = "hangfire", bool useTablePrefix = false, string tablePrefixName = "hangfire_")
     {
       if (connection == null)
       {
@@ -101,6 +102,80 @@ namespace Hangfire.PostgreSql
         previousVersion = version;
         version++;
       } while (true);
+
+      if(!useTablePrefix)
+      {
+        _logger.Warn("Hangfire SQL objects installed.");
+        return;
+      }
+
+      _logger.Info($"Try to change table name with prefix {tablePrefixName}");
+
+      try
+      {
+        _logger.Info("Check if prefix change has already been recorded..");
+        string prefixChangeKey = "hangfire:table_prefix_changed";
+        using (var checkCmd = new NpgsqlCommand(
+            $@"SELECT 1 FROM ""{schemaName}"".""set"" WHERE ""key"" = @Key LIMIT 1;", connection))
+        {
+          checkCmd.Parameters.AddWithValue("Key", prefixChangeKey);
+          var exists = checkCmd.ExecuteScalar();
+          if (exists != null && exists != DBNull.Value)
+          {
+            _logger.Warn("Table prefix has already been changed. If you want to change it again, you must drop all Hangfire tables and reinstall them.");
+            return;
+          }
+        }
+
+        var hangfireTableNames = new[]
+        {
+            "job", "state", "counter", "queue", "schema", "server", "set", "list", "hash", "lock", "aggregatedcounter", "jobparameter", "jobqueue"
+        };
+
+        List<string> tablesToRename = new List<string>();
+        using (var cmd = new NpgsqlCommand($@"
+                  SELECT table_name
+                  FROM information_schema.tables
+                  WHERE table_schema = @SchemaName
+                    AND table_name = ANY(@TableNames)", connection))
+        {
+          cmd.Parameters.AddWithValue("SchemaName", schemaName);
+          cmd.Parameters.AddWithValue("TableNames", hangfireTableNames);
+          using (var reader = cmd.ExecuteReader())
+          {
+            while (reader.Read())
+            {
+              tablesToRename.Add(reader.GetString(0));
+            }
+          }
+        }
+
+        foreach (string tableName in tablesToRename)
+        {
+          string newTableName = tablePrefixName + tableName;
+          using (var renameCmd = new NpgsqlCommand(
+              $@"ALTER TABLE ""{schemaName}"".""{tableName}"" RENAME TO ""{newTableName}"";", connection))
+          {
+            renameCmd.ExecuteNonQuery();
+            _logger.Info($"Table {tableName} renamed to {newTableName}");
+          }
+        }
+
+        using (var insertCmd = new NpgsqlCommand(
+            $@"INSERT INTO ""{schemaName}"".""{tablePrefixName + "set"}"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, @Score);", connection))
+        {
+          insertCmd.Parameters.AddWithValue("Key", prefixChangeKey);
+          insertCmd.Parameters.AddWithValue("Value", tablePrefixName);
+          insertCmd.Parameters.AddWithValue("Score", 0); // oppure un valore appropriato
+          insertCmd.ExecuteNonQuery();
+          _logger.Info($"Table prefix change persisted in set table with key '{prefixChangeKey}' and value '{tablePrefixName}'");
+        }
+      }
+      catch (Exception ex)
+      {
+        _logger.ErrorException("Error while changing table name with prefix", ex);
+        throw;
+      }
 
       _logger.Info("Hangfire SQL objects installed.");
     }

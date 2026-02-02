@@ -44,6 +44,8 @@ namespace Hangfire.PostgreSql
       JobExpirationCheckInterval = TimeSpan.FromHours(1);
       CountersAggregateInterval = TimeSpan.FromMinutes(5);
       SchemaName = "hangfire";
+      UseTablePrefix = false;
+      TablePrefixName = "hangfire_";
       AllowUnsafeValues = false;
       UseNativeDatabaseTransactions = true;
       PrepareSchemaIfNecessary = true;
@@ -127,6 +129,8 @@ namespace Hangfire.PostgreSql
     public bool UseNativeDatabaseTransactions { get; set; }
     public bool PrepareSchemaIfNecessary { get; set; }
     public string SchemaName { get; set; }
+    public bool UseTablePrefix { get; set; }
+    public string TablePrefixName { get; set; }
     public bool EnableTransactionScopeEnlistment { get; set; }
     public bool EnableLongPolling { get; set; }
 

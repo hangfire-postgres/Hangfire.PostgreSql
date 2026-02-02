@@ -30,6 +30,7 @@ using Hangfire.PostgreSql.Entities;
 using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -112,7 +113,7 @@ namespace Hangfire.PostgreSql
     public IList<ServerDto> Servers()
     {
       return UseConnection(connection => {
-        List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>($@"SELECT * FROM ""{_storage.Options.SchemaName}"".""server""")
+        List<(Entities.Server Server, ServerData Data)> servers = connection.Query<Entities.Server>($@"SELECT * FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""")
           .AsEnumerable()
           .Select(server => (server, SerializationHelper.Deserialize<ServerData>(server.Data)))
           .ToList();
@@ -227,15 +228,15 @@ namespace Hangfire.PostgreSql
       return UseConnection(connection => {
         string sql = $@"
           SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt"" 
-          FROM ""{_storage.Options.SchemaName}"".""job"" 
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}""
           WHERE ""id"" = @Id;
 
           SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value"" 
-          FROM ""{_storage.Options.SchemaName}"".""jobparameter"" 
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobparameter")}""
           WHERE ""jobid"" = @Id;
 
           SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""reason"" ""Reason"", ""createdat"" ""CreatedAt"", ""data"" ""Data"" 
-          FROM ""{_storage.Options.SchemaName}"".""state"" 
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" 
           WHERE ""jobid"" = @Id 
           ORDER BY ""id"" DESC;
         ";
@@ -284,33 +285,33 @@ namespace Hangfire.PostgreSql
       return UseConnection(connection => {
         string sql = $@"
           SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
-          FROM ""{_storage.Options.SchemaName}"".""job""
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}""
           WHERE ""statename"" IS NOT NULL
           GROUP BY ""statename"";
 
           SELECT COUNT(*) 
-          FROM ""{_storage.Options.SchemaName}"".""server"";
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("server")}"";
 
           SELECT SUM(""value"") FROM
             (SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""counter"" 
+            FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}""
             WHERE ""key"" = 'stats:succeeded'
             UNION ALL
             SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
+            FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("aggregatedcounter")}""
             WHERE ""key"" = 'stats:succeeded') c;
 
           SELECT SUM(""value"") FROM
             (SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""counter"" 
+            FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}""
             WHERE ""key"" = 'stats:deleted'
             UNION ALL
             SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
+            FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("aggregatedcounter")}""
             WHERE ""key"" = 'stats:deleted') c;
 
           SELECT COUNT(*) 
-          FROM ""{_storage.Options.SchemaName}"".""set"" 
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}""
           WHERE ""key"" = 'recurring-jobs';
         ";
 
@@ -383,11 +384,11 @@ namespace Hangfire.PostgreSql
         $"""
         WITH "aggregated_counters" AS (
           SELECT "key", "value"
-          FROM "{_storage.Options.SchemaName}"."aggregatedcounter"
+          FROM "{_storage.Options.SchemaName}"."{TableNameHandler("aggregatedcounter")}"
           WHERE "key" = ANY(@Keys)
         ), "regular_counters" AS (
           SELECT "key", "value"
-          FROM "{_storage.Options.SchemaName}"."counter"
+          FROM "{_storage.Options.SchemaName}"."{TableNameHandler("counter")}"
           WHERE "key" = ANY(@Keys)
         ), "all_counters" AS (
           SELECT * FROM "aggregated_counters"
@@ -435,9 +436,9 @@ namespace Hangfire.PostgreSql
       string enqueuedJobsSql = $@"
         SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
           ""j"".""expireat"" ""ExpireAt"", ""s"".""name"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
-        FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""s"".""id"" = ""j"".""stateid""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
+        FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" ""j""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" ""s"" ON ""s"".""id"" = ""j"".""stateid""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
         AND ""jq"".""fetchedat"" IS NULL;
       ";
@@ -458,7 +459,7 @@ namespace Hangfire.PostgreSql
 
     private long GetNumberOfJobsByStateName(string stateName)
     {
-      string sqlQuery = $@"SELECT COUNT(""id"") FROM ""{_storage.Options.SchemaName}"".""job"" WHERE ""statename"" = @StateName;";
+      string sqlQuery = $@"SELECT COUNT(""id"") FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" WHERE ""statename"" = @StateName;";
 
       return UseConnection(connection => connection.QuerySingle<long>(sqlQuery,
         new { StateName = stateName }));
@@ -484,8 +485,8 @@ namespace Hangfire.PostgreSql
       string jobsSql = $@"
         SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
           ""j"".""expireat"" ""ExpireAt"", NULL ""FetchedAt"", ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
-        FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
+        FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" ""j""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
         WHERE ""j"".""statename"" = @StateName 
         ORDER BY ""j"".""id"" DESC
         LIMIT @Limit OFFSET @Offset;
@@ -531,9 +532,9 @@ namespace Hangfire.PostgreSql
         SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", 
           ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"", 
           ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
-        FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
+        FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" ""j""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
         AND ""jq"".""fetchedat"" IS NOT NULL;
       ";
@@ -554,6 +555,11 @@ namespace Hangfire.PostgreSql
     private T UseConnection<T>(Func<IDbConnection, T> func)
     {
       return _storage.UseConnection(null, func);
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
 
     /// <summary>

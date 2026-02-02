@@ -23,6 +23,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -37,7 +38,7 @@ namespace Hangfire.PostgreSql
 
     public IEnumerable<string> GetQueues()
     {
-      string sqlQuery = $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""jobqueue""";
+      string sqlQuery = $@"SELECT DISTINCT ""queue"" FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""";
       return _storage.UseConnection(null, connection => connection.Query<string>(sqlQuery).ToList());
     }
 
@@ -56,13 +57,13 @@ namespace Hangfire.PostgreSql
       string sqlQuery = $@"
         SELECT (
             SELECT COUNT(*) 
-            FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+            FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""
             WHERE ""fetchedat"" IS NULL 
             AND ""queue"" = @Queue
         ) ""EnqueuedCount"", 
         (
           SELECT COUNT(*) 
-          FROM ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""
           WHERE ""fetchedat"" IS NOT NULL 
           AND ""queue"" = @Queue
         ) ""FetchedCount"";
@@ -81,8 +82,8 @@ namespace Hangfire.PostgreSql
     {
       string sqlQuery = $@"
         SELECT j.""id"" 
-        FROM ""{_storage.Options.SchemaName}"".""jobqueue"" jq
-        LEFT JOIN ""{_storage.Options.SchemaName}"".""job"" j ON jq.""jobid"" = j.""id""
+        FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" jq
+        LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" j ON jq.""jobid"" = j.""id""
         WHERE jq.""queue"" = @Queue 
         AND jq.""fetchedat"" {(fetched ? "IS NOT NULL" : "IS NULL")}
         AND j.""id"" IS NOT NULL
@@ -93,6 +94,11 @@ namespace Hangfire.PostgreSql
       return _storage.UseConnection(null, connection => connection.Query<long>(sqlQuery,
           new { Queue = queue, Offset = from, Limit = perPage })
         .ToList());
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
   }
 }
