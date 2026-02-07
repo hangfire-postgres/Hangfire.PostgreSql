@@ -111,7 +111,7 @@ namespace Hangfire.PostgreSql.Tests
 
       string createJobSql = $@"
         INSERT INTO ""{schemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, NOW()) RETURNING ""id""";
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW()) RETURNING ""id""";
 
       string createJobQueueSql = $@"
         INSERT INTO ""{schemaName}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
