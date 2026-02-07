@@ -433,13 +433,14 @@ namespace Hangfire.PostgreSql
     private JobList<EnqueuedJobDto> EnqueuedJobs(IEnumerable<long> jobIds)
     {
       string enqueuedJobsSql = $@"
-        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
+        SELECT DISTINCT ON (""j"".""id"") ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"",
           ""j"".""expireat"" ""ExpireAt"", ""s"".""name"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""s"".""id"" = ""j"".""stateid""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
-        AND ""jq"".""fetchedat"" IS NULL;
+        AND ""jq"".""fetchedat"" IS NULL
+        ORDER BY ""j"".""id"";
       ";
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(enqueuedJobsSql,
@@ -528,14 +529,15 @@ namespace Hangfire.PostgreSql
       IEnumerable<long> jobIds)
     {
       string fetchedJobsSql = $@"
-        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", 
-          ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"", 
+        SELECT DISTINCT ON (""j"".""id"") ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"",
+          ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"",
           ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""jobqueue"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
-        AND ""jq"".""fetchedat"" IS NOT NULL;
+        AND ""jq"".""fetchedat"" IS NOT NULL
+        ORDER BY ""j"".""id"", ""jq"".""fetchedat"" DESC;
       ";
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(fetchedJobsSql,
