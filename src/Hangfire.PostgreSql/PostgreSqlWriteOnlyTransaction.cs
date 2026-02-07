@@ -108,7 +108,7 @@ namespace Hangfire.PostgreSql
       string addAndSetStateSql = $@"
         WITH ""s"" AS (
             INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
-            VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data) RETURNING ""id""
+            VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data::jsonb) RETURNING ""id""
         )
         UPDATE ""{_storage.Options.SchemaName}"".""job"" ""j""
         SET ""stateid"" = s.""id"", ""statename"" = @Name
@@ -122,7 +122,7 @@ namespace Hangfire.PostgreSql
           state.Name,
           state.Reason,
           CreatedAt = DateTime.UtcNow,
-          Data = new JsonParameter(SerializationHelper.Serialize(state.SerializeData())),
+          Data = JsonParameter.GetParameterValue(SerializationHelper.Serialize(state.SerializeData())),
           Id = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
         }));
     }
@@ -131,7 +131,7 @@ namespace Hangfire.PostgreSql
     {
       string addStateSql = $@"
         INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
-        VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data);
+        VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data::jsonb);
       ";
 
       QueueCommand(con => con.Execute(addStateSql,
@@ -140,7 +140,7 @@ namespace Hangfire.PostgreSql
           state.Name,
           state.Reason,
           CreatedAt = DateTime.UtcNow,
-          Data = new JsonParameter(SerializationHelper.Serialize(state.SerializeData())),
+          Data = JsonParameter.GetParameterValue(SerializationHelper.Serialize(state.SerializeData())),
         }));
     }
 

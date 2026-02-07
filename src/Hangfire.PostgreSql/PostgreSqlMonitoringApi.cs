@@ -33,6 +33,7 @@ using Hangfire.Storage.Monitoring;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   public class PostgreSqlMonitoringApi : IMonitoringApi
   {
     private readonly PersistentJobQueueProviderCollection _queueProviders;
@@ -399,9 +400,9 @@ namespace Hangfire.PostgreSql
         GROUP BY "key"
         """;
 
-      Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<(string Key, long Count)>(query,
+      Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<KeyCount>(query,
           new { Keys = keyMaps.Keys.ToList() })
-        .ToList()
+        .AsList()
         .ToDictionary(x => x.Key, x => x.Count));
 
       foreach (string key in keyMaps.Keys)
@@ -421,6 +422,8 @@ namespace Hangfire.PostgreSql
 
       return result;
     }
+
+    internal record struct KeyCount(string Key, long Count);
 
     private IPersistentJobQueueMonitoringApi GetQueueApi(string queueName)
     {
@@ -445,7 +448,7 @@ namespace Hangfire.PostgreSql
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(enqueuedJobsSql,
           new { JobIds = jobIds.ToList() })
-        .ToList());
+        .AsList());
 
       return DeserializeJobs(jobs,
         (sqlJob, job, stateData) => new EnqueuedJobDto {
@@ -494,7 +497,7 @@ namespace Hangfire.PostgreSql
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(jobsSql,
           new { StateName = stateName, Limit = count, Offset = from })
-        .ToList());
+        .AsList());
 
       return DeserializeJobs(jobs, selector);
     }
@@ -542,7 +545,7 @@ namespace Hangfire.PostgreSql
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(fetchedJobsSql,
           new { JobIds = jobIds.ToList() })
-        .ToList());
+        .AsList());
 
       Dictionary<string, FetchedJobDto> result = jobs.ToDictionary(job => job.Id.ToString(), job => new FetchedJobDto {
         Job = DeserializeJob(job.InvocationData, job.Arguments),

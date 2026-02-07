@@ -33,6 +33,7 @@ using Npgsql;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   public class PostgreSqlJobQueue : IPersistentJobQueue
   {
     private const string JobNotificationChannel = "new_job";
@@ -159,9 +160,8 @@ namespace Hangfire.PostgreSql
           try
           {
             using NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-            FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobSql,
-                new { Queues = queues.ToList() }, trx)
-              .SingleOrDefault();
+            FetchedJob jobToFetch = connection.QuerySingleOrDefault<FetchedJob>(fetchJobSql,
+                new { Queues = queues.ToList() }, trx);
 
             trx.Commit();
 
@@ -169,7 +169,7 @@ namespace Hangfire.PostgreSql
           }
           catch (InvalidOperationException)
           {
-            // thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
+            // thrown by .QuerySingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
           }
           finally
           {
@@ -233,9 +233,9 @@ namespace Hangfire.PostgreSql
       {
         cancellationToken.ThrowIfCancellationRequested();
 
-        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(jobToFetchSql,
+        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.QuerySingleOrDefault<FetchedJob>(jobToFetchSql,
             new { Queues = queues.ToList() })
-          .SingleOrDefault());
+          );
 
         if (jobToFetch == null)
         {
@@ -250,9 +250,9 @@ namespace Hangfire.PostgreSql
         }
         else
         {
-          markJobAsFetched = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(markJobAsFetchedSql,
+          markJobAsFetched = _storage.UseConnection(null, connection => connection.QuerySingleOrDefault<FetchedJob>(markJobAsFetchedSql,
               jobToFetch)
-            .SingleOrDefault());
+          );
         }
       }
       while (markJobAsFetched == null);
@@ -329,7 +329,7 @@ namespace Hangfire.PostgreSql
     }
 
     [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
-    private class FetchedJob
+    internal class FetchedJob
     {
       public long Id { get; set; }
       public long JobId { get; set; }

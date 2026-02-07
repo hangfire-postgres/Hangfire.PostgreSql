@@ -1,42 +1,28 @@
 ﻿using System;
-using System.Data;
 using System.Text.Json;
-using Dapper;
 using Hangfire.Annotations;
-using Npgsql;
-using NpgsqlTypes;
 
 namespace Hangfire.PostgreSql;
 
-internal class JsonParameter : SqlMapper.ICustomQueryParameter
+internal static class JsonParameter
 {
-  [CanBeNull] private readonly object _value;
-  private readonly ValueType _type;
-
-  public JsonParameter([CanBeNull] object value) : this(value, ValueType.Object)
+  public static string GetParameterValue([CanBeNull] object value)
   {
+    return GetParameterValue(value, ValueType.Object);
   }
 
-  public JsonParameter([CanBeNull] object value, ValueType type)
+  public static string GetParameterValue([CanBeNull] object value, ValueType type)
   {
-    _value = value;
-    _type = type;
-  }
-
-  public void AddParameter(IDbCommand command, string name)
-  {
-    string value = _value switch {
+    return value switch {
       string { Length: > 0 } stringValue => stringValue,
-      string { Length: 0 } or null => GetDefaultValue(),
-      var _ => JsonSerializer.Serialize(_value),
+      string { Length: 0 } or null => GetDefaultValue(type),
+      var _ => JsonSerializer.Serialize(value),
     };
-    command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Jsonb) { Value = value });
   }
 
-  private string GetDefaultValue()
+  private static string GetDefaultValue(ValueType type)
   {
-    return _type switch
-    {
+    return type switch {
       ValueType.Object => "{}",
       ValueType.Array => "[]",
       var _ => throw new ArgumentOutOfRangeException(),
