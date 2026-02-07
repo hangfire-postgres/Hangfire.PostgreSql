@@ -8,6 +8,7 @@ using Dapper;
 using Hangfire.PostgreSql.Tests.Utils;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
+using Npgsql;
 using Xunit;
 
 namespace Hangfire.PostgreSql.Tests
@@ -535,6 +536,54 @@ namespace Hangfire.PostgreSql.Tests
         Assert.Equal("1", record.jobid.ToString());
         Assert.Equal("default", record.queue);
         Assert.Null(record.FetchedAt);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void Dequeue_ShouldSelfHeal_WhenListenConnectionFails()
+    {
+      UseConnection((_, storage) => {
+        storage.Options.QueuePollInterval = TimeSpan.FromMilliseconds(500);
+        PostgreSqlJobQueue queue = CreateJobQueue(storage, false, true);
+        Exception thrownException = null;
+        IFetchedJob job = null;
+
+        CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+
+        Task dequeueTask = Task.Run(() => {
+          try
+          {
+            job = queue.Dequeue(new[] { "default" }, cts.Token);
+          }
+          catch (Exception ex) when (ex is not OperationCanceledException)
+          {
+            thrownException = ex;
+          }
+        });
+
+        Thread.Sleep(1000);
+
+        using (NpgsqlConnection adminConnection = ConnectionUtils.CreateMasterConnection())
+        {
+          adminConnection.Execute(@"
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE query LIKE '%LISTEN%'
+            AND pid <> pg_backend_pid()");
+        }
+
+        Thread.Sleep(500);
+
+        using (NpgsqlConnection enqueueConnection = ConnectionUtils.CreateConnection())
+        {
+          queue.Enqueue(enqueueConnection, "default", "1");
+        }
+
+        dequeueTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.Null(thrownException);
+        Assert.NotNull(job);
       });
     }
 

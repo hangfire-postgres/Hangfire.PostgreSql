@@ -81,13 +81,13 @@ namespace Hangfire.PostgreSql
     private IEnumerable<long> GetQueuedOrFetchedJobIds(string queue, bool fetched, int from, int perPage)
     {
       string sqlQuery = $@"
-        SELECT j.""id"" 
+        SELECT DISTINCT j.""id""
         FROM ""{_storage.Options.SchemaName}"".""jobqueue"" jq
         LEFT JOIN ""{_storage.Options.SchemaName}"".""job"" j ON jq.""jobid"" = j.""id""
-        WHERE jq.""queue"" = @Queue 
+        WHERE jq.""queue"" = @Queue
         AND jq.""fetchedat"" {(fetched ? "IS NOT NULL" : "IS NULL")}
         AND j.""id"" IS NOT NULL
-        ORDER BY jq.""fetchedat"", jq.""jobid""
+        ORDER BY j.""id""
         LIMIT @Limit OFFSET @Offset;
       ";
 
