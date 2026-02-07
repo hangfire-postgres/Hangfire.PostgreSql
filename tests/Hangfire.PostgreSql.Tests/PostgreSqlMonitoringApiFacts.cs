@@ -123,8 +123,8 @@ namespace Hangfire.PostgreSql.Tests
 
         long jobId = connection.QuerySingle<long>(createJobSql,
           new {
-            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(invocationData)),
+            Arguments = JsonParameter.GetParameterValue(invocationData.Arguments, JsonParameter.ValueType.Array),
           });
 
         DateTime fetchedAt = DateTime.UtcNow;
