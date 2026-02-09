@@ -39,6 +39,7 @@ using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   public class PostgreSqlConnection : JobStorageConnection
   {
     private readonly Dictionary<string, HashSet<Guid>> _lockedResources;
@@ -117,7 +118,7 @@ namespace Hangfire.PostgreSql
 
       string createJobSql = $@"
         INSERT INTO ""{_options.SchemaName}"".""{TableNameHandler("job")}"" (""invocationdata"", ""arguments"", ""createdat"", ""expireat"")
-        VALUES (@InvocationData, @Arguments, @CreatedAt, @ExpireAt) 
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, @CreatedAt, @ExpireAt) 
         RETURNING ""id"";
       ";
 
@@ -126,30 +127,28 @@ namespace Hangfire.PostgreSql
       return _storage.UseTransaction(_dedicatedConnection, (connection, transaction) => {
         string jobId = connection.QuerySingle<long>(createJobSql,
           new {
-            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(invocationData)),
+            Arguments = JsonParameter.GetParameterValue(invocationData.Arguments, JsonParameter.ValueType.Array),
             CreatedAt = createdAt,
             ExpireAt = createdAt.Add(expireIn),
           }).ToString(CultureInfo.InvariantCulture);
 
         if (parameters.Count > 0)
         {
-          object[] parameterArray = new object[parameters.Count];
-          int parameterIndex = 0;
-          foreach (KeyValuePair<string, string> parameter in parameters)
-          {
-            parameterArray[parameterIndex++] = new {
-              JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
-              Name = parameter.Key,
-              parameter.Value,
-            };
-          }
+          var parameterArray = parameters
+            .Select(parameter =>
+              new {
+                JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture),
+                Name = parameter.Key,
+                parameter.Value,
+              }
+            )
+            .ToArray();
 
           string insertParameterSql = $@"
             INSERT INTO ""{_options.SchemaName}"".""{TableNameHandler("jobparameter")}"" (""jobid"", ""name"", ""value"")
             VALUES (@JobId, @Name, @Value);
           ";
-
           connection.Execute(insertParameterSql, parameterArray, transaction);
         }
 
@@ -172,8 +171,7 @@ namespace Hangfire.PostgreSql
 
       SqlJob jobData = _storage.UseConnection(_dedicatedConnection,
         connection => connection
-          .Query<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) })
-          .SingleOrDefault());
+          .QuerySingleOrDefault<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) }));
 
       if (jobData == null)
       {
@@ -220,8 +218,7 @@ namespace Hangfire.PostgreSql
 
       SqlState sqlState = _storage.UseConnection(_dedicatedConnection,
         connection => connection
-          .Query<SqlState>(sql, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) })
-          .SingleOrDefault());
+          .QuerySingleOrDefault<SqlState>(sql, new { JobId = Convert.ToInt64(jobId, CultureInfo.InvariantCulture) }));
       return sqlState == null
         ? null
         : new StateData {
@@ -352,7 +349,7 @@ namespace Hangfire.PostgreSql
           ORDER BY ""score"" LIMIT @Limit;
         ",
           new { Key = key, FromScore = fromScore, ToScore = toScore, Limit = count }))
-        .ToList();
+        .AsList();
     }
 
     public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -455,7 +452,7 @@ namespace Hangfire.PostgreSql
 
       string sql = $@"
         WITH ""inputvalues"" AS (
-          SELECT @Id ""id"", @Data ""data"", NOW() ""lastheartbeat""
+          SELECT @Id ""id"", @Data::jsonb ""data"", NOW() ""lastheartbeat""
         ), ""updatedrows"" AS ( 
           UPDATE ""{_options.SchemaName}"".""{TableNameHandler("server")}"" ""updatetarget""
           SET ""data"" = ""inputvalues"".""data"", ""lastheartbeat"" = ""inputvalues"".""lastheartbeat""
@@ -474,7 +471,7 @@ namespace Hangfire.PostgreSql
       ";
 
       _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Execute(sql, new { Id = serverId, Data = new JsonParameter(SerializationHelper.Serialize(data)) }));
+        .Execute(sql, new { Id = serverId, Data = JsonParameter.GetParameterValue(SerializationHelper.Serialize(data)) }));
     }
 
     public override void RemoveServer(string serverId)
@@ -548,7 +545,7 @@ namespace Hangfire.PostgreSql
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key })
-        .ToList());
+        .AsList());
     }
 
     public override long GetCounter(string key)
@@ -614,7 +611,7 @@ namespace Hangfire.PostgreSql
       return _storage.UseConnection(_dedicatedConnection, connection =>
         connection
           .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
-          .ToList());
+          .AsList());
     }
 
     public override long GetHashCount(string key)
@@ -662,7 +659,7 @@ namespace Hangfire.PostgreSql
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
         .Query<string>(query, new { Key = key, Limit = endingAt - startingFrom + 1, Offset = startingFrom })
-        .ToList());
+        .AsList());
     }
 
     public override TimeSpan GetSetTtl(string key)
@@ -695,8 +692,7 @@ namespace Hangfire.PostgreSql
       string query = $@"SELECT ""value"" FROM ""{_options.SchemaName}"".""{TableNameHandler("hash")}"" WHERE ""key"" = @Key AND ""field"" = @Field";
 
       return _storage.UseConnection(_dedicatedConnection, connection => connection
-        .Query<string>(query, new { Key = key, Field = name })
-        .SingleOrDefault());
+        .QuerySingleOrDefault<string>(query, new { Key = key, Field = name }));
     }
 
     private IDisposable AcquireLock(string resource, TimeSpan timeout)

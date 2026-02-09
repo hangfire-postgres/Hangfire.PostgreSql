@@ -34,6 +34,7 @@ using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   public class PostgreSqlJobQueue : IPersistentJobQueue
   {
     private const string JobNotificationChannel = "new_job";
@@ -76,14 +77,10 @@ namespace Hangfire.PostgreSql
           cancelListenSource?.Cancel();
           listenTask?.Wait();
         }
-        catch (AggregateException ex)
+        catch (AggregateException)
         {
-          if (ex.InnerException is not TaskCanceledException)
-          {
-            throw;
-          }
-
-          // Otherwise do nothing, cancel exception is expected.
+          // Swallow all exceptions from listen task cleanup.
+          // The main dequeue operation already succeeded or failed independently.
         }
         finally
         {
@@ -164,9 +161,8 @@ namespace Hangfire.PostgreSql
           try
           {
             using NpgsqlTransaction trx = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-            FetchedJob jobToFetch = connection.Query<FetchedJob>(fetchJobSql,
-                new { Queues = queues.ToList() }, trx)
-              .SingleOrDefault();
+            FetchedJob jobToFetch = connection.QuerySingleOrDefault<FetchedJob>(fetchJobSql,
+                new { Queues = queues.ToList() }, trx);
 
             trx.Commit();
 
@@ -174,7 +170,7 @@ namespace Hangfire.PostgreSql
           }
           catch (InvalidOperationException)
           {
-            // thrown by .SingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
+            // thrown by .QuerySingleOrDefault(): stop the exception propagation if the fetched job was concurrently fetched by another worker
           }
           finally
           {
@@ -238,9 +234,9 @@ namespace Hangfire.PostgreSql
       {
         cancellationToken.ThrowIfCancellationRequested();
 
-        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(jobToFetchSql,
+        FetchedJob jobToFetch = _storage.UseConnection(null, connection => connection.QuerySingleOrDefault<FetchedJob>(jobToFetchSql,
             new { Queues = queues.ToList() })
-          .SingleOrDefault());
+          );
 
         if (jobToFetch == null)
         {
@@ -255,9 +251,9 @@ namespace Hangfire.PostgreSql
         }
         else
         {
-          markJobAsFetched = _storage.UseConnection(null, connection => connection.Query<FetchedJob>(markJobAsFetchedSql,
+          markJobAsFetched = _storage.UseConnection(null, connection => connection.QuerySingleOrDefault<FetchedJob>(markJobAsFetchedSql,
               jobToFetch)
-            .SingleOrDefault());
+          );
         }
       }
       while (markJobAsFetched == null);
@@ -283,30 +279,45 @@ namespace Hangfire.PostgreSql
         // CreateAnOpenConnection can return the same connection over and over if an existing connection
         //  is passed in the constructor of PostgreSqlStorage. We must use a separate dedicated
         //  connection to listen for notifications.
-        NpgsqlConnection clonedConnection = connection.CloneWith(connection.ConnectionString);
+        string connectionString = connection.ConnectionString;
+        NpgsqlConnection clonedConnection = connection.CloneWith(connectionString);
 
         return Task.Run(async () => {
+          NpgsqlConnection currentConnection = clonedConnection;
           try
           {
-            if (clonedConnection.State != ConnectionState.Open)
-            {
-              await clonedConnection.OpenAsync(cancellationToken); // Open so that Dapper doesn't auto-close.
-            }
-
             while (!cancellationToken.IsCancellationRequested)
             {
-              await clonedConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
-              await clonedConnection.WaitAsync(cancellationToken);
-              JobQueueNotification.Set();
+              try
+              {
+                if (currentConnection.State != ConnectionState.Open)
+                {
+                  await currentConnection.OpenAsync(cancellationToken);
+                }
+
+                await currentConnection.ExecuteAsync($"LISTEN {JobNotificationChannel}");
+                await currentConnection.WaitAsync(cancellationToken);
+                JobQueueNotification.Set();
+              }
+              catch (OperationCanceledException)
+              {
+                throw;
+              }
+              catch (Exception ex) when (ex.IsCatchableExceptionType())
+              {
+                currentConnection?.Dispose();
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                currentConnection = new NpgsqlConnection(connectionString);
+              }
             }
           }
-          catch (TaskCanceledException)
+          catch (OperationCanceledException)
           {
             // Do nothing, cancellation requested so just end.
           }
           finally
           {
-            _storage.ReleaseConnection(clonedConnection);
+            currentConnection?.Dispose();
           }
 
         }, cancellationToken);
@@ -324,7 +335,7 @@ namespace Hangfire.PostgreSql
     }
 
     [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
-    private class FetchedJob
+    internal class FetchedJob
     {
       public long Id { get; set; }
       public long JobId { get; set; }

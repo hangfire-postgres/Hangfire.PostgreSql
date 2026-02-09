@@ -29,7 +29,7 @@ namespace Hangfire.PostgreSql.Tests
     {
       string arrangeSql = $@"
         INSERT INTO ""{ConnectionUtils.GetSchemaName()}"".""job""(""invocationdata"", ""arguments"", ""createdat"")
-        VALUES (@InvocationData, @Arguments, NOW()) RETURNING ""id""";
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW()) RETURNING ""id""";
 
       Job job = Job.FromExpression(() => SampleMethod("Hello"));
       InvocationData invocationData = InvocationData.SerializeJob(job);
@@ -37,8 +37,8 @@ namespace Hangfire.PostgreSql.Tests
       UseConnection(connection => {
         long jobId = connection.QuerySingle<long>(arrangeSql,
           new {
-            InvocationData = new JsonParameter(SerializationHelper.Serialize(invocationData)),
-            Arguments = new JsonParameter(invocationData.Arguments, JsonParameter.ValueType.Array),
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(invocationData)),
+            Arguments = JsonParameter.GetParameterValue(invocationData.Arguments, JsonParameter.ValueType.Array),
           });
 
         Mock<IState> state = new();
@@ -101,6 +101,49 @@ namespace Hangfire.PostgreSql.Tests
       using PostgreSqlWriteOnlyTransaction transaction = new(storage, () => connection);
       action(transaction);
       transaction.Commit();
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void FetchedJobs_WithDuplicateJobQueueEntries_DoesNotThrow()
+    {
+      string schemaName = ConnectionUtils.GetSchemaName();
+
+      string createJobSql = $@"
+        INSERT INTO ""{schemaName}"".""job"" (""invocationdata"", ""arguments"", ""createdat"")
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, NOW()) RETURNING ""id""";
+
+      string createJobQueueSql = $@"
+        INSERT INTO ""{schemaName}"".""jobqueue"" (""jobid"", ""queue"", ""fetchedat"")
+        VALUES (@JobId, @Queue, @FetchedAt)";
+
+      UseConnection(connection => {
+        Job job = Job.FromExpression(() => SampleMethod("test"));
+        InvocationData invocationData = InvocationData.SerializeJob(job);
+
+        long jobId = connection.QuerySingle<long>(createJobSql,
+          new {
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(invocationData)),
+            Arguments = JsonParameter.GetParameterValue(invocationData.Arguments, JsonParameter.ValueType.Array),
+          });
+
+        DateTime fetchedAt = DateTime.UtcNow;
+        connection.Execute(createJobQueueSql, new { JobId = jobId, Queue = "default", FetchedAt = fetchedAt });
+        connection.Execute(createJobQueueSql, new { JobId = jobId, Queue = "default", FetchedAt = fetchedAt.AddSeconds(1) });
+
+        PostgreSqlStorage storage = _fixture.SafeInit();
+        PostgreSqlStorageOptions options = new() { SchemaName = schemaName };
+
+        PostgreSqlJobQueueProvider provider = new(storage, options);
+        PersistentJobQueueProviderCollection providers = new(provider);
+        storage.QueueProviders = providers;
+
+        IMonitoringApi monitoringApi = storage.GetMonitoringApi();
+        JobList<FetchedJobDto> fetchedJobs = monitoringApi.FetchedJobs("default", 0, 10);
+
+        Assert.NotNull(fetchedJobs);
+        Assert.Single(fetchedJobs);
+      });
     }
 
 #pragma warning disable xUnit1013 // Public method should be marked as test

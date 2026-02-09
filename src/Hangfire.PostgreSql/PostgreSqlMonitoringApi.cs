@@ -34,6 +34,7 @@ using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
+  [DapperAot]
   public class PostgreSqlMonitoringApi : IMonitoringApi
   {
     private readonly PersistentJobQueueProviderCollection _queueProviders;
@@ -400,9 +401,9 @@ namespace Hangfire.PostgreSql
         GROUP BY "key"
         """;
 
-      Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<(string Key, long Count)>(query,
+      Dictionary<string, long> valuesMap = UseConnection(connection => connection.Query<KeyCount>(query,
           new { Keys = keyMaps.Keys.ToList() })
-        .ToList()
+        .AsList()
         .ToDictionary(x => x.Key, x => x.Count));
 
       foreach (string key in keyMaps.Keys)
@@ -423,6 +424,8 @@ namespace Hangfire.PostgreSql
       return result;
     }
 
+    internal record struct KeyCount(string Key, long Count);
+
     private IPersistentJobQueueMonitoringApi GetQueueApi(string queueName)
     {
       IPersistentJobQueueProvider provider = _queueProviders.GetProvider(queueName);
@@ -434,18 +437,19 @@ namespace Hangfire.PostgreSql
     private JobList<EnqueuedJobDto> EnqueuedJobs(IEnumerable<long> jobIds)
     {
       string enqueuedJobsSql = $@"
-        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
+        SELECT DISTINCT ON (""j"".""id"") ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"",
           ""j"".""expireat"" ""ExpireAt"", ""s"".""name"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" ""j""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" ""s"" ON ""s"".""id"" = ""j"".""stateid""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
-        AND ""jq"".""fetchedat"" IS NULL;
+        AND ""jq"".""fetchedat"" IS NULL
+        ORDER BY ""j"".""id"";
       ";
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(enqueuedJobsSql,
           new { JobIds = jobIds.ToList() })
-        .ToList());
+        .AsList());
 
       return DeserializeJobs(jobs,
         (sqlJob, job, stateData) => new EnqueuedJobDto {
@@ -494,7 +498,7 @@ namespace Hangfire.PostgreSql
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(jobsSql,
           new { StateName = stateName, Limit = count, Offset = from })
-        .ToList());
+        .AsList());
 
       return DeserializeJobs(jobs, selector);
     }
@@ -529,19 +533,20 @@ namespace Hangfire.PostgreSql
       IEnumerable<long> jobIds)
     {
       string fetchedJobsSql = $@"
-        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", 
-          ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"", 
+        SELECT DISTINCT ON (""j"".""id"") ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"",
+          ""j"".""createdat"" ""CreatedAt"", ""j"".""expireat"" ""ExpireAt"", ""jq"".""fetchedat"" ""FetchedAt"",
           ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" ""j""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" ""jq"" ON ""jq"".""jobid"" = ""j"".""id""
         WHERE ""j"".""id"" = ANY (@JobIds)
-        AND ""jq"".""fetchedat"" IS NOT NULL;
+        AND ""jq"".""fetchedat"" IS NOT NULL
+        ORDER BY ""j"".""id"", ""jq"".""fetchedat"" DESC;
       ";
 
       List<SqlJob> jobs = UseConnection(connection => connection.Query<SqlJob>(fetchedJobsSql,
           new { JobIds = jobIds.ToList() })
-        .ToList());
+        .AsList());
 
       Dictionary<string, FetchedJobDto> result = jobs.ToDictionary(job => job.Id.ToString(), job => new FetchedJobDto {
         Job = DeserializeJob(job.InvocationData, job.Arguments),

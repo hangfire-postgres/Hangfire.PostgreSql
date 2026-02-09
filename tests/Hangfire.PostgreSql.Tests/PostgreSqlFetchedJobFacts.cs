@@ -113,7 +113,7 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       dynamic record = _storage.UseConnection(null, connection =>
-        connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single());
+        connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue"""));
       Assert.Null(record.fetchedat);
     }
 
@@ -131,7 +131,7 @@ namespace Hangfire.PostgreSql.Tests
           Thread.Sleep(TimeSpan.FromSeconds(10));
           processingJob.ExecuteKeepAliveQueryIfRequired();
 
-          dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
+          dynamic record = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""");
 
           Assert.NotNull(processingJob.FetchedAt);
           Assert.Equal<DateTime?>(processingJob.FetchedAt, record.fetchedat);
@@ -157,7 +157,7 @@ namespace Hangfire.PostgreSql.Tests
           processingJob.RemoveFromQueue();
 
           // Assert
-          int count = connection.Query<int>($@"SELECT count(*) FROM ""{GetSchemaName()}"".""jobqueue""").Single();
+          int count = connection.QuerySingle<int>($@"SELECT count(*) FROM ""{GetSchemaName()}"".""jobqueue""");
           Assert.Equal(0, count);
         }
       });
@@ -179,7 +179,7 @@ namespace Hangfire.PostgreSql.Tests
           processingJob.Requeue();
 
           // Assert
-          dynamic record = connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single();
+          dynamic record = connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""");
           Assert.Null(record.fetchedat);
         }
       });
@@ -198,7 +198,7 @@ namespace Hangfire.PostgreSql.Tests
 
       // Assert
       dynamic record = _storage.UseConnection(null, connection =>
-        connection.Query($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue""").Single());
+        connection.QuerySingle($@"SELECT * FROM ""{GetSchemaName()}"".""jobqueue"""));
       Assert.Null(record.fetchedat);
     }
 
