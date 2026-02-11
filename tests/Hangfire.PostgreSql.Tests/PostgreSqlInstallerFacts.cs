@@ -29,6 +29,26 @@ namespace Hangfire.PostgreSql.Tests
     }
 
     [Fact]
+    public void InstallingWithPrefixAndShouldNotThrowAnException()
+    {
+      Exception ex = Record.Exception(() => {
+        UseConnection(connection => {
+          string schemaName = "hangfire_tests_" + Guid.NewGuid().ToString().Replace("-", "_").ToLower(CultureInfo.InvariantCulture);
+          string tablePrefix = "hf_";
+
+          PostgreSqlObjectsInstaller.Install(connection, schemaName, true, tablePrefix);
+
+          int lastVersion = connection.Query<int>($@"SELECT version FROM ""{schemaName}"".""{ tablePrefix + "schema"}""").Single();
+          Assert.Equal(23, lastVersion);
+
+          connection.Execute($@"DROP SCHEMA ""{schemaName}"" CASCADE;");
+        });
+      });
+
+      Assert.Null(ex);
+    }
+
+    [Fact]
     public void InstallingSchemaWithCapitalsUpdatesVersionAndShouldNotThrowAnException()
     {
       Exception ex = Record.Exception(() => {

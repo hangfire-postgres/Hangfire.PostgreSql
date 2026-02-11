@@ -297,7 +297,7 @@ namespace Hangfire.PostgreSql
       NpgsqlConnection connection = CreateAndOpenConnection();
       try
       {
-        PostgreSqlObjectsInstaller.Install(connection, Options.SchemaName);
+        PostgreSqlObjectsInstaller.Install(connection, Options.SchemaName, Options.UseTablePrefix, Options.TablePrefixName);
       }
       finally
       {

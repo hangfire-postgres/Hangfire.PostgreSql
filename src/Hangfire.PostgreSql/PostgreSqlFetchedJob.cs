@@ -1,4 +1,4 @@
-// This file is part of Hangfire.PostgreSql.
+﻿// This file is part of Hangfire.PostgreSql.
 // Copyright © 2014 Frank Hommers <http://hmm.rs/Hangfire.PostgreSql>.
 // 
 // Hangfire.PostgreSql is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ using Dapper;
 using Hangfire.Logging;
 using Hangfire.PostgreSql.Utils;
 using Hangfire.Storage;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -78,7 +79,7 @@ namespace Hangfire.PostgreSql
         }
         
         _storage.UseConnection(null, connection => connection.Execute($@"
-          DELETE FROM ""{_storage.Options.SchemaName}"".""jobqueue"" WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
+          DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
         ",
           new { Id, FetchedAt }));
 
@@ -96,7 +97,7 @@ namespace Hangfire.PostgreSql
         }
 
         _storage.UseConnection(null, connection => connection.Execute($@"
-          UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}"" 
           SET ""fetchedat"" = NULL 
           WHERE ""id"" = @Id AND ""fetchedat"" = @FetchedAt;
         ",
@@ -157,7 +158,7 @@ namespace Hangfire.PostgreSql
         }
         
         string updateFetchAtSql = $@"
-          UPDATE ""{_storage.Options.SchemaName}"".""jobqueue"" 
+          UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("jobqueue")}""
           SET ""fetchedat"" = NOW()
           WHERE ""id"" = @id AND ""fetchedat"" = @fetchedAt
           RETURNING ""fetchedat"" AS ""FetchedAt"";
@@ -185,6 +186,11 @@ namespace Hangfire.PostgreSql
           _logger.DebugException($"Unable to execute keep-alive query for message {Id}", ex);
         }
       }
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
   }
 }

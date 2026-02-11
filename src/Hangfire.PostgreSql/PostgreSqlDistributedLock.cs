@@ -29,6 +29,7 @@ using Hangfire.Annotations;
 using Hangfire.Logging;
 using Npgsql;
 using IsolationLevel = System.Data.IsolationLevel;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -102,7 +103,7 @@ namespace Hangfire.PostgreSql
         Stopwatch lockAcquiringTime = Stopwatch.StartNew();
 
         bool tryAcquireLock = true;
-        Func<IDbConnection, string, string, bool> tryLock = options.UseNativeDatabaseTransactions
+        Func<IDbConnection, PostgreSqlStorageOptions, string, bool> tryLock = options.UseNativeDatabaseTransactions
           ? TransactionLockHandler.TryLock
           : UpdateCountLockHandler.TryLock;
 
@@ -117,7 +118,7 @@ namespace Hangfire.PostgreSql
 
           try
           {
-            if (tryLock(connection, options.SchemaName, resource))
+            if (tryLock(connection, options, resource))
             {
               return;
             }
@@ -166,7 +167,7 @@ namespace Hangfire.PostgreSql
 
           DateTime timeout = onlyExpired ? DateTime.UtcNow - options.DistributedLockTimeout : DateTime.MaxValue;
 
-          int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""lock"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
+          int rowsAffected = connection.Execute($@"DELETE FROM ""{options.SchemaName}"".""{TableNameHandler("lock", options)}"" WHERE ""resource"" = @Resource AND ""acquired"" < @Timeout",
             new {
               Resource = resource,
               Timeout = timeout,
@@ -190,18 +191,19 @@ namespace Hangfire.PostgreSql
 
     private static class TransactionLockHandler
     {
-      public static bool TryLock(IDbConnection connection, string schemaName, string resource)
+      public static bool TryLock(IDbConnection connection, PostgreSqlStorageOptions options, string resource)
       {
         IDbTransaction trx = null;
         try
         {
+          string schemaName = options.SchemaName;
           trx = BeginTransactionIfNotPresent(connection);
 
           int rowsAffected = connection.Execute($@"
-                INSERT INTO ""{schemaName}"".""lock""(""resource"", ""acquired"") 
+                INSERT INTO ""{schemaName}"".""{TableNameHandler("lock", options)}""(""resource"", ""acquired"") 
                 SELECT @Resource, @Acquired
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM ""{schemaName}"".""lock"" 
+                    SELECT 1 FROM ""{schemaName}"".""{TableNameHandler("lock", options)}""
                     WHERE ""resource"" = @Resource
                 )
                 ON CONFLICT DO NOTHING;
@@ -231,13 +233,16 @@ namespace Hangfire.PostgreSql
 
     private static class UpdateCountLockHandler
     {
-      public static bool TryLock(IDbConnection connection, string schemaName, string resource)
+      public static bool TryLock(IDbConnection connection, PostgreSqlStorageOptions options, string resource)
       {
+
+        string schemaName = options.SchemaName;
+
         connection.Execute($@"
-              INSERT INTO ""{schemaName}"".""lock""(""resource"", ""updatecount"", ""acquired"") 
+              INSERT INTO ""{schemaName}"".""{TableNameHandler("lock", options)}""(""resource"", ""updatecount"", ""acquired"") 
               SELECT @Resource, 0, @Acquired
               WHERE NOT EXISTS (
-                  SELECT 1 FROM ""{schemaName}"".""lock"" 
+                  SELECT 1 FROM ""{schemaName}"".""{TableNameHandler("lock", options)}""
                   WHERE ""resource"" = @Resource
               )
               ON CONFLICT DO NOTHING;
@@ -247,11 +252,16 @@ namespace Hangfire.PostgreSql
         });
 
         int rowsAffected = connection.Execute(
-          $@"UPDATE ""{schemaName}"".""lock"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @Resource",
+          $@"UPDATE ""{schemaName}"".""{TableNameHandler("lock", options)}"" SET ""updatecount"" = 1 WHERE ""updatecount"" = 0 AND ""resource"" = @Resource",
           new { Resource = resource });
 
         return rowsAffected > 0;
       }
+    }
+
+    private static string TableNameHandler(string baseName, PostgreSqlStorageOptions options)
+    {
+      return Utility.GetTableName(baseName, options.UseTablePrefix, options.TablePrefixName);
     }
   }
 }

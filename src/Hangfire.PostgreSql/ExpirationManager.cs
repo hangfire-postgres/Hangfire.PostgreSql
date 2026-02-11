@@ -27,6 +27,7 @@ using Dapper;
 using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.Storage;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -82,10 +83,10 @@ namespace Hangfire.PostgreSql
           {
             using IDbTransaction transaction = connection.BeginTransaction();
             removedCount = connection.Execute($@"
-                DELETE FROM ""{_storage.Options.SchemaName}"".""{table}"" 
+                DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler(table)}"" 
                 WHERE ""id"" IN (
                     SELECT ""id"" 
-                    FROM ""{_storage.Options.SchemaName}"".""{table}"" 
+                    FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler(table)}"" 
                     WHERE ""expireat"" < NOW() 
                     LIMIT {_storage.Options.DeleteExpiredBatchSize.ToString(CultureInfo.InvariantCulture)}
                 )", transaction: transaction);
@@ -129,7 +130,7 @@ namespace Hangfire.PostgreSql
         using IDbTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
         string aggregateQuery = $@"
             WITH ""counters"" AS (
-              DELETE FROM ""{_storage.Options.SchemaName}"".""counter""
+              DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}""
               WHERE ""key"" = @Key
               AND ""expireat"" IS NULL
               RETURNING *
@@ -143,7 +144,7 @@ namespace Hangfire.PostgreSql
 
         if (aggregatedValue > 0)
         {
-          string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"") VALUES (@Key, @Value);";
+          string insertQuery = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}""(""key"", ""value"") VALUES (@Key, @Value);";
           connection.Execute(insertQuery, new { Key = counterName, Value = aggregatedValue });
         }
       });
@@ -175,6 +176,11 @@ namespace Hangfire.PostgreSql
             $@"An exception was thrown during acquiring distributed lock on the {DistributedLockKey} resource within {_defaultLockTimeout.TotalSeconds} seconds. Outdated records were not removed. It will be retried in {_checkInterval.TotalSeconds} seconds.",
           e);
       }
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
   }
 }

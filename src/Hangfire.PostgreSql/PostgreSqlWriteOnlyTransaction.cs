@@ -30,6 +30,7 @@ using Dapper;
 using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -82,7 +83,7 @@ namespace Hangfire.PostgreSql
     public override void ExpireJob(string jobId, TimeSpan expireIn)
     {
       string sql = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""job""
+        UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}""
         SET ""expireat"" = NOW() + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS'
         WHERE ""id"" = @Id;
       ";
@@ -94,7 +95,7 @@ namespace Hangfire.PostgreSql
     public override void PersistJob(string jobId)
     {
       string sql = $@"
-        UPDATE ""{_storage.Options.SchemaName}"".""job"" 
+        UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}""
         SET ""expireat"" = NULL 
         WHERE ""id"" = @Id;
       ";
@@ -107,10 +108,10 @@ namespace Hangfire.PostgreSql
     {
       string addAndSetStateSql = $@"
         WITH ""s"" AS (
-            INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
+            INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
             VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data::jsonb) RETURNING ""id""
         )
-        UPDATE ""{_storage.Options.SchemaName}"".""job"" ""j""
+        UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("job")}"" ""j""
         SET ""stateid"" = s.""id"", ""statename"" = @Name
         FROM ""s""
         WHERE ""j"".""id"" = @Id;
@@ -130,7 +131,7 @@ namespace Hangfire.PostgreSql
     public override void AddJobState(string jobId, IState state)
     {
       string addStateSql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""state"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("state")}"" (""jobid"", ""name"", ""reason"", ""createdat"", ""data"")
         VALUES (@JobId, @Name, @Reason, @CreatedAt, @Data::jsonb);
       ";
 
@@ -157,7 +158,7 @@ namespace Hangfire.PostgreSql
     public override void IncrementCounter(string key)
     {
       string sql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""counter"" (""key"", ""value"") 
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}"" (""key"", ""value"") 
         VALUES (@Key, @Value);
       ";
       QueueCommand(con => con.Execute(sql,
@@ -167,7 +168,7 @@ namespace Hangfire.PostgreSql
     public override void IncrementCounter(string key, TimeSpan expireIn)
     {
       string sql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}""(""key"", ""value"", ""expireat"") 
         VALUES (@Key, @Value, NOW() + INTERVAL '{(long)expireIn.TotalSeconds} SECONDS');
       ";
       QueueCommand(con => con.Execute(sql,
@@ -177,7 +178,7 @@ namespace Hangfire.PostgreSql
     public override void DecrementCounter(string key)
     {
       string sql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""counter"" (""key"", ""value"") 
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}"" (""key"", ""value"") 
         VALUES (@Key, @Value);
       ";
       QueueCommand(con => con.Execute(sql,
@@ -187,7 +188,7 @@ namespace Hangfire.PostgreSql
     public override void DecrementCounter(string key, TimeSpan expireIn)
     {
       string sql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""counter""(""key"", ""value"", ""expireat"") 
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("counter")}""(""key"", ""value"", ""expireat"") 
         VALUES (@Key, @Value, NOW() + INTERVAL '{((long)expireIn.TotalSeconds).ToString(CultureInfo.InvariantCulture)} SECONDS');
       ";
       QueueCommand(con => con.Execute(sql, new { Key = key, Value = -1 }));
@@ -201,7 +202,7 @@ namespace Hangfire.PostgreSql
     public override void AddToSet(string key, string value, double score)
     {
       string addSql = $@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""set""(""key"", ""value"", ""score"")
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}""(""key"", ""value"", ""score"")
         VALUES(@Key, @Value, @Score)
         ON CONFLICT (""key"", ""value"")
         DO UPDATE SET ""score"" = EXCLUDED.""score""
@@ -213,7 +214,7 @@ namespace Hangfire.PostgreSql
     public override void RemoveFromSet(string key, string value)
     {
       QueueCommand(con => con.Execute($@"
-        DELETE FROM ""{_storage.Options.SchemaName}"".""set"" 
+        DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}"" 
         WHERE ""key"" = @Key 
         AND ""value"" = @Value;
       ",
@@ -223,7 +224,7 @@ namespace Hangfire.PostgreSql
     public override void InsertToList(string key, string value)
     {
       QueueCommand(con => con.Execute($@"
-        INSERT INTO ""{_storage.Options.SchemaName}"".""list"" (""key"", ""value"") 
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("list")}"" (""key"", ""value"") 
         VALUES (@Key, @Value);
       ",
       new { Key = key, Value = value }));
@@ -232,7 +233,7 @@ namespace Hangfire.PostgreSql
     public override void RemoveFromList(string key, string value)
     {
       QueueCommand(con => con.Execute($@"
-        DELETE FROM ""{_storage.Options.SchemaName}"".""list"" 
+        DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("list")}""
         WHERE ""key"" = @Key 
         AND ""value"" = @Value;
       ", new { Key = key, Value = value }));
@@ -241,11 +242,11 @@ namespace Hangfire.PostgreSql
     public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
     {
       string trimSql = $@"
-        DELETE FROM ""{_storage.Options.SchemaName}"".""list"" AS source
+        DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("list")}"" AS source
         WHERE ""key"" = @Key
         AND ""id"" NOT IN (
             SELECT ""id"" 
-            FROM ""{_storage.Options.SchemaName}"".""list"" AS keep
+            FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("list")}"" AS keep
             WHERE keep.""key"" = source.""key""
             ORDER BY ""id"" 
             OFFSET @Offset LIMIT @Limit
@@ -272,14 +273,14 @@ namespace Hangfire.PostgreSql
         WITH ""inputvalues"" AS (
 	        SELECT @Key ""key"", @Field ""field"", @Value ""value""
         ), ""updatedrows"" AS ( 
-	        UPDATE ""{_storage.Options.SchemaName}"".""hash"" ""updatetarget""
+	        UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("hash")}"" ""updatetarget""
 	        SET ""value"" = ""inputvalues"".""value""
 	        FROM ""inputvalues""
 	        WHERE ""updatetarget"".""key"" = ""inputvalues"".""key""
 	        AND ""updatetarget"".""field"" = ""inputvalues"".""field""
 	        RETURNING ""updatetarget"".""key"", ""updatetarget"".""field""
         )
-        INSERT INTO ""{_storage.Options.SchemaName}"".""hash""(""key"", ""field"", ""value"")
+        INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("hash")}""(""key"", ""field"", ""value"")
         SELECT ""key"", ""field"", ""value"" 
         FROM ""inputvalues"" ""insertvalues""
         WHERE NOT EXISTS (
@@ -303,7 +304,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""hash"" WHERE ""key"" = @Key";
+      string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("hash")}"" WHERE ""key"" = @Key";
       QueueCommand(con => con.Execute(sql,
         new { Key = key }));
     }
@@ -315,7 +316,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
+      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql,
         new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
@@ -328,7 +329,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
+      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("list")}"" SET ""expireat"" = @ExpireAt WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql,
         new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
@@ -341,7 +342,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = @ExpireAt WHERE ""key"" = @Key";
+      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("hash")}"" SET expireat = @ExpireAt WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql,
         new { Key = key, ExpireAt = DateTime.UtcNow.Add(expireIn) }));
@@ -354,7 +355,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""set"" SET expireat = null WHERE ""key"" = @Key";
+      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}"" SET expireat = null WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql, new { Key = key }));
     }
@@ -366,7 +367,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""list"" SET expireat = null WHERE ""key"" = @Key";
+      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("list")}"" SET expireat = null WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql, new { Key = key }));
     }
@@ -378,7 +379,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""hash"" SET expireat = null WHERE ""key"" = @Key";
+      string sql = $@"UPDATE ""{_storage.Options.SchemaName}"".""{TableNameHandler("hash")}"" SET expireat = null WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql,
         new { Key = key }));
@@ -396,7 +397,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(items));
       }
 
-      string sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""set"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)";
+      string sql = $@"INSERT INTO ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}"" (""key"", ""value"", ""score"") VALUES (@Key, @Value, 0.0)";
 
       QueueCommand(connection => connection.Execute(sql,
         items.Select(value => new { Key = key, Value = value }).ToList()));
@@ -409,7 +410,7 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(key));
       }
 
-      string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""set"" WHERE ""key"" = @Key";
+      string sql = $@"DELETE FROM ""{_storage.Options.SchemaName}"".""{TableNameHandler("set")}"" WHERE ""key"" = @Key";
 
       QueueCommand(connection => connection.Execute(sql, new { Key = key }));
     }
@@ -417,6 +418,11 @@ namespace Hangfire.PostgreSql
     internal void QueueCommand(Action<IDbConnection> action)
     {
       _commandQueue.Enqueue(action);
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
   }
 }
