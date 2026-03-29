@@ -25,6 +25,7 @@ using Dapper;
 using Hangfire.Common;
 using Hangfire.Logging;
 using Hangfire.Server;
+using Utility = Hangfire.PostgreSql.Utils.Utils;
 
 namespace Hangfire.PostgreSql
 {
@@ -81,27 +82,33 @@ namespace Hangfire.PostgreSql
     private string GetAggregationQuery()
     {
       string schemaName = _storage.Options.SchemaName;
+      
       return
         $"""
         BEGIN;
 
-        INSERT INTO "{schemaName}"."aggregatedcounter" ("key", "value", "expireat")	
+        INSERT INTO "{schemaName}"."{TableNameHandler("aggregatedcounter")}" ("key", "value", "expireat")	
         SELECT
           "key",
           SUM("value"),
           MAX("expireat")
-        FROM "{schemaName}"."counter"
+        FROM "{schemaName}"."{TableNameHandler("counter")}"
         GROUP BY "key"
         ON CONFLICT("key") DO UPDATE
-        SET "value" = "aggregatedcounter"."value" + EXCLUDED."value", "expireat" = EXCLUDED."expireat";
+        SET "value" = "{schemaName}"."{TableNameHandler("aggregatedcounter")}"."value" + EXCLUDED."value", "expireat" = EXCLUDED."expireat";
   
-        DELETE FROM "{schemaName}"."counter"
+        DELETE FROM "{schemaName}"."{TableNameHandler("counter")}"
         WHERE "key" IN (
-          SELECT "key" FROM "{schemaName}"."aggregatedcounter"
+          SELECT "key" FROM "{schemaName}"."{TableNameHandler("aggregatedcounter")}"
         );
 
         COMMIT;
         """;
+    }
+
+    private string TableNameHandler(string baseName)
+    {
+      return Utility.GetTableName(baseName, _storage.Options.UseTablePrefix, _storage.Options.TablePrefixName);
     }
   }
 }
