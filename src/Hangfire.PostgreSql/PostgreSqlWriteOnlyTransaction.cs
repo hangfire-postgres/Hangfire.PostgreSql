@@ -247,7 +247,7 @@ namespace Hangfire.PostgreSql
             SELECT ""id"" 
             FROM ""{_storage.Options.SchemaName}"".""list"" AS keep
             WHERE keep.""key"" = source.""key""
-            ORDER BY ""id"" 
+            ORDER BY ""id"" DESC
             OFFSET @Offset LIMIT @Limit
         );
       ";
