@@ -221,6 +221,71 @@ namespace Hangfire.PostgreSql.Tests
 
     [Fact]
     [CleanDatabase]
+    public void GetJobData_ReturnsParametersSnapshot_WhenJobHasParameters()
+    {
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, @StateName, NOW()) RETURNING ""id""
+      ";
+
+      string parameterSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""jobparameter"" (""jobid"", ""name"", ""value"")
+        VALUES (@JobId, @Name, @Value)
+      ";
+
+      UseConnections((connection, jobStorageConnection) => {
+        Job job = Job.FromExpression(() => SampleMethod("wrong"));
+
+        long jobId = connection.QuerySingle<long>(arrangeSql,
+          new {
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(InvocationData.SerializeJob(job))),
+            StateName = "Succeeded",
+            Arguments = JsonParameter.GetParameterValue("[\"\\\"Arguments\\\"\"]", JsonParameter.ValueType.Array),
+          });
+
+        connection.Execute(parameterSql, new { JobId = jobId, Name = "Key1", Value = "Value1" });
+        connection.Execute(parameterSql, new { JobId = jobId, Name = "Key2", Value = "Value2" });
+
+        JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.InvocationData);
+        Assert.NotNull(result.ParametersSnapshot);
+        Assert.Equal(2, result.ParametersSnapshot.Count);
+        Assert.Equal("Value1", result.ParametersSnapshot["Key1"]);
+        Assert.Equal("Value2", result.ParametersSnapshot["Key2"]);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
+    public void GetJobData_ReturnsEmptyParametersSnapshot_WhenJobHasNoParameters()
+    {
+      string arrangeSql = $@"
+        INSERT INTO ""{GetSchemaName()}"".""job"" (""invocationdata"", ""arguments"", ""statename"", ""createdat"")
+        VALUES (@InvocationData::jsonb, @Arguments::jsonb, @StateName, NOW()) RETURNING ""id""
+      ";
+
+      UseConnections((connection, jobStorageConnection) => {
+        Job job = Job.FromExpression(() => SampleMethod("wrong"));
+
+        long jobId = connection.QuerySingle<long>(arrangeSql,
+          new {
+            InvocationData = JsonParameter.GetParameterValue(SerializationHelper.Serialize(InvocationData.SerializeJob(job))),
+            StateName = "Succeeded",
+            Arguments = JsonParameter.GetParameterValue("[\"\\\"Arguments\\\"\"]", JsonParameter.ValueType.Array),
+          });
+
+        JobData result = jobStorageConnection.GetJobData(jobId.ToString(CultureInfo.InvariantCulture));
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.ParametersSnapshot);
+        Assert.Empty(result.ParametersSnapshot);
+      });
+    }
+
+    [Fact]
+    [CleanDatabase]
     public void GetStateData_ThrowsAnException_WhenJobIdIsNull()
     {
       UseConnection(connection => Assert.Throws<ArgumentNullException>(() => connection.GetStateData(null)));
