@@ -161,43 +161,59 @@ namespace Hangfire.PostgreSql
         throw new ArgumentNullException(nameof(id));
       }
 
-      string sql = $@"
-        SELECT ""invocationdata"" ""invocationData"", ""statename"" ""stateName"", ""arguments"", ""createdat"" ""createdAt"" 
-        FROM ""{_options.SchemaName}"".""job"" 
-        WHERE ""id"" = @Id;
-      ";
-
-      SqlJob jobData = _storage.UseConnection(_dedicatedConnection,
-        connection => connection
-          .QuerySingleOrDefault<SqlJob>(sql, new { Id = Convert.ToInt64(id, CultureInfo.InvariantCulture) }));
-
-      if (jobData == null)
+      return _storage.UseConnection(_dedicatedConnection, connection =>
       {
-        return null;
-      }
+          string sql =
+              $"""
+               SELECT "invocationdata" "invocationData", "statename" "stateName", "arguments", "createdat" "createdAt" 
+               FROM "{_options.SchemaName}"."job" 
+               WHERE "id" = @Id;
 
-      // TODO: conversion exception could be thrown.
-      InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>(jobData.InvocationData);
-      invocationData.Arguments = jobData.Arguments;
+               SELECT "name", "value"
+               FROM "{_options.SchemaName}"."jobparameter" 
+               WHERE "jobid" = @Id;
+               """;
 
-      Job job = null;
-      JobLoadException loadException = null;
+          using var reader = connection.QueryMultiple(sql, new
+          {
+              Id = Convert.ToInt64(id, CultureInfo.InvariantCulture)
+          });
 
-      try
-      {
-        job = invocationData.DeserializeJob();
-      }
-      catch (JobLoadException ex)
-      {
-        loadException = ex;
-      }
+          SqlJob jobData = reader.ReadSingleOrDefault<SqlJob>();
+          if (jobData == null)
+          {
+              return null;
+          }
 
-      return new JobData {
-        Job = job,
-        State = jobData.StateName,
-        CreatedAt = jobData.CreatedAt,
-        LoadException = loadException,
-      };
+          Dictionary<string, string> parameters = reader.Read<JobParameter>()
+              .ToDictionary(p => p.Name, p => p.Value);
+
+          // TODO: conversion exception could be thrown.
+          InvocationData invocationData = SerializationHelper.Deserialize<InvocationData>(jobData.InvocationData);
+          invocationData.Arguments = jobData.Arguments;
+
+          Job job = null;
+          JobLoadException loadException = null;
+
+          try
+          {
+              job = invocationData.DeserializeJob();
+          }
+          catch (JobLoadException ex)
+          {
+              loadException = ex;
+          }
+
+          return new JobData
+          {
+              Job = job,
+              State = jobData.StateName,
+              CreatedAt = jobData.CreatedAt,
+              LoadException = loadException,
+              InvocationData = invocationData,
+              ParametersSnapshot = parameters
+          };
+      });
     }
 
     public override StateData GetStateData(string jobId)
