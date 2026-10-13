@@ -32,6 +32,9 @@ namespace Hangfire.PostgreSql
 {
   public static class PostgreSqlObjectsInstaller
   {
+    // Advisory lock key ("Hangfire" in ASCII) that serializes schema installation and upgrades within a database.
+    private const long SchemaLockKey = 0x48616E6766697265;
+
     private static readonly ILog _logger = LogProvider.GetLogger(typeof(PostgreSqlStorage));
 
     public static void Install(NpgsqlConnection connection, string schemaName = "hangfire")
@@ -69,7 +72,13 @@ namespace Hangfire.PostgreSql
           if (!VersionAlreadyApplied(connection, schemaName, version))
           {
             string commandText = $@"{script}; UPDATE ""{schemaName}"".""schema"" SET ""version"" = @Version WHERE ""version"" = @PreviousVersion";
-            using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+            // The script must see changes committed while waiting for the lock.
+            using NpgsqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
+            using NpgsqlCommand lockCommand = new("SELECT pg_advisory_xact_lock(@SchemaLockKey)", connection, transaction);
+            lockCommand.CommandTimeout = 120;
+            lockCommand.Parameters.Add(new NpgsqlParameter("SchemaLockKey", SchemaLockKey));
+            lockCommand.ExecuteNonQuery();
+
             using NpgsqlCommand command = new(commandText, connection, transaction);
             command.CommandTimeout = 120;
             command.Parameters.Add(new NpgsqlParameter("Version", version));
